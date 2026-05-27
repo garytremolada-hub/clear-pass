@@ -1,0 +1,64 @@
+{
+  "name": "WorkLibraryItem",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "User-given title for this work item"
+    },
+    "task_type": {
+      "type": "string",
+      "enum": [
+        "score",
+        "rewrite",
+        "evaluate",
+        "build"
+      ],
+      "description": "Which task module produced this item"
+    },
+    "unit_code": {
+      "type": "string",
+      "description": "UoC code if applicable"
+    },
+    "unit_title": {
+      "type": "string",
+      "description": "UoC title if applicable"
+    },
+    "aqf_level": {
+      "type": "string",
+      "description": "AQF level if applicable"
+    },
+    "fkgl": {
+      "type": "number",
+      "description": "FKGL score"
+    },
+    "fre": {
+      "type": "number",
+      "description": "FRE score"
+    },
+    "band": {
+      "type": "string",
+      "description": "8-band scale position"
+    },
+    "original_text": {
+      "type": "string",
+      "description": "Original text that was scored/rewritten"
+    },
+    "output_text": {
+      "type": "string",
+      "description": "Main output from the agent"
+    },
+    "notes": {
+      "type": "string",
+      "description": "User notes"
+    },
+    "conversation_id": {
+      "type": "string",
+      "description": "ID of the conversation that produced this item"
+    }
+  },
+  "required": [
+    "title",
+    "task_type"
+  ]
+}
