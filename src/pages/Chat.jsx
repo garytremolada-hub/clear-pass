@@ -10,14 +10,23 @@ import { BarChart3, PenLine, ClipboardCheck, Hammer } from 'lucide-react';
 const AGENT_NAME = 'fk_readability_tool';
 
 const quickActions = [
-    { label: 'Score text', icon: BarChart3, prompt: 'I want to score some text for readability.' },
-    { label: 'Rewrite text', icon: PenLine, prompt: 'I want to rewrite some text to a target level.' },
-    { label: 'Evaluate assessment', icon: ClipboardCheck, prompt: 'I want to evaluate an existing assessment against a UoC.' },
-    { label: 'Build assessment', icon: Hammer, prompt: 'I want to build a new assessment from a UoC.' },
+    { label: 'Score text', icon: BarChart3, prompt: 'I want to score some text for readability.', cohort: false },
+    { label: 'Rewrite text', icon: PenLine, prompt: 'I want to rewrite some text to a target level.', cohort: false },
+    { label: 'Evaluate assessment', icon: ClipboardCheck, prompt: 'I want to evaluate an existing assessment against a UoC.', cohort: true },
+    { label: 'Build assessment', icon: Hammer, prompt: 'I want to build a new assessment from a UoC.', cohort: true },
 ];
 
 export default function Chat() {
-    const { onboardingDone, saveProfile, buildCohortMessage } = useCohort();
+    const { onboardingDone, saveProfile, buildCohortMessage, profile, getLabel } = useCohort();
+
+    const buildCohortProfile = () => {
+        const inst = getLabel('institution_type', profile.institution_type);
+        const mode = getLabel('delivery_mode', profile.delivery_mode);
+        const lit  = getLabel('literacy_level', profile.literacy_level);
+        const lang = getLabel('language_background', profile.language_background);
+        const age  = getLabel('age_group', profile.age_group);
+        return `Institution: ${inst}\n1. Delivery mode: ${mode}\n2. Literacy level: ${lit}\n3. Language background: ${lang}\n4. Age group: ${age}`;
+    };
     const [conversation, setConversation] = useState(null);
     const [messages, setMessages] = useState([]);
     const [isStreaming, setIsStreaming] = useState(false);
@@ -75,8 +84,12 @@ export default function Chat() {
         await base44.agents.addMessage(conv, msgPayload);
     };
 
-    const handleQuickAction = (prompt) => {
-        handleSend(prompt);
+    const handleQuickAction = (prompt, includesCohort = false) => {
+        if (includesCohort) {
+            handleSend(`${prompt}\n\nCOHORT PROFILE:\n${buildCohortProfile()}`);
+        } else {
+            handleSend(prompt);
+        }
     };
 
     const handleOnboardingComplete = async (profile) => {
@@ -91,22 +104,53 @@ export default function Chat() {
         });
     };
 
-    const handleDocumentUpload = (extracted) => {
-        // Map slot keys to clear numbered labels for the AI
-        const SLOT_LABELS = {
-            uoc: 'DOCUMENT 1 — UNIT OF COMPETENCY',
-            assessment: 'DOCUMENT 2 — ASSESSMENT INSTRUMENT',
-            doc: 'DOCUMENT',
-        };
+    const handleDocumentUpload = (extracted, mode) => {
+        const cohortBlock = buildCohortProfile();
 
-        const parts = Object.entries(extracted).map(([key, { name, text }]) => {
-            const heading = SLOT_LABELS[key] || key.toUpperCase();
-            return `${heading} (file: ${name})\n\n${text}`;
-        });
+        let message;
 
-        console.log('[Chat] Sending document blocks to agent:', parts.map((p, i) => `Block ${i+1}: ${p.slice(0, 100)}`));
+        if (mode === 'evaluate') {
+            const uoc = extracted.uoc?.text || '';
+            const assessment = extracted.assessment?.text || '';
+            message =
+`EVALUATE MODE — TWO DOCUMENTS PROVIDED
 
-        const message = parts.join('\n\n---\n\n');
+DOCUMENT 1 — UNIT OF COMPETENCY:
+${uoc}
+
+---
+
+DOCUMENT 2 — ASSESSMENT INSTRUMENT:
+${assessment}
+
+---
+
+COHORT PROFILE:
+${cohortBlock}
+
+Please proceed directly with the EVALUATE workflow. Do not ask what mode to use. Do not ask for the cohort profile. Both documents and the cohort profile are provided above.`;
+
+        } else if (mode === 'build') {
+            const uoc = extracted.uoc?.text || '';
+            message =
+`BUILD MODE — UOC PROVIDED
+
+DOCUMENT 1 — UNIT OF COMPETENCY:
+${uoc}
+
+---
+
+COHORT PROFILE:
+${cohortBlock}
+
+Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do not ask for the cohort profile. The UoC and cohort profile are provided above.`;
+
+        } else {
+            // score / rewrite — single doc, no cohort injection needed
+            const doc = extracted.doc || Object.values(extracted)[0];
+            message = `DOCUMENT (file: ${doc?.name || 'uploaded'})\n\n${doc?.text || ''}`;
+        }
+
         handleSend(message);
     };
 
@@ -143,7 +187,7 @@ export default function Chat() {
                             {quickActions.map((action) => (
                                 <button
                                     key={action.label}
-                                    onClick={() => handleQuickAction(action.prompt)}
+                                    onClick={() => handleQuickAction(action.prompt, action.cohort)}
                                     className="flex items-center gap-2.5 p-3.5 rounded-xl border bg-card hover:bg-muted/60 transition-colors text-left group"
                                 >
                                     <action.icon className="h-4 w-4 text-primary shrink-0" />

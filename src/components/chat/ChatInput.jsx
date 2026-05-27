@@ -30,9 +30,10 @@ export default function ChatInput({ onSend, onDocumentUpload, disabled }) {
     };
 
     const handleDocumentSubmit = (extracted) => {
+        const submittedMode = uploadMode;
         setShowUploadPanel(false);
         setUploadMode(null);
-        if (onDocumentUpload) onDocumentUpload(extracted);
+        if (onDocumentUpload) onDocumentUpload(extracted, submittedMode);
     };
 
     // Detect active mode from panel state
