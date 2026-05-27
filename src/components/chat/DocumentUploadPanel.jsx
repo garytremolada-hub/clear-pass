@@ -99,7 +99,7 @@ export default function DocumentUploadPanel({ mode, onSubmit, onCancel, disabled
                 // Upload file first
                 const { file_url } = await base44.integrations.Core.UploadFile({ file });
                 // Extract text via backend function
-                const res = await base44.functions.invoke('extractDocumentText', { file_url, label: slot.label });
+                const res = await base44.functions.invoke('extractDocumentText', { file_url, file_name: file.name, label: slot.label });
                 extracted[slot.key] = { text: res.data.text, name: file.name, label: slot.label };
             }
             onSubmit(extracted);
@@ -141,9 +141,9 @@ export default function DocumentUploadPanel({ mode, onSubmit, onCancel, disabled
                 <Button variant="ghost" size="sm" onClick={onCancel} disabled={processing}>Cancel</Button>
                 <Button size="sm" onClick={handleSubmit} disabled={!allFilled || processing || disabled}>
                     {processing ? (
-                        <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Extracting text…</>
+                        <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Analysing documents…</>
                     ) : (
-                        <><FileUp className="h-3.5 w-3.5 mr-1.5" /> Extract & Send</>
+                        <><FileUp className="h-3.5 w-3.5 mr-1.5" /> Analyse documents</>
                     )}
                 </Button>
             </div>
