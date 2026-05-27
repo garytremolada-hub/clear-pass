@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
 import ChatMessages from '../components/chat/ChatMessages';
 import ChatInput from '../components/chat/ChatInput';
+import CohortOnboarding from '../components/chat/CohortOnboarding';
+import CohortBar from '../components/chat/CohortBar';
+import { useCohort } from '@/lib/CohortContext';
 import { BarChart3, PenLine, ClipboardCheck, Hammer } from 'lucide-react';
 
 const AGENT_NAME = 'fk_readability_tool';
@@ -14,6 +17,7 @@ const quickActions = [
 ];
 
 export default function Chat() {
+    const { onboardingDone, saveProfile, buildCohortMessage } = useCohort();
     const [conversation, setConversation] = useState(null);
     const [messages, setMessages] = useState([]);
     const [isStreaming, setIsStreaming] = useState(false);
@@ -62,6 +66,18 @@ export default function Chat() {
         handleSend(prompt);
     };
 
+    const handleOnboardingComplete = async (profile) => {
+        saveProfile(profile);
+        // Auto-send cohort profile to agent
+        let conv = conversation;
+        if (!conv) conv = await createConversation();
+        setIsStreaming(true);
+        await base44.agents.addMessage(conv, {
+            role: 'user',
+            content: buildCohortMessage(profile),
+        });
+    };
+
     const handleDocumentUpload = (extracted) => {
         // Build a message that clearly presents each extracted document to the agent
         const parts = Object.values(extracted).map(({ label, name, text }) =>
@@ -81,8 +97,13 @@ export default function Chat() {
 
     const hasMessages = messages.length > 0;
 
+    if (!onboardingDone) {
+        return <CohortOnboarding onComplete={handleOnboardingComplete} />;
+    }
+
     return (
         <div className="flex flex-col h-full">
+            <CohortBar />
             {!hasMessages ? (
                 <div className="flex-1 flex flex-col items-center justify-center p-6">
                     <div className="max-w-lg text-center space-y-6">
