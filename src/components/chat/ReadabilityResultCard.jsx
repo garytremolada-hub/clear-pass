@@ -6,13 +6,44 @@ import { BAND_CONFIG, getBandForFkgl, getBandIndex } from '@/lib/parseReadabilit
 
 // ─── Band scale ──────────────────────────────────────────────────────────────
 
+// Calculate % position across the full bar for a given FKGL value
+function fkglToPercent(fkgl) {
+    const MIN = 0;
+    const MAX = 20; // anything ≥17 lands in last band; cap at 20 for visual
+    const clamped = Math.min(Math.max(fkgl, MIN), MAX);
+    return ((clamped - MIN) / (MAX - MIN)) * 100;
+}
+
 function ScaleBar({ fkgl, rewriteFkgl }) {
     const activeBandIdx = getBandIndex(fkgl);
     const rewriteBandIdx = rewriteFkgl != null ? getBandIndex(rewriteFkgl) : -1;
     const band = getBandForFkgl(fkgl);
 
+    const primaryPct  = fkgl != null ? fkglToPercent(fkgl) : null;
+    const rewritePct  = rewriteFkgl != null ? fkglToPercent(rewriteFkgl) : null;
+
     return (
         <div>
+            {/* Marker row — sits above the bar */}
+            <div className="relative w-full h-5 mb-0.5">
+                {primaryPct != null && (
+                    <div
+                        className="absolute -translate-x-1/2"
+                        style={{ left: `${primaryPct}%` }}
+                    >
+                        <span style={{ fontSize: '16px', color: '#1e3a5f', lineHeight: 1 }}>▼</span>
+                    </div>
+                )}
+                {rewritePct != null && (
+                    <div
+                        className="absolute -translate-x-1/2"
+                        style={{ left: `${rewritePct}%` }}
+                    >
+                        <span style={{ fontSize: '16px', color: '#15803d', lineHeight: 1 }}>▼</span>
+                    </div>
+                )}
+            </div>
+
             {/* Band segments */}
             <div className="flex rounded-lg overflow-hidden h-5 w-full">
                 {BAND_CONFIG.map((b, i) => (
@@ -21,24 +52,7 @@ function ScaleBar({ fkgl, rewriteFkgl }) {
                         className="flex-1 relative"
                         style={{ backgroundColor: b.color }}
                         title={`${b.name} (${b.gradeRange})`}
-                    >
-                        {/* Primary marker */}
-                        {i === activeBandIdx && (
-                            <div className="absolute inset-x-0 -top-3 flex justify-center">
-                                <div className="flex flex-col items-center">
-                                    <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-[#1e3a5f]" />
-                                </div>
-                            </div>
-                        )}
-                        {/* Rewrite marker */}
-                        {rewriteBandIdx >= 0 && i === rewriteBandIdx && rewriteBandIdx !== activeBandIdx && (
-                            <div className="absolute inset-x-0 -top-3 flex justify-center">
-                                <div className="flex flex-col items-center">
-                                    <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-[#15803d]" />
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                    />
                 ))}
             </div>
 
@@ -70,11 +84,11 @@ function ScaleBar({ fkgl, rewriteFkgl }) {
             {rewriteBandIdx >= 0 && (
                 <div className="flex gap-4 justify-center mt-1.5 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
-                        <span className="inline-block w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-[#1e3a5f]" />
+                        <span style={{ color: '#1e3a5f', fontSize: '12px' }}>▼</span>
                         Original
                     </span>
                     <span className="flex items-center gap-1">
-                        <span className="inline-block w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-[#15803d]" />
+                        <span style={{ color: '#15803d', fontSize: '12px' }}>▼</span>
                         Rewrite
                     </span>
                 </div>
@@ -156,11 +170,28 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
 
             <div className="p-4 space-y-4">
                 {/* Section 1 — Headline */}
-                {result.summary && (
-                    <p className="text-base font-bold text-[#1e3a5f] dark:text-foreground leading-snug">
-                        {result.summary}
-                    </p>
-                )}
+                {(() => {
+                    const band = getBandForFkgl(result.fkgl);
+                    const bandDescriptions = {
+                        'Very Easy':         'below AQF entry — primary to early secondary',
+                        'Easy':              'below AQF entry — upper primary to Year 6',
+                        'Fairly Easy':       'below AQF entry — Year 7–8',
+                        'Cert I/II · Yr 10': 'AQF 1–2 — suitable for foundation VET learners',
+                        'Cert III/IV':       'AQF 3–4 — suitable for vocational learners',
+                        'Diploma':           'AQF 5–6 — suitable for advanced VET learners',
+                        'Degree / Grad Dip': 'AQF 7–8 — suitable for undergraduate students',
+                        'Very Difficult':    'AQF 9–10 — postgraduate level',
+                    };
+                    const desc = band ? bandDescriptions[band.name] : null;
+                    const headline = band && desc
+                        ? `This document reads at ${band.name} level (${desc}).`
+                        : result.summary;
+                    return headline ? (
+                        <p className="text-base font-bold text-[#1e3a5f] dark:text-foreground leading-snug">
+                            {headline}
+                        </p>
+                    ) : null;
+                })()}
 
                 {/* Section 2 — Scale */}
                 <div className="pt-3">
@@ -169,23 +200,36 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
 
                 {/* Section 3 — Three key stats */}
                 <div className="grid grid-cols-3 gap-2">
-                    {[
-                        { value: result.fkgl?.toFixed(1), label: 'Grade level', sub: 'FKGL' },
-                        { value: result.fre?.toFixed(1),  label: 'Reading ease (higher = easier)', sub: 'FRE' },
-                        { value: result.words != null ? result.words.toLocaleString() : '—', label: 'Words', sub: null },
-                    ].map(stat => (
-                        <div key={stat.sub || stat.label} className="bg-muted/50 rounded-xl p-3 text-center">
-                            <div className="font-mono text-2xl font-bold text-[#1e3a5f] dark:text-foreground tabular-nums">
-                                {stat.value ?? '—'}
-                            </div>
-                            {stat.sub && (
-                                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
-                                    {stat.sub}
-                                </div>
-                            )}
-                            <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{stat.label}</div>
+                    <div className="bg-muted/50 rounded-xl p-3 text-center">
+                        <div className="font-mono text-2xl font-bold text-[#1e3a5f] dark:text-foreground tabular-nums">
+                            {result.fkgl?.toFixed(1) ?? '—'}
                         </div>
-                    ))}
+                        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
+                            Reading Grade Level
+                        </div>
+                        <div className="text-[9px] text-muted-foreground mt-0.5 leading-tight italic">
+                            (higher = harder to read)
+                        </div>
+                    </div>
+                    <div className="bg-muted/50 rounded-xl p-3 text-center">
+                        <div className="font-mono text-2xl font-bold text-[#1e3a5f] dark:text-foreground tabular-nums">
+                            {result.fre?.toFixed(1) ?? '—'}
+                        </div>
+                        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
+                            Reading Ease Score
+                        </div>
+                        <div className="text-[9px] text-muted-foreground mt-0.5 leading-tight italic">
+                            (higher = easier to read)
+                        </div>
+                    </div>
+                    <div className="bg-muted/50 rounded-xl p-3 text-center">
+                        <div className="font-mono text-2xl font-bold text-[#1e3a5f] dark:text-foreground tabular-nums">
+                            {result.words != null ? result.words.toLocaleString() : '—'}
+                        </div>
+                        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
+                            Words
+                        </div>
+                    </div>
                 </div>
 
                 {/* Section 4 — Traffic light */}
