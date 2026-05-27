@@ -5,7 +5,7 @@ import ChatInput from '../components/chat/ChatInput';
 import CohortOnboarding from '../components/chat/CohortOnboarding';
 import CohortBar from '../components/chat/CohortBar';
 import { useCohort } from '@/lib/CohortContext';
-import { BarChart3, PenLine, ClipboardCheck, Hammer } from 'lucide-react';
+import { BarChart3, PenLine, ClipboardCheck, Hammer, Search, CheckSquare, FileEdit } from 'lucide-react';
 
 const AGENT_NAME = 'fk_readability_tool';
 
@@ -172,29 +172,85 @@ Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do
         <div className="flex flex-col h-full">
             <CohortBar />
             {!hasMessages ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-6">
-                    <div className="max-w-lg text-center space-y-6">
-                        <div className="inline-flex h-14 w-14 rounded-2xl bg-primary/10 items-center justify-center">
-                            <BarChart3 className="h-7 w-7 text-primary" />
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-semibold tracking-tight">FK Readability & AQF Tool</h2>
-                            <p className="text-muted-foreground mt-2 text-sm leading-relaxed max-w-md mx-auto">
-                                Score text readability, rewrite to target levels, evaluate assessments against Units of Competency, or build new assessments from scratch.
+                <div className="flex-1 overflow-y-auto bg-white dark:bg-background">
+                    <div className="max-w-4xl mx-auto px-6 py-12 space-y-12">
+
+                        {/* Hero */}
+                        <div className="text-center space-y-4">
+                            <h1 className="text-4xl font-bold text-[#1e3a5f] dark:text-foreground leading-tight">
+                                Are your assessments audit-ready?
+                            </h1>
+                            <p className="text-muted-foreground text-base leading-relaxed max-w-2xl mx-auto">
+                                Upload your assessment and Unit of Competency. We'll check readability, evidence coverage, and compliance gaps — and tell you exactly what needs fixing before an ASQA or TEQSA audit.
                             </p>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            {quickActions.map((action) => (
-                                <button
-                                    key={action.label}
-                                    onClick={() => handleQuickAction(action.prompt, action.cohort)}
-                                    className="flex items-center gap-2.5 p-3.5 rounded-xl border bg-card hover:bg-muted/60 transition-colors text-left group"
-                                >
-                                    <action.icon className="h-4 w-4 text-primary shrink-0" />
-                                    <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground">{action.label}</span>
-                                </button>
-                            ))}
+
+                        {/* Task cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+                            {/* Card 1 — Check readability */}
+                            <div className="bg-white dark:bg-card rounded-xl shadow-sm border border-l-4 border-l-[#1e3a5f] flex flex-col">
+                                <div className="p-5 flex flex-col flex-1 space-y-3">
+                                    <div className="h-10 w-10 rounded-lg bg-[#1e3a5f]/10 flex items-center justify-center">
+                                        <Search className="h-5 w-5 text-[#1e3a5f]" />
+                                    </div>
+                                    <h3 className="font-semibold text-[#1e3a5f] dark:text-foreground text-base">Check readability</h3>
+                                    <p className="text-sm text-muted-foreground leading-relaxed flex-1">
+                                        Is your assessment written at the right level for your learners? Get an instant readability score mapped to AQF levels.
+                                    </p>
+                                    <button
+                                        onClick={() => handleQuickAction('I want to score some text for readability.', false)}
+                                        className="w-full mt-2 py-2.5 px-4 rounded-lg bg-[#1e3a5f] text-white text-sm font-medium hover:bg-[#152d4d] transition-colors"
+                                    >
+                                        Upload document
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Card 2 — Audit assessment */}
+                            <div className="bg-white dark:bg-card rounded-xl shadow-sm border border-l-4 border-l-[#15803d] flex flex-col">
+                                <div className="p-5 flex flex-col flex-1 space-y-3">
+                                    <div className="h-10 w-10 rounded-lg bg-[#15803d]/10 flex items-center justify-center">
+                                        <CheckSquare className="h-5 w-5 text-[#15803d]" />
+                                    </div>
+                                    <h3 className="font-semibold text-[#15803d] dark:text-foreground text-base">Audit your assessment</h3>
+                                    <p className="text-sm text-muted-foreground leading-relaxed flex-1">
+                                        Upload your assessment and Unit of Competency. We'll check evidence coverage, readability compliance, and flag every gap before an auditor does.
+                                    </p>
+                                    <button
+                                        onClick={() => handleQuickAction('I want to evaluate an existing assessment against a UoC.', true)}
+                                        className="w-full mt-2 py-2.5 px-4 rounded-lg bg-[#15803d] text-white text-sm font-medium hover:bg-[#166534] transition-colors"
+                                    >
+                                        Upload assessment + UoC
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Card 3 — Build assessment */}
+                            <div className="bg-white dark:bg-card rounded-xl shadow-sm border border-l-4 border-l-[#7c3aed] flex flex-col">
+                                <div className="p-5 flex flex-col flex-1 space-y-3">
+                                    <div className="h-10 w-10 rounded-lg bg-[#7c3aed]/10 flex items-center justify-center">
+                                        <FileEdit className="h-5 w-5 text-[#7c3aed]" />
+                                    </div>
+                                    <h3 className="font-semibold text-[#7c3aed] dark:text-foreground text-base">Build a new assessment</h3>
+                                    <p className="text-sm text-muted-foreground leading-relaxed flex-1">
+                                        Give us your Unit of Competency and we'll build a complete, audit-ready assessment from scratch — scored and mapped to your cohort.
+                                    </p>
+                                    <button
+                                        onClick={() => handleQuickAction('I want to build a new assessment from a UoC.', true)}
+                                        className="w-full mt-2 py-2.5 px-4 rounded-lg bg-[#7c3aed] text-white text-sm font-medium hover:bg-[#6d28d9] transition-colors"
+                                    >
+                                        Upload UoC
+                                    </button>
+                                </div>
+                            </div>
                         </div>
+
+                        {/* Trust statement */}
+                        <p className="text-center text-xs text-muted-foreground leading-relaxed">
+                            Used by RTOs and universities across Australia. Results mapped to AQF levels 1–10.<br />
+                            Scores are AI estimates — always review with a qualified assessor before submission.
+                        </p>
                     </div>
                 </div>
             ) : (
