@@ -23,6 +23,19 @@ export default function Chat() {
     const [isStreaming, setIsStreaming] = useState(false);
     const [loading, setLoading] = useState(false);
 
+    // Handle quick-action events fired from result cards
+    useEffect(() => {
+        const onRewrite = () => handleSend('Please rewrite this to a different level.');
+        const onSave    = () => handleSend('Please save this result to the work library.');
+        window.addEventListener('fk:rewrite-request', onRewrite);
+        window.addEventListener('fk:save-to-library', onSave);
+        return () => {
+            window.removeEventListener('fk:rewrite-request', onRewrite);
+            window.removeEventListener('fk:save-to-library', onSave);
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [conversation]);
+
     const createConversation = useCallback(async () => {
         setLoading(true);
         const conv = await base44.agents.createConversation({
