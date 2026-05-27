@@ -13,25 +13,22 @@ Deno.serve(async (req) => {
             return Response.json({ error: 'file_url is required' }, { status: 400 });
         }
 
-        const result = await base44.asServiceRole.integrations.Core.ExtractDataFromUploadedFile({
-            file_url,
-            json_schema: {
+        const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
+            prompt: `Extract the complete plain text content from this document. Output ONLY the raw text — no commentary, no summary, no markdown formatting. Preserve all headings, paragraphs, numbered lists, bullet points, and table content as plain text. Do not omit or paraphrase anything.`,
+            file_urls: [file_url],
+            response_json_schema: {
                 type: 'object',
                 properties: {
                     text: {
                         type: 'string',
-                        description: 'The full plain text content of the document, preserving all headings, paragraphs, lists, and structured content as plain text. Do not summarise — extract everything verbatim.'
+                        description: 'The complete verbatim plain text content of the document'
                     }
                 },
                 required: ['text']
             }
         });
 
-        if (result.status !== 'success') {
-            return Response.json({ error: result.details || 'Extraction failed' }, { status: 500 });
-        }
-
-        const text = result.output?.text || '';
+        const text = result?.text || '';
         return Response.json({ text, label: label || 'document' });
     } catch (error) {
         return Response.json({ error: error.message }, { status: 500 });
