@@ -62,6 +62,15 @@ export default function Chat() {
         handleSend(prompt);
     };
 
+    const handleDocumentUpload = (extracted) => {
+        // Build a message that clearly presents each extracted document to the agent
+        const parts = Object.values(extracted).map(({ label, name, text }) =>
+            `--- ${label.toUpperCase()} (from file: ${name}) ---\n\n${text}`
+        );
+        const message = parts.join('\n\n\n');
+        handleSend(message);
+    };
+
     if (loading) {
         return (
             <div className="flex-1 flex items-center justify-center">
@@ -103,7 +112,7 @@ export default function Chat() {
             ) : (
                 <ChatMessages messages={messages} isStreaming={isStreaming} />
             )}
-            <ChatInput onSend={handleSend} disabled={isStreaming} />
+            <ChatInput onSend={handleSend} onDocumentUpload={handleDocumentUpload} disabled={isStreaming} />
         </div>
     );
 }
