@@ -94,13 +94,31 @@ export default function DocumentUploadPanel({ mode, onSubmit, onCancel, disabled
         setError(null);
         try {
             const extracted = {};
-            for (const slot of config.slots) {
+            // Process each slot strictly sequentially with isolated variables
+            for (let i = 0; i < config.slots.length; i++) {
+                const slot = config.slots[i];
                 const file = files[slot.key];
-                // Upload file first
-                const { file_url } = await base44.integrations.Core.UploadFile({ file });
-                // Extract text via backend function
-                const res = await base44.functions.invoke('extractDocumentText', { file_url, file_name: file.name, label: slot.label });
-                extracted[slot.key] = { text: res.data.text, name: file.name, label: slot.label };
+                if (!file) throw new Error(`Missing file for slot: ${slot.key}`);
+
+                console.log(`[DocumentUpload] Uploading slot "${slot.key}" — file: ${file.name}, size: ${file.size} bytes`);
+
+                // Upload to get a unique URL for this specific file
+                const uploadResult = await base44.integrations.Core.UploadFile({ file });
+                const fileUrl = uploadResult.file_url;
+
+                console.log(`[DocumentUpload] Uploaded slot "${slot.key}" → URL: ${fileUrl}`);
+
+                // Extract text from this specific file URL
+                const res = await base44.functions.invoke('extractDocumentText', {
+                    file_url: fileUrl,
+                    file_name: file.name,
+                    label: slot.label,
+                });
+
+                const extractedText = res.data.text;
+                console.log(`[DocumentUpload] Extracted slot "${slot.key}" — ${extractedText?.length ?? 0} chars — preview: ${extractedText?.slice(0, 120)}`);
+
+                extracted[slot.key] = { text: extractedText, name: file.name, label: slot.label };
             }
             onSubmit(extracted);
         } catch (err) {

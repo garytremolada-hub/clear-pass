@@ -79,11 +79,21 @@ export default function Chat() {
     };
 
     const handleDocumentUpload = (extracted) => {
-        // Build a message that clearly presents each extracted document to the agent
-        const parts = Object.values(extracted).map(({ label, name, text }) =>
-            `--- ${label.toUpperCase()} (from file: ${name}) ---\n\n${text}`
-        );
-        const message = parts.join('\n\n\n');
+        // Map slot keys to clear numbered labels for the AI
+        const SLOT_LABELS = {
+            uoc: 'DOCUMENT 1 — UNIT OF COMPETENCY',
+            assessment: 'DOCUMENT 2 — ASSESSMENT INSTRUMENT',
+            doc: 'DOCUMENT',
+        };
+
+        const parts = Object.entries(extracted).map(([key, { name, text }]) => {
+            const heading = SLOT_LABELS[key] || key.toUpperCase();
+            return `${heading} (file: ${name})\n\n${text}`;
+        });
+
+        console.log('[Chat] Sending document blocks to agent:', parts.map((p, i) => `Block ${i+1}: ${p.slice(0, 100)}`));
+
+        const message = parts.join('\n\n---\n\n');
         handleSend(message);
     };
 

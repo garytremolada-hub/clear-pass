@@ -14,6 +14,8 @@ Deno.serve(async (req) => {
             return Response.json({ error: 'file_url is required' }, { status: 400 });
         }
 
+        console.log(`[extractDocumentText] label="${label}" file_name="${file_name}" url="${file_url}"`);
+
         const isDocx = file_name?.toLowerCase().endsWith('.docx') ||
                        file_url.toLowerCase().includes('.docx');
 
@@ -51,6 +53,8 @@ Deno.serve(async (req) => {
         if (!text.trim()) {
             return Response.json({ error: 'No text could be extracted from the document.' }, { status: 422 });
         }
+
+        console.log(`[extractDocumentText] SUCCESS label="${label}" extracted ${text.length} chars — preview: ${text.slice(0, 150)}`);
 
         return Response.json({ text, label: label || 'document' });
     } catch (error) {
