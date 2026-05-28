@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import ChatMessages from '../components/chat/ChatMessages';
 import ChatInput from '../components/chat/ChatInput';
@@ -17,6 +18,7 @@ const quickActions = [
 ];
 
 export default function Chat() {
+    const location = useLocation();
     const { onboardingDone, saveProfile, buildCohortMessage, profile, getLabel } = useCohort();
 
     const buildCohortProfile = () => {
@@ -58,8 +60,21 @@ export default function Chat() {
     }, []);
 
     useEffect(() => {
-        createConversation();
-    }, [createConversation]);
+        createConversation().then(conv => {
+            // If navigated here with a quickPrompt from Dashboard, auto-send it
+            const state = location.state;
+            if (state?.quickPrompt && conv) {
+                const prompt = state.cohort
+                    ? `${state.quickPrompt}\n\nCOHORT PROFILE:\n${buildCohortProfile()}`
+                    : state.quickPrompt;
+                setIsStreaming(true);
+                base44.agents.addMessage(conv, { role: 'user', content: prompt });
+                // Clear state so refresh doesn't re-send
+                window.history.replaceState({}, '', '/chat');
+            }
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         if (!conversation?.id) return;

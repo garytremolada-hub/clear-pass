@@ -1,20 +1,17 @@
 import { cn } from '@/lib/utils';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquareText, Library, BarChart3, FileText, PenLine, ClipboardCheck, Hammer, Menu, X, CreditCard } from 'lucide-react';
+import { MessageSquareText, Library, BarChart3, FileText, CreditCard, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 
 const navItems = [
-{ label: 'New Session', path: '/', icon: MessageSquareText },
+{ label: 'Dashboard', path: '/', icon: BarChart3 },
+{ label: 'New Session', path: '/chat', icon: MessageSquareText },
 { label: 'Work Library', path: '/library', icon: Library },
-{ label: 'Pricing', path: '/pricing', icon: CreditCard }];
+];
 
 
-const modeItems = [
-{ label: 'Score', icon: BarChart3, description: 'Score text readability' },
-{ label: 'Rewrite', icon: PenLine, description: 'Rewrite to target level' },
-{ label: 'Evaluate', icon: ClipboardCheck, description: 'Audit an assessment' },
-{ label: 'Build', icon: Hammer, description: 'Create new assessment' }];
+
 
 
 export default function Sidebar() {
@@ -75,26 +72,24 @@ export default function Sidebar() {
                         </Link>
           )}
 
-                    <div className="pt-4 pb-2">
-                        <p className="px-3 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Modes</p>
-                    </div>
-                    {modeItems.map((item) =>
-          <div
-            key={item.label}
-            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground">
-            
-                            <item.icon className="h-4 w-4" />
-                            <div>
-                                <p className="text-foreground/70 text-xs font-medium">{item.label}</p>
-                                <p className="text-[10px]">{item.description}</p>
-                            </div>
-                        </div>
-          )}
                 </nav>
 
                 {/* Footer */}
-                <div className="p-4 border-t">
-                    <p className="text-[10px] text-muted-foreground text-center">
+                <div className="p-4 border-t space-y-1">
+                    <Link
+                        to="/pricing"
+                        onClick={() => setMobileOpen(false)}
+                        className={cn(
+                            "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
+                            location.pathname === '/pricing'
+                                ? "bg-primary/10 text-primary font-medium"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                        )}
+                    >
+                        <CreditCard className="h-4 w-4" />
+                        Pricing
+                    </Link>
+                    <p className="text-[10px] text-muted-foreground text-center pt-1">
                         Scores are AI-estimated. Use for guidance only.
                     </p>
                 </div>
