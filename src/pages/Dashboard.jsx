@@ -156,7 +156,7 @@ export default function Dashboard() {
                         ].map(task => (
                             <button
                                 key={task.label}
-                                onClick={() => navigate('/', { state: { quickPrompt: task.prompt, cohort: task.cohort } })}
+                                onClick={() => navigate('/chat', { state: { quickPrompt: task.prompt, cohort: task.cohort } })}
                                 className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors text-left group"
                             >
                                 <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${task.color}`}>
@@ -172,7 +172,7 @@ export default function Dashboard() {
 
                         <div className="pt-2 border-t">
                             <button
-                                onClick={() => navigate('/')}
+                                onClick={() => navigate('/chat')}
                                 className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors text-left group"
                             >
                                 <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-muted">
