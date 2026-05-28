@@ -18,6 +18,7 @@ export default function LevelCheck() {
     const [showRewriteModal, setShowRewriteModal] = useState(false);
     const [rewriting, setRewriting] = useState(false);
     const [rewritingLabel, setRewritingLabel] = useState('');
+    const [rewritingProgress, setRewritingProgress] = useState('');
     const [rewriteResult, setRewriteResult] = useState(null); // { before, after }
     const [rewrittenText, setRewrittenText] = useState(null);
     const inputRef = useRef(null);
@@ -108,11 +109,33 @@ ${text.slice(0, 4000)}`;
         runCheck(file);
     };
 
-    // Rewrite modal confirm — two-step: rewrite text, then score it
+    // Split text into ~2000-word chunks on paragraph boundaries
+    const splitIntoChunks = (text, wordsPerChunk = 2000) => {
+        const paragraphs = text.split(/\n\n+/);
+        const chunks = [];
+        let current = [];
+        let wordCount = 0;
+        for (const para of paragraphs) {
+            const paraWords = para.split(/\s+/).length;
+            if (wordCount + paraWords > wordsPerChunk && current.length > 0) {
+                chunks.push(current.join('\n\n'));
+                current = [para];
+                wordCount = paraWords;
+            } else {
+                current.push(para);
+                wordCount += paraWords;
+            }
+        }
+        if (current.length > 0) chunks.push(current.join('\n\n'));
+        return chunks;
+    };
+
+    // Rewrite modal confirm — chunk-based rewrite then score
     const handleRewriteConfirm = async ({ targetFkgl, learnerLabel, learnerDesc, support }) => {
         setShowRewriteModal(false);
         setRewriting(true);
         setRewritingLabel(learnerLabel);
+        setRewritingProgress('');
         setRewriteResult(null);
         setRewrittenText(null);
         setError(null);
@@ -124,9 +147,7 @@ ${text.slice(0, 4000)}`;
             return;
         }
 
-        try {
-            // Step 1 — rewrite only, no scoring blocks
-            const rewritePrompt = `You are rewriting a document to make it simpler and easier to read.
+        const buildPrompt = (chunkText) => `You are rewriting a document to make it simpler and easier to read.
 
 Target reading level: FKGL ${targetFkgl}
 Current reading level: FKGL ${result?.fkgl != null ? result.fkgl.toFixed(1) : 'unknown'}
@@ -151,22 +172,53 @@ REWRITING RULES — follow every rule:
 5. Keep all factual content and assessment requirements intact.
 6. Keep question numbers and structure.
 
+PROTECTED TEXT — DO NOT CHANGE:
+The following must be copied exactly as they appear in the original — word for word, no changes:
+- All Element names and numbers
+- All Performance Criteria text
+- All Performance Evidence text
+- All Knowledge Evidence text
+- All Assessment Conditions text
+- All unit codes and unit titles
+- All text inside tables headed Element or Performance Criteria
+
+Only rewrite:
+- Instructions to students
+- Question text
+- Scenario descriptions
+- Administrative text
+- Overview and introduction paragraphs
+- Assessor instructions (simplify these separately at FKGL 12-14)
+
 Return ONLY the rewritten text.
 No explanations. No scoring.
 No commentary. No headers.
-Just the rewritten document.
+Just the rewritten document section.
 
-Document to rewrite:
-${text.slice(0, 4000)}`;
+Document section to rewrite:
+${chunkText}`;
 
-            const rewritten = await base44.integrations.Core.InvokeLLM({ prompt: rewritePrompt, model: 'claude_sonnet_4_6' });
+        try {
+            const chunks = splitIntoChunks(text, 2000);
+            const rewrittenChunks = [];
 
-            if (!rewritten || rewritten.trim().length < 20) {
-                throw new Error('AI did not return a rewritten document. Please try again.');
+            for (let i = 0; i < chunks.length; i++) {
+                setRewritingProgress(`Rewriting section ${i + 1} of ${chunks.length}…`);
+                const rewritten = await base44.integrations.Core.InvokeLLM({
+                    prompt: buildPrompt(chunks[i]),
+                    model: 'claude_sonnet_4_6',
+                });
+                if (!rewritten || rewritten.trim().length < 10) {
+                    throw new Error(`Section ${i + 1} could not be rewritten. Please try again.`);
+                }
+                rewrittenChunks.push(rewritten.trim());
             }
-            setRewrittenText(rewritten);
 
-            // Step 2 — score the rewritten text
+            const fullRewritten = rewrittenChunks.join('\n\n');
+            setRewrittenText(fullRewritten);
+
+            // Score the rewritten text (first 4000 chars is representative)
+            setRewritingProgress('Scoring rewritten document…');
             const scorePrompt = `Score the following text for readability using FKGL and FRE formulas.
 
 Return ONLY this exact format (no extra commentary):
@@ -179,11 +231,10 @@ Summary: [one sentence describing the readability level]
 Benchmark: [nearest AQF level or year level]
 
 Text to score:
-${rewritten.slice(0, 4000)}`;
+${fullRewritten.slice(0, 4000)}`;
 
             const scoreRaw = await base44.integrations.Core.InvokeLLM({ prompt: scorePrompt });
             const afterResult = parseReadabilityResult(scoreRaw);
-
             if (!afterResult) throw new Error('Could not score the rewritten document.');
 
             setRewriteResult({ before: result, after: afterResult });
@@ -191,6 +242,7 @@ ${rewritten.slice(0, 4000)}`;
             setError(err.message || 'Rewrite failed. Please try again.');
         } finally {
             setRewriting(false);
+            setRewritingProgress('');
         }
     };
 
@@ -369,6 +421,9 @@ ${rewritten.slice(0, 4000)}`;
                         <p style={{ color: '#0d2444', fontSize: '14px' }}>
                             Rewriting to <span className="font-medium">{rewritingLabel}</span> level…
                         </p>
+                        {rewritingProgress && (
+                            <p style={{ color: '#6b7280', fontSize: '13px' }}>{rewritingProgress}</p>
+                        )}
                     </div>
                 )}
 
