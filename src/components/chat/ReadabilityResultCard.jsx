@@ -1,85 +1,81 @@
-import { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { BAND_CONFIG, getBandForFkgl, getBandIndex } from '@/lib/parseReadabilityResult';
 
-// ─── Band scale ──────────────────────────────────────────────────────────────
+// ─── Scale bar ────────────────────────────────────────────────────────────────
 
 function fkglToPercent(fkgl) {
     const MIN = 0;
     const MAX = 20;
-    const clamped = Math.min(Math.max(fkgl, MIN), MAX);
-    return ((clamped - MIN) / (MAX - MIN)) * 100;
+    return ((Math.min(Math.max(fkgl, MIN), MAX) - MIN) / (MAX - MIN)) * 100;
 }
 
 function ScaleBar({ fkgl, rewriteFkgl }) {
     const activeBandIdx = getBandIndex(fkgl);
-    const rewriteBandIdx = rewriteFkgl != null ? getBandIndex(rewriteFkgl) : -1;
     const band = getBandForFkgl(fkgl);
-
     const primaryPct = fkgl != null ? fkglToPercent(fkgl) : null;
     const rewritePct = rewriteFkgl != null ? fkglToPercent(rewriteFkgl) : null;
+    const hasRewrite = rewritePct != null;
 
     return (
-        <div>
+        <div style={{ marginBottom: '24px' }}>
             {/* Marker row */}
-            <div className="relative w-full h-5 mb-0.5">
+            <div className="relative w-full" style={{ height: '28px', marginBottom: '4px' }}>
                 {primaryPct != null && (
-                    <div className="absolute -translate-x-1/2" style={{ left: `${primaryPct}%` }}>
-                        <span style={{ fontSize: '16px', color: '#0d2444', lineHeight: 1 }}>▼</span>
+                    <div className="absolute -translate-x-1/2" style={{ left: `${primaryPct}%`, bottom: 0 }}>
+                        <span style={{ fontSize: '20px', color: '#0d2444', lineHeight: 1 }}>▼</span>
                     </div>
                 )}
                 {rewritePct != null && (
-                    <div className="absolute -translate-x-1/2" style={{ left: `${rewritePct}%` }}>
-                        <span style={{ fontSize: '16px', color: '#c9a84c', lineHeight: 1 }}>▼</span>
+                    <div className="absolute -translate-x-1/2" style={{ left: `${rewritePct}%`, bottom: 0 }}>
+                        <span style={{ fontSize: '20px', color: '#c9a84c', lineHeight: 1 }}>▼</span>
                     </div>
                 )}
             </div>
 
-            {/* Band segments */}
-            <div className="flex rounded-lg overflow-hidden h-3 w-full">
+            {/* Band bar */}
+            <div className="flex w-full overflow-hidden" style={{ borderRadius: '8px', height: '16px' }}>
                 {BAND_CONFIG.map((b) => (
-                    <div
-                        key={b.name}
-                        className="flex-1"
-                        style={{ backgroundColor: b.color }}
-                        title={`${b.name} (${b.gradeRange})`}
-                    />
+                    <div key={b.name} className="flex-1" style={{ backgroundColor: b.color }} />
                 ))}
             </div>
 
             {/* Band labels */}
-            <div className="flex w-full mt-0.5">
-                {BAND_CONFIG.map((b, i) => (
-                    <div
-                        key={b.name}
-                        className={cn("flex-1 text-center leading-tight", i === activeBandIdx ? "font-semibold" : "")}
-                        style={{ fontSize: '9px', color: i === activeBandIdx ? '#0d2444' : '#6b7280' }}
-                    >
-                        {b.name.split(' ·')[0]}
-                    </div>
-                ))}
+            <div className="flex w-full" style={{ marginTop: '6px' }}>
+                {BAND_CONFIG.map((b, i) => {
+                    const isActive = i === activeBandIdx;
+                    return (
+                        <div
+                            key={b.name}
+                            className="flex-1 text-center leading-tight"
+                            style={{
+                                fontSize: isActive ? '11px' : '10px',
+                                fontWeight: isActive ? 500 : 400,
+                                color: isActive ? '#0d2444' : '#6b7280',
+                            }}
+                        >
+                            {b.name.split(' ·')[0]}
+                        </div>
+                    );
+                })}
             </div>
 
-            {/* Active band detail */}
+            {/* Active band summary */}
             {band && (
-                <div className="mt-1.5 text-center">
-                    <span className="text-sm font-medium" style={{ color: '#0d2444' }}>{band.name}</span>
-                    <span className="text-xs ml-1.5" style={{ color: '#6b7280' }}>— {band.gradeRange} · {band.aqf}</span>
+                <div className="text-center" style={{ marginTop: '12px' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 500, color: '#0d2444' }}>
+                        {band.name} — {band.gradeRange} · {band.aqf}
+                    </span>
                 </div>
             )}
 
-            {/* Legend */}
-            {rewriteBandIdx >= 0 && (
-                <div className="flex gap-4 justify-center mt-1.5 text-xs" style={{ color: '#6b7280' }}>
+            {/* Before/After legend */}
+            {hasRewrite && (
+                <div className="flex gap-4 justify-center" style={{ marginTop: '8px', fontSize: '12px', color: '#6b7280' }}>
                     <span className="flex items-center gap-1">
-                        <span style={{ color: '#0d2444', fontSize: '12px' }}>▼</span>
-                        Original
+                        <span style={{ color: '#0d2444' }}>▼</span> Original
                     </span>
                     <span className="flex items-center gap-1">
-                        <span style={{ color: '#c9a84c', fontSize: '12px' }}>▼</span>
-                        Rewrite
+                        <span style={{ color: '#c9a84c' }}>▼</span> Rewrite
                     </span>
                 </div>
             )}
@@ -98,40 +94,56 @@ function TrafficLight({ tl, onRewrite }) {
 
     const config = {
         green: {
-            bg: '#22c55e', color: '#14532d',
-            icon: '✓',
-            label: 'Within range for your cohort',
+            bg: '#dcfce7', color: '#14532d',
+            label: '✓ Within range for your learners',
             sub: tl.targetFkgl != null
                 ? `FKGL ${tl.fkgl} is within ±1.5 of your target FKGL ${tl.targetFkgl}`
                 : 'Text is within expected readability range.',
         },
         amber: {
-            bg: '#fde047', color: '#713f12',
-            icon: '⚠',
-            label: 'Outside expected range',
+            bg: '#fef9c3', color: '#713f12',
+            label: '⚠ Outside expected range — assessor review recommended',
             sub: tl.targetFkgl != null
-                ? `FKGL ${tl.fkgl} is ${absDiff} grade levels ${direction} your target. Assessor review recommended.`
-                : 'Text is outside expected readability range. Assessor review recommended.',
+                ? `FKGL ${tl.fkgl} is ${absDiff} grade levels ${direction} your target.`
+                : 'Text is outside expected readability range.',
         },
         red: {
-            bg: '#ef4444', color: '#ffffff',
-            icon: '✗',
-            label: 'Material readability concern',
+            bg: '#fee2e2', color: '#7f1d1d',
+            label: '✗ Material readability concern — must be addressed',
             sub: tl.targetFkgl != null
                 ? `FKGL ${tl.fkgl} is ${absDiff} grade levels ${direction} your target. Must be addressed before use.`
                 : 'Text has a significant readability concern. Must be addressed before use.',
         },
     }[tl.status];
 
+    if (!config) return null;
+
     return (
-        <div className="rounded-xl px-4 py-3" style={{ backgroundColor: config.bg, color: config.color }}>
-            <div className="font-medium text-sm">{config.icon} {config.label}</div>
-            <div className="text-xs mt-0.5 opacity-90">{config.sub}</div>
+        <div style={{
+            backgroundColor: config.bg,
+            color: config.color,
+            borderRadius: '8px',
+            padding: '12px 16px',
+            marginBottom: '20px',
+        }}>
+            <div style={{ fontSize: '14px', fontWeight: 500 }}>{config.label}</div>
+            {config.sub && (
+                <div style={{ fontSize: '13px', marginTop: '4px', opacity: 0.85 }}>{config.sub}</div>
+            )}
             {(tl.status === 'amber' || tl.status === 'red') && onRewrite && (
                 <button
                     onClick={onRewrite}
-                    className="mt-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: '#0d2444', color: '#ffffff' }}
+                    style={{
+                        marginTop: '10px',
+                        padding: '6px 14px',
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        backgroundColor: '#0d2444',
+                        color: '#ffffff',
+                        border: 'none',
+                        cursor: 'pointer',
+                    }}
                 >
                     Rewrite this section
                 </button>
@@ -140,113 +152,149 @@ function TrafficLight({ tl, onRewrite }) {
     );
 }
 
+// ─── Stat box ─────────────────────────────────────────────────────────────────
+
+function StatBox({ value, label, sub }) {
+    return (
+        <div style={{
+            flex: 1,
+            backgroundColor: '#f9fafb',
+            border: '1px solid #e5e7eb',
+            borderRadius: '12px',
+            padding: '20px 16px',
+            textAlign: 'center',
+        }}>
+            <div style={{ fontSize: '36px', fontWeight: 500, color: '#0d2444', lineHeight: 1 }}>{value}</div>
+            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>{label}</div>
+            {sub && <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px', fontStyle: 'italic' }}>{sub}</div>}
+        </div>
+    );
+}
+
 // ─── Single result card ───────────────────────────────────────────────────────
 
 export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRewrite, onSaveToLibrary }) {
+    const band = getBandForFkgl(result.fkgl);
+
+    const headline = band
+        ? `This document reads at ${band.name} level`
+        : result.summary || null;
+
     return (
-        <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb' }}>
+        <div style={{
+            backgroundColor: '#ffffff',
+            border: '1px solid #e5e7eb',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '640px',
+            width: '100%',
+        }}>
+            {/* Header label (Before / After) */}
             {headerLabel && (
-                <div
-                    className="px-4 py-2 text-xs font-medium uppercase tracking-wider"
-                    style={{ backgroundColor: headerColor || '#0d2444', color: '#ffffff' }}
-                >
+                <div style={{
+                    marginBottom: '20px',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    letterSpacing: '1px',
+                    textTransform: 'uppercase',
+                    color: headerColor || '#0d2444',
+                }}>
                     {headerLabel}
                 </div>
             )}
 
-            <div className="p-4 space-y-4">
-                {/* Headline */}
-                {(() => {
-                    const band = getBandForFkgl(result.fkgl);
-                    const bandDescriptions = {
-                        'Very Easy':         'below AQF entry — primary to early secondary',
-                        'Easy':              'below AQF entry — upper primary to Year 6',
-                        'Fairly Easy':       'below AQF entry — Year 7–8',
-                        'Cert I/II · Yr 10': 'AQF 1–2 — suitable for foundation VET learners',
-                        'Cert III/IV':       'AQF 3–4 — suitable for vocational learners',
-                        'Diploma':           'AQF 5–6 — suitable for advanced VET learners',
-                        'Degree / Grad Dip': 'AQF 7–8 — suitable for undergraduate students',
-                        'Very Difficult':    'AQF 9–10 — postgraduate level',
-                    };
-                    const desc = band ? bandDescriptions[band.name] : null;
-                    const headline = band && desc
-                        ? `This document reads at ${band.name} level (${desc}).`
-                        : result.summary;
-                    return headline ? (
-                        <p className="text-base font-medium leading-snug" style={{ color: '#0d2444' }}>
-                            {headline}
-                        </p>
-                    ) : null;
-                })()}
-
-                {/* Scale */}
-                <div className="pt-2">
-                    <ScaleBar fkgl={result.fkgl} rewriteFkgl={rewriteFkgl} />
-                </div>
-
-                {/* Key stats */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {[
-                        { abbr: 'FKGL', label: 'Grade Level',         value: result.fkgl?.toFixed(1) ?? '—',        note: 'lower = easier' },
-                        { abbr: 'FRE',  label: 'Reading Ease',        value: result.fre?.toFixed(1) ?? '—',         note: '0–100, higher = easier' },
-                        {
-                            abbr: 'ASL', label: 'Avg Sentence Length',
-                            value: result.sentences != null && result.words != null && result.sentences > 0
-                                ? (result.words / result.sentences).toFixed(1) : '—',
-                            note: 'words per sentence',
-                        },
-                        {
-                            abbr: 'ASW', label: 'Avg Word Length',
-                            value: result.syllables != null && result.words != null && result.words > 0
-                                ? (result.syllables / result.words).toFixed(2) : '—',
-                            note: 'syllables per word',
-                        },
-                    ].map(stat => (
-                        <div key={stat.abbr} className="rounded-xl p-3 text-center" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
-                            <div className="font-mono text-2xl font-medium tabular-nums" style={{ color: '#0d2444' }}>
-                                {stat.value}
-                            </div>
-                            <div className="text-[11px] font-medium mt-0.5" style={{ color: '#374151' }}>{stat.abbr}</div>
-                            <div className="text-[10px] mt-0.5 leading-tight" style={{ color: '#6b7280' }}>{stat.label}</div>
-                            <div className="text-[9px] mt-0.5 leading-tight italic" style={{ color: '#9ca3af' }}>{stat.note}</div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Traffic light */}
-                {result.trafficLight && (
-                    <TrafficLight tl={result.trafficLight} onRewrite={onRewrite} />
-                )}
-
-                {/* Action buttons */}
-                <div className="flex gap-2 pt-1">
-                    <button
-                        className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
-                        style={{ border: '1px solid #0d2444', color: '#0d2444', backgroundColor: 'transparent' }}
-                        onClick={onSaveToLibrary}
-                    >
-                        Save to library
-                    </button>
-                    <button
-                        className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
-                        style={{ backgroundColor: '#c9a84c', color: '#0d2444', border: 'none' }}
-                        onClick={onRewrite}
-                    >
-                        Rewrite to different level
-                    </button>
-                </div>
-
-                {/* Disclaimer */}
-                <p className="text-[11px] italic leading-relaxed" style={{ color: '#9ca3af' }}>
-                    Scores are AI estimates based on sentence length and word complexity. For critical compliance decisions, verify with a qualified assessor.
+            {/* Section 1 — Headline */}
+            {headline && (
+                <p style={{
+                    fontSize: '22px',
+                    fontWeight: 500,
+                    color: '#0d2444',
+                    lineHeight: 1.3,
+                    marginBottom: '24px',
+                }}>
+                    {headline}
                 </p>
+            )}
 
-                {result.benchmark && (
-                    <p className="text-[11px] italic" style={{ color: '#9ca3af' }}>
-                        Nearest benchmark: {result.benchmark}
-                    </p>
-                )}
+            {/* Section 2 — Scale bar */}
+            <ScaleBar fkgl={result.fkgl} rewriteFkgl={rewriteFkgl} />
+
+            {/* Section 3 — Traffic light (only when cohort target is set) */}
+            {result.trafficLight && (
+                <TrafficLight tl={result.trafficLight} onRewrite={onRewrite} />
+            )}
+
+            {/* Section 4 — Stat boxes */}
+            <div className="flex gap-3" style={{ marginBottom: '24px' }}>
+                <StatBox
+                    value={result.fkgl?.toFixed(1) ?? '—'}
+                    label="Reading Grade Level"
+                    sub="lower = harder to read"
+                />
+                <StatBox
+                    value={result.fre?.toFixed(1) ?? '—'}
+                    label="Reading Ease Score"
+                    sub="higher = easier to read"
+                />
+                <StatBox
+                    value={result.words ?? '—'}
+                    label="Words"
+                    sub={null}
+                />
             </div>
+
+            {/* Action buttons */}
+            {(onSaveToLibrary || onRewrite) && (
+                <div className="flex gap-2">
+                    {onSaveToLibrary && (
+                        <button
+                            onClick={onSaveToLibrary}
+                            style={{
+                                flex: 1,
+                                padding: '10px 16px',
+                                borderRadius: '8px',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                border: '1px solid #0d2444',
+                                color: '#0d2444',
+                                backgroundColor: 'transparent',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Save to library
+                        </button>
+                    )}
+                    {onRewrite && (
+                        <button
+                            onClick={onRewrite}
+                            style={{
+                                flex: 1,
+                                padding: '10px 16px',
+                                borderRadius: '8px',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                backgroundColor: '#c9a84c',
+                                color: '#0d2444',
+                                border: 'none',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Rewrite to different level
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {/* Disclaimer */}
+            <p style={{ fontSize: '11px', fontStyle: 'italic', color: '#9ca3af', marginTop: '16px', lineHeight: 1.6 }}>
+                Scores are AI estimates based on sentence length and word complexity. For critical compliance decisions, verify with a qualified assessor.
+            </p>
+
+            {result.benchmark && (
+                <p style={{ fontSize: '11px', fontStyle: 'italic', color: '#9ca3af', marginTop: '4px' }}>
+                    Nearest benchmark: {result.benchmark}
+                </p>
+            )}
         </div>
     );
 }
@@ -264,8 +312,8 @@ export function BeforeAfterCards({ before, after, onRewrite, onSaveToLibrary }) 
         : null;
 
     return (
-        <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-start">
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-4 items-start">
                 <ResultCard
                     result={before}
                     headerLabel="Before"
@@ -273,7 +321,7 @@ export function BeforeAfterCards({ before, after, onRewrite, onSaveToLibrary }) 
                     onRewrite={onRewrite}
                     onSaveToLibrary={onSaveToLibrary}
                 />
-                <div className="flex items-center justify-center py-2 sm:py-0 sm:pt-20">
+                <div className="flex items-center justify-center py-2 sm:py-0 sm:pt-24">
                     <ArrowRight className="h-5 w-5" style={{ color: '#6b7280' }} />
                 </div>
                 <ResultCard
@@ -287,7 +335,9 @@ export function BeforeAfterCards({ before, after, onRewrite, onSaveToLibrary }) 
 
             {beforeBand && afterBand && diff && (
                 <p className="text-sm font-medium text-center" style={{ color: '#374151' }}>
-                    Moved from <span style={{ color: beforeBand.color }}>{beforeBand.name}</span> to{' '}
+                    Moved from{' '}
+                    <span style={{ color: beforeBand.color }}>{beforeBand.name}</span>
+                    {' '}to{' '}
                     <span style={{ color: afterBand.color }}>{afterBand.name}</span>
                     {' '}— {Math.abs(parseFloat(diff))} grade level{Math.abs(parseFloat(diff)) !== 1 ? 's' : ''} {direction}
                 </p>
