@@ -74,7 +74,9 @@ export default function RewriteModal({ bandName, fkglStr, onConfirm, onCancel })
             style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
             onClick={e => { if (e.target === e.currentTarget) onCancel(); }}
         >
-            <div style={{
+            <div
+                onClick={e => e.stopPropagation()}
+                style={{
                 backgroundColor: '#ffffff',
                 borderRadius: '16px',
                 maxWidth: '480px',
