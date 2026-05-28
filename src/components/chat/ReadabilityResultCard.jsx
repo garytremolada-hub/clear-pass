@@ -6,10 +6,9 @@ import { BAND_CONFIG, getBandForFkgl, getBandIndex } from '@/lib/parseReadabilit
 
 // ─── Band scale ──────────────────────────────────────────────────────────────
 
-// Calculate % position across the full bar for a given FKGL value
 function fkglToPercent(fkgl) {
     const MIN = 0;
-    const MAX = 20; // anything ≥17 lands in last band; cap at 20 for visual
+    const MAX = 20;
     const clamped = Math.min(Math.max(fkgl, MIN), MAX);
     return ((clamped - MIN) / (MAX - MIN)) * 100;
 }
@@ -19,53 +18,44 @@ function ScaleBar({ fkgl, rewriteFkgl }) {
     const rewriteBandIdx = rewriteFkgl != null ? getBandIndex(rewriteFkgl) : -1;
     const band = getBandForFkgl(fkgl);
 
-    const primaryPct  = fkgl != null ? fkglToPercent(fkgl) : null;
-    const rewritePct  = rewriteFkgl != null ? fkglToPercent(rewriteFkgl) : null;
+    const primaryPct = fkgl != null ? fkglToPercent(fkgl) : null;
+    const rewritePct = rewriteFkgl != null ? fkglToPercent(rewriteFkgl) : null;
 
     return (
         <div>
-            {/* Marker row — sits above the bar */}
+            {/* Marker row */}
             <div className="relative w-full h-5 mb-0.5">
                 {primaryPct != null && (
-                    <div
-                        className="absolute -translate-x-1/2"
-                        style={{ left: `${primaryPct}%` }}
-                    >
-                        <span style={{ fontSize: '16px', color: '#1e3a5f', lineHeight: 1 }}>▼</span>
+                    <div className="absolute -translate-x-1/2" style={{ left: `${primaryPct}%` }}>
+                        <span style={{ fontSize: '16px', color: '#0d2444', lineHeight: 1 }}>▼</span>
                     </div>
                 )}
                 {rewritePct != null && (
-                    <div
-                        className="absolute -translate-x-1/2"
-                        style={{ left: `${rewritePct}%` }}
-                    >
-                        <span style={{ fontSize: '16px', color: '#15803d', lineHeight: 1 }}>▼</span>
+                    <div className="absolute -translate-x-1/2" style={{ left: `${rewritePct}%` }}>
+                        <span style={{ fontSize: '16px', color: '#c9a84c', lineHeight: 1 }}>▼</span>
                     </div>
                 )}
             </div>
 
             {/* Band segments */}
-            <div className="flex rounded-lg overflow-hidden h-5 w-full">
-                {BAND_CONFIG.map((b, i) => (
+            <div className="flex rounded-lg overflow-hidden h-3 w-full">
+                {BAND_CONFIG.map((b) => (
                     <div
                         key={b.name}
-                        className="flex-1 relative"
+                        className="flex-1"
                         style={{ backgroundColor: b.color }}
                         title={`${b.name} (${b.gradeRange})`}
                     />
                 ))}
             </div>
 
-            {/* Band labels — tiny, below */}
+            {/* Band labels */}
             <div className="flex w-full mt-0.5">
                 {BAND_CONFIG.map((b, i) => (
                     <div
                         key={b.name}
-                        className={cn(
-                            "flex-1 text-center leading-tight",
-                            i === activeBandIdx ? "font-semibold text-foreground" : "text-muted-foreground"
-                        )}
-                        style={{ fontSize: '9px' }}
+                        className={cn("flex-1 text-center leading-tight", i === activeBandIdx ? "font-semibold" : "")}
+                        style={{ fontSize: '9px', color: i === activeBandIdx ? '#0d2444' : '#6b7280' }}
                     >
                         {b.name.split(' ·')[0]}
                     </div>
@@ -75,20 +65,20 @@ function ScaleBar({ fkgl, rewriteFkgl }) {
             {/* Active band detail */}
             {band && (
                 <div className="mt-1.5 text-center">
-                    <span className="font-semibold text-sm text-foreground">{band.name}</span>
-                    <span className="text-xs text-muted-foreground ml-1.5">— {band.gradeRange} · {band.aqf}</span>
+                    <span className="text-sm font-medium" style={{ color: '#0d2444' }}>{band.name}</span>
+                    <span className="text-xs ml-1.5" style={{ color: '#6b7280' }}>— {band.gradeRange} · {band.aqf}</span>
                 </div>
             )}
 
             {/* Legend */}
             {rewriteBandIdx >= 0 && (
-                <div className="flex gap-4 justify-center mt-1.5 text-xs text-muted-foreground">
+                <div className="flex gap-4 justify-center mt-1.5 text-xs" style={{ color: '#6b7280' }}>
                     <span className="flex items-center gap-1">
-                        <span style={{ color: '#1e3a5f', fontSize: '12px' }}>▼</span>
+                        <span style={{ color: '#0d2444', fontSize: '12px' }}>▼</span>
                         Original
                     </span>
                     <span className="flex items-center gap-1">
-                        <span style={{ color: '#15803d', fontSize: '12px' }}>▼</span>
+                        <span style={{ color: '#c9a84c', fontSize: '12px' }}>▼</span>
                         Rewrite
                     </span>
                 </div>
@@ -108,7 +98,7 @@ function TrafficLight({ tl, onRewrite }) {
 
     const config = {
         green: {
-            bg: 'bg-green-600',
+            bg: '#22c55e', color: '#14532d',
             icon: '✓',
             label: 'Within range for your cohort',
             sub: tl.targetFkgl != null
@@ -116,7 +106,7 @@ function TrafficLight({ tl, onRewrite }) {
                 : 'Text is within expected readability range.',
         },
         amber: {
-            bg: 'bg-amber-500',
+            bg: '#fde047', color: '#713f12',
             icon: '⚠',
             label: 'Outside expected range',
             sub: tl.targetFkgl != null
@@ -124,7 +114,7 @@ function TrafficLight({ tl, onRewrite }) {
                 : 'Text is outside expected readability range. Assessor review recommended.',
         },
         red: {
-            bg: 'bg-red-600',
+            bg: '#ef4444', color: '#ffffff',
             icon: '✗',
             label: 'Material readability concern',
             sub: tl.targetFkgl != null
@@ -134,15 +124,14 @@ function TrafficLight({ tl, onRewrite }) {
     }[tl.status];
 
     return (
-        <div className={cn('rounded-xl px-4 py-3 text-white', config.bg)}>
-            <div className="font-semibold text-sm">
-                {config.icon} {config.label}
-            </div>
+        <div className="rounded-xl px-4 py-3" style={{ backgroundColor: config.bg, color: config.color }}>
+            <div className="font-medium text-sm">{config.icon} {config.label}</div>
             <div className="text-xs mt-0.5 opacity-90">{config.sub}</div>
             {(tl.status === 'amber' || tl.status === 'red') && onRewrite && (
                 <button
                     onClick={onRewrite}
-                    className="mt-2 px-3 py-1.5 bg-[#1e3a5f] text-white rounded-lg text-xs font-medium hover:bg-[#152d4d] transition-colors"
+                    className="mt-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: '#0d2444', color: '#ffffff' }}
                 >
                     Rewrite this section
                 </button>
@@ -154,21 +143,19 @@ function TrafficLight({ tl, onRewrite }) {
 // ─── Single result card ───────────────────────────────────────────────────────
 
 export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRewrite, onSaveToLibrary }) {
-
     return (
-        <div className="bg-white dark:bg-card border rounded-2xl shadow-sm overflow-hidden">
-            {/* Optional coloured header bar */}
+        <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb' }}>
             {headerLabel && (
                 <div
-                    className="px-4 py-2 text-white text-xs font-semibold uppercase tracking-wider"
-                    style={{ backgroundColor: headerColor || '#1e3a5f' }}
+                    className="px-4 py-2 text-xs font-medium uppercase tracking-wider"
+                    style={{ backgroundColor: headerColor || '#0d2444', color: '#ffffff' }}
                 >
                     {headerLabel}
                 </div>
             )}
 
             <div className="p-4 space-y-4">
-                {/* Section 1 — Headline */}
+                {/* Headline */}
                 {(() => {
                     const band = getBandForFkgl(result.fkgl);
                     const bandDescriptions = {
@@ -186,94 +173,76 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
                         ? `This document reads at ${band.name} level (${desc}).`
                         : result.summary;
                     return headline ? (
-                        <p className="text-base font-bold text-[#1e3a5f] dark:text-foreground leading-snug">
+                        <p className="text-base font-medium leading-snug" style={{ color: '#0d2444' }}>
                             {headline}
                         </p>
                     ) : null;
                 })()}
 
-                {/* Section 2 — Scale */}
-                <div className="pt-3">
+                {/* Scale */}
+                <div className="pt-2">
                     <ScaleBar fkgl={result.fkgl} rewriteFkgl={rewriteFkgl} />
                 </div>
 
-                {/* Section 3 — Key stats */}
+                {/* Key stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
+                        { abbr: 'FKGL', label: 'Grade Level',         value: result.fkgl?.toFixed(1) ?? '—',        note: 'lower = easier' },
+                        { abbr: 'FRE',  label: 'Reading Ease',        value: result.fre?.toFixed(1) ?? '—',         note: '0–100, higher = easier' },
                         {
-                            abbr: 'FKGL',
-                            label: 'Grade Level',
-                            value: result.fkgl?.toFixed(1) ?? '—',
-                            note: 'lower = easier to read',
-                        },
-                        {
-                            abbr: 'FRE',
-                            label: 'Reading Ease',
-                            value: result.fre?.toFixed(1) ?? '—',
-                            note: '0–100, higher = easier',
-                        },
-                        {
-                            abbr: 'ASL',
-                            label: 'Avg Sentence Length',
+                            abbr: 'ASL', label: 'Avg Sentence Length',
                             value: result.sentences != null && result.words != null && result.sentences > 0
-                                ? (result.words / result.sentences).toFixed(1)
-                                : '—',
+                                ? (result.words / result.sentences).toFixed(1) : '—',
                             note: 'words per sentence',
                         },
                         {
-                            abbr: 'ASW',
-                            label: 'Avg Word Length',
+                            abbr: 'ASW', label: 'Avg Word Length',
                             value: result.syllables != null && result.words != null && result.words > 0
-                                ? (result.syllables / result.words).toFixed(2)
-                                : '—',
+                                ? (result.syllables / result.words).toFixed(2) : '—',
                             note: 'syllables per word',
                         },
                     ].map(stat => (
-                        <div key={stat.abbr} className="bg-muted/50 rounded-xl p-3 text-center">
-                            <div className="font-mono text-2xl font-bold text-[#1e3a5f] dark:text-foreground tabular-nums">
+                        <div key={stat.abbr} className="rounded-xl p-3 text-center" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
+                            <div className="font-mono text-2xl font-medium tabular-nums" style={{ color: '#0d2444' }}>
                                 {stat.value}
                             </div>
-                            <div className="text-[11px] font-semibold text-foreground mt-0.5">{stat.abbr}</div>
-                            <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{stat.label}</div>
-                            <div className="text-[9px] text-muted-foreground mt-0.5 leading-tight italic">{stat.note}</div>
+                            <div className="text-[11px] font-medium mt-0.5" style={{ color: '#374151' }}>{stat.abbr}</div>
+                            <div className="text-[10px] mt-0.5 leading-tight" style={{ color: '#6b7280' }}>{stat.label}</div>
+                            <div className="text-[9px] mt-0.5 leading-tight italic" style={{ color: '#9ca3af' }}>{stat.note}</div>
                         </div>
                     ))}
                 </div>
 
-                {/* Section 4 — Traffic light */}
+                {/* Traffic light */}
                 {result.trafficLight && (
                     <TrafficLight tl={result.trafficLight} onRewrite={onRewrite} />
                 )}
 
-
-
                 {/* Action buttons */}
                 <div className="flex gap-2 pt-1">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 border-[#1e3a5f] text-[#1e3a5f] hover:bg-[#1e3a5f]/5 dark:border-primary dark:text-primary"
+                    <button
+                        className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
+                        style={{ border: '1px solid #0d2444', color: '#0d2444', backgroundColor: 'transparent' }}
                         onClick={onSaveToLibrary}
                     >
                         Save to library
-                    </Button>
-                    <Button
-                        size="sm"
-                        className="flex-1 bg-[#1e3a5f] hover:bg-[#152d4d] text-white dark:bg-primary"
+                    </button>
+                    <button
+                        className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
+                        style={{ backgroundColor: '#c9a84c', color: '#0d2444', border: 'none' }}
                         onClick={onRewrite}
                     >
                         Rewrite to different level
-                    </Button>
+                    </button>
                 </div>
 
                 {/* Disclaimer */}
-                <p className="text-[11px] text-muted-foreground italic leading-relaxed">
+                <p className="text-[11px] italic leading-relaxed" style={{ color: '#9ca3af' }}>
                     Scores are AI estimates based on sentence length and word complexity. For critical compliance decisions, verify with a qualified assessor.
                 </p>
 
-                {/* Nearest benchmark */}
                 {result.benchmark && (
-                    <p className="text-[11px] text-muted-foreground italic">
+                    <p className="text-[11px] italic" style={{ color: '#9ca3af' }}>
                         Nearest benchmark: {result.benchmark}
                     </p>
                 )}
@@ -287,39 +256,37 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
 export function BeforeAfterCards({ before, after, onRewrite, onSaveToLibrary }) {
     const beforeBand = getBandForFkgl(before.fkgl);
     const afterBand  = getBandForFkgl(after.fkgl);
-    const diff       = after.fkgl != null && before.fkgl != null
+    const diff = after.fkgl != null && before.fkgl != null
         ? (before.fkgl - after.fkgl).toFixed(1)
         : null;
-    const direction  = diff != null
+    const direction = diff != null
         ? (parseFloat(diff) > 0 ? 'simpler' : 'more complex')
         : null;
 
     return (
         <div className="space-y-3">
-            {/* Cards — side by side on desktop, stacked on mobile */}
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-start">
                 <ResultCard
                     result={before}
                     headerLabel="Before"
-                    headerColor="#1e3a5f"
+                    headerColor="#0d2444"
                     onRewrite={onRewrite}
                     onSaveToLibrary={onSaveToLibrary}
                 />
                 <div className="flex items-center justify-center py-2 sm:py-0 sm:pt-20">
-                    <ArrowRight className="h-5 w-5 text-muted-foreground" />
+                    <ArrowRight className="h-5 w-5" style={{ color: '#6b7280' }} />
                 </div>
                 <ResultCard
                     result={after}
                     headerLabel="After"
-                    headerColor="#15803d"
+                    headerColor="#c9a84c"
                     onRewrite={onRewrite}
                     onSaveToLibrary={onSaveToLibrary}
                 />
             </div>
 
-            {/* Movement summary */}
             {beforeBand && afterBand && diff && (
-                <p className="text-sm font-semibold text-foreground text-center">
+                <p className="text-sm font-medium text-center" style={{ color: '#374151' }}>
                     Moved from <span style={{ color: beforeBand.color }}>{beforeBand.name}</span> to{' '}
                     <span style={{ color: afterBand.color }}>{afterBand.name}</span>
                     {' '}— {Math.abs(parseFloat(diff))} grade level{Math.abs(parseFloat(diff)) !== 1 ? 's' : ''} {direction}

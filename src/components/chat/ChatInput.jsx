@@ -40,7 +40,7 @@ export default function ChatInput({ onSend, onDocumentUpload, disabled }) {
     const activePanelMode = uploadMode !== 'pick' ? uploadMode : null;
 
     return (
-        <div className="border-t bg-card">
+        <div style={{ borderTop: '1px solid #e5e7eb', backgroundColor: '#ffffff' }}>
             {showUploadPanel && uploadMode && uploadMode !== 'pick' && (
                 <div className="p-4 pb-0">
                     <DocumentUploadPanel

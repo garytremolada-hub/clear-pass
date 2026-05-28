@@ -228,12 +228,12 @@ export default function BuildOutputViewer({ text }) {
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            className={cn(
-                                "flex-1 px-5 py-3 text-sm font-medium transition-colors",
-                                activeTab === tab.id
-                                    ? "bg-white dark:bg-card text-[#1e3a5f] border-b-2 border-[#1e3a5f]"
-                                    : "bg-muted/40 text-muted-foreground hover:text-foreground"
-                            )}
+                            className="flex-1 px-5 py-3 text-sm font-medium transition-colors"
+                            style={{
+                                backgroundColor: activeTab === tab.id ? '#ffffff' : '#f9fafb',
+                                color: activeTab === tab.id ? '#0d2444' : '#6b7280',
+                                borderBottom: activeTab === tab.id ? '2px solid #c9a84c' : '2px solid transparent',
+                            }}
                         >
                             {tab.label}
                         </button>
@@ -255,8 +255,9 @@ export default function BuildOutputViewer({ text }) {
 
             {/* Download button */}
             <Button
-                className="w-full bg-[#1e3a5f] hover:bg-[#152d4d] text-white gap-2"
+                className="w-full gap-2 transition-opacity hover:opacity-90"
                 size="lg"
+                style={{ backgroundColor: '#c9a84c', color: '#0d2444', border: 'none' }}
                 onClick={() => downloadAsWord(studentText, assessorText)}
             >
                 <Download className="h-4 w-4" />

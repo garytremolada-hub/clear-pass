@@ -5,13 +5,13 @@
 
 export const BAND_CONFIG = [
     { name: 'Very Easy',         gradeRange: 'Grade 1–3',   aqf: 'Year 1–4',              color: '#22c55e', fkglMin: 0,  fkglMax: 3  },
-    { name: 'Easy',              gradeRange: 'Grade 4–5',   aqf: 'Year 5–6',              color: '#84cc16', fkglMin: 3,  fkglMax: 6  },
-    { name: 'Fairly Easy',       gradeRange: 'Grade 6–7',   aqf: 'Year 7–8',              color: '#a3e635', fkglMin: 6,  fkglMax: 8  },
-    { name: 'Cert I/II · Yr 10', gradeRange: 'Grade 8–9',   aqf: 'AQF 1–2',              color: '#facc15', fkglMin: 8,  fkglMax: 10 },
+    { name: 'Easy',              gradeRange: 'Grade 4–5',   aqf: 'Year 5–6',              color: '#86efac', fkglMin: 3,  fkglMax: 6  },
+    { name: 'Fairly Easy',       gradeRange: 'Grade 6–7',   aqf: 'Year 7–8',              color: '#bef264', fkglMin: 6,  fkglMax: 8  },
+    { name: 'Cert I/II · Yr 10', gradeRange: 'Grade 8–9',   aqf: 'AQF 1–2',              color: '#fde047', fkglMin: 8,  fkglMax: 10 },
     { name: 'Cert III/IV',       gradeRange: 'Grade 10–12', aqf: 'AQF 3–4',              color: '#fb923c', fkglMin: 10, fkglMax: 13 },
     { name: 'Diploma',           gradeRange: 'Grade 13–14', aqf: 'AQF 5–6',              color: '#f97316', fkglMin: 13, fkglMax: 15 },
     { name: 'Degree / Grad Dip', gradeRange: 'Grade 15–16', aqf: 'AQF 7–8',              color: '#ef4444', fkglMin: 15, fkglMax: 17 },
-    { name: 'Very Difficult',    gradeRange: 'Grade 17+',   aqf: 'Postgraduate register', color: '#dc2626', fkglMin: 17, fkglMax: 99 },
+    { name: 'Very Difficult',    gradeRange: 'Grade 17+',   aqf: 'Postgraduate register', color: '#991b1b', fkglMin: 17, fkglMax: 99 },
 ];
 
 export function getBandForFkgl(fkgl) {

@@ -220,14 +220,14 @@ export default function MessageBubble({ message }) {
     return (
         <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
             {!isUser && (
-                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center mt-0.5 shrink-0">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
+                <div className="h-8 w-8 rounded-lg flex items-center justify-center mt-0.5 shrink-0" style={{ backgroundColor: '#162d50' }}>
+                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: '#c9a84c' }} />
                 </div>
             )}
             <div className={cn(isUser ? "max-w-[85%] flex flex-col items-end" : "w-full max-w-3xl")}>
                 {message.content && (
                     isUser ? (
-                        <div className="rounded-2xl px-4 py-3 bg-primary text-primary-foreground">
+                        <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: '#0d2444', color: '#ffffff' }}>
                             <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
                         </div>
                     ) : (

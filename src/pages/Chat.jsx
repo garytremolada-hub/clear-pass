@@ -192,7 +192,7 @@ Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do
 
                         {/* Hero */}
                         <div className="text-center space-y-4">
-                            <h1 className="text-4xl font-bold text-[#1e3a5f] dark:text-foreground leading-tight">
+                            <h1 className="text-4xl leading-tight" style={{ color: '#0d2444', fontWeight: 500 }}>
                                 Are your assessments audit-ready?
                             </h1>
                             <p className="text-muted-foreground text-base leading-relaxed max-w-2xl mx-auto">
@@ -204,18 +204,19 @@ Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
                             {/* Card 1 — Check readability */}
-                            <div className="bg-white dark:bg-card rounded-xl shadow-sm border border-l-4 border-l-[#1e3a5f] flex flex-col">
+                            <div className="bg-white rounded-xl shadow-sm flex flex-col" style={{ border: '1px solid #e5e7eb', borderLeft: '4px solid #0d2444' }}>
                                 <div className="p-5 flex flex-col flex-1 space-y-3">
-                                    <div className="h-10 w-10 rounded-lg bg-[#1e3a5f]/10 flex items-center justify-center">
-                                        <Search className="h-5 w-5 text-[#1e3a5f]" />
+                                    <div className="h-10 w-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#0d2444' }}>
+                                        <Search className="h-5 w-5" style={{ color: '#c9a84c' }} />
                                     </div>
-                                    <h3 className="font-semibold text-[#1e3a5f] dark:text-foreground text-base">Check readability</h3>
-                                    <p className="text-sm text-muted-foreground leading-relaxed flex-1">
+                                    <h3 className="text-base font-medium" style={{ color: '#0d2444' }}>Check readability</h3>
+                                    <p className="text-sm leading-relaxed flex-1" style={{ color: '#6b7280' }}>
                                         Is your assessment written at the right level for your learners? Get an instant readability score mapped to AQF levels.
                                     </p>
                                     <button
                                         onClick={() => handleQuickAction('I want to score some text for readability.', false)}
-                                        className="w-full mt-2 py-2.5 px-4 rounded-lg bg-[#1e3a5f] text-white text-sm font-medium hover:bg-[#152d4d] transition-colors"
+                                        className="w-full mt-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
+                                        style={{ backgroundColor: '#c9a84c', color: '#0d2444' }}
                                     >
                                         Upload document
                                     </button>
@@ -223,18 +224,19 @@ Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do
                             </div>
 
                             {/* Card 2 — Audit assessment */}
-                            <div className="bg-white dark:bg-card rounded-xl shadow-sm border border-l-4 border-l-[#15803d] flex flex-col">
+                            <div className="bg-white rounded-xl shadow-sm flex flex-col" style={{ border: '1px solid #e5e7eb', borderLeft: '4px solid #162d50' }}>
                                 <div className="p-5 flex flex-col flex-1 space-y-3">
-                                    <div className="h-10 w-10 rounded-lg bg-[#15803d]/10 flex items-center justify-center">
-                                        <CheckSquare className="h-5 w-5 text-[#15803d]" />
+                                    <div className="h-10 w-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#162d50' }}>
+                                        <CheckSquare className="h-5 w-5" style={{ color: '#c9a84c' }} />
                                     </div>
-                                    <h3 className="font-semibold text-[#15803d] dark:text-foreground text-base">Audit your assessment</h3>
-                                    <p className="text-sm text-muted-foreground leading-relaxed flex-1">
+                                    <h3 className="text-base font-medium" style={{ color: '#0d2444' }}>Audit your assessment</h3>
+                                    <p className="text-sm leading-relaxed flex-1" style={{ color: '#6b7280' }}>
                                         Upload your assessment and Unit of Competency. We'll check evidence coverage, readability compliance, and flag every gap before an auditor does.
                                     </p>
                                     <button
                                         onClick={() => handleQuickAction('I want to evaluate an existing assessment against a UoC.', true)}
-                                        className="w-full mt-2 py-2.5 px-4 rounded-lg bg-[#15803d] text-white text-sm font-medium hover:bg-[#166534] transition-colors"
+                                        className="w-full mt-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
+                                        style={{ backgroundColor: '#c9a84c', color: '#0d2444' }}
                                     >
                                         Upload assessment + UoC
                                     </button>
@@ -242,18 +244,19 @@ Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do
                             </div>
 
                             {/* Card 3 — Build assessment */}
-                            <div className="bg-white dark:bg-card rounded-xl shadow-sm border border-l-4 border-l-[#7c3aed] flex flex-col">
+                            <div className="bg-white rounded-xl shadow-sm flex flex-col" style={{ border: '1px solid #e5e7eb', borderLeft: '4px solid #8ba4c4' }}>
                                 <div className="p-5 flex flex-col flex-1 space-y-3">
-                                    <div className="h-10 w-10 rounded-lg bg-[#7c3aed]/10 flex items-center justify-center">
-                                        <FileEdit className="h-5 w-5 text-[#7c3aed]" />
+                                    <div className="h-10 w-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#8ba4c4' }}>
+                                        <FileEdit className="h-5 w-5" style={{ color: '#0d2444' }} />
                                     </div>
-                                    <h3 className="font-semibold text-[#7c3aed] dark:text-foreground text-base">Build a new assessment</h3>
-                                    <p className="text-sm text-muted-foreground leading-relaxed flex-1">
+                                    <h3 className="text-base font-medium" style={{ color: '#0d2444' }}>Build a new assessment</h3>
+                                    <p className="text-sm leading-relaxed flex-1" style={{ color: '#6b7280' }}>
                                         Give us your Unit of Competency and we'll build a complete, audit-ready assessment from scratch — scored and mapped to your cohort.
                                     </p>
                                     <button
                                         onClick={() => handleQuickAction('I want to build a new assessment from a UoC.', true)}
-                                        className="w-full mt-2 py-2.5 px-4 rounded-lg bg-[#7c3aed] text-white text-sm font-medium hover:bg-[#6d28d9] transition-colors"
+                                        className="w-full mt-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
+                                        style={{ backgroundColor: '#c9a84c', color: '#0d2444' }}
                                     >
                                         Upload UoC
                                     </button>
@@ -262,14 +265,14 @@ Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do
                         </div>
 
                         {/* Trust statement */}
-                        <p className="text-center text-xs text-muted-foreground leading-relaxed">
+                        <p className="text-center text-xs leading-relaxed" style={{ color: '#9ca3af' }}>
                             Used by RTOs and universities across Australia. Results mapped to AQF levels 1–10.<br />
                             Scores are AI estimates — always review with a qualified assessor before submission.
                         </p>
 
                         {/* Metric definitions */}
-                        <div className="border rounded-xl p-5 bg-muted/30">
-                            <p className="text-xs font-semibold text-foreground mb-3">Metric definitions</p>
+                        <div className="rounded-xl p-5" style={{ border: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
+                            <p className="text-xs font-medium mb-3" style={{ color: '#374151' }}>Metric definitions</p>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {[
                                     { abbr: 'FKGL', name: 'Flesch–Kincaid Grade Level', desc: 'Mapped to Australian year levels and AQF qualifications (AQF 1–10). Lower score = easier to read.' },
@@ -278,9 +281,9 @@ Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do
                                     { abbr: 'ASW',  name: 'Average Syllables per Word', desc: 'Mean syllables per word. Fewer syllables = simpler vocabulary.' },
                                 ].map(m => (
                                     <div key={m.abbr}>
-                                        <p className="text-sm font-bold text-[#1e3a5f]">{m.abbr}</p>
-                                        <p className="text-[11px] font-medium text-foreground mb-0.5">{m.name}</p>
-                                        <p className="text-[11px] text-muted-foreground leading-relaxed">{m.desc}</p>
+                                        <p className="text-sm font-medium" style={{ color: '#0d2444' }}>{m.abbr}</p>
+                                        <p className="text-[11px] font-medium mb-0.5" style={{ color: '#374151' }}>{m.name}</p>
+                                        <p className="text-[11px] leading-relaxed" style={{ color: '#6b7280' }}>{m.desc}</p>
                                     </div>
                                 ))}
                             </div>
