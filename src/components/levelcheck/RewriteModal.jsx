@@ -10,10 +10,10 @@ const LEARNER_OPTIONS = [
 ];
 
 const SUPPORT_OPTIONS = [
-    { value: 'none',    label: 'No — most learners read English comfortably' },
-    { value: 'esl',     label: 'Yes — some learners speak English as a second language (ESL)' },
-    { value: 'literacy',label: 'Yes — some learners need extra literacy support' },
-    { value: 'both',    label: 'Yes — ESL and literacy support needed' },
+    { value: 'none',     label: 'No — most learners read English comfortably' },
+    { value: 'esl',      label: 'Yes — some learners speak English as a second language (ESL)' },
+    { value: 'literacy', label: 'Yes — some learners need extra literacy support' },
+    { value: 'both',     label: 'Yes — ESL and literacy support needed' },
 ];
 
 const FKGL_MAP = {
@@ -31,10 +31,10 @@ const LEARNER_DESCRIPTIONS = {
 };
 
 const SUPPORT_SUFFIXES = {
-    none:    '',
-    esl:     ' with ESL support',
-    literacy:' with literacy support',
-    both:    ' with ESL and literacy support',
+    none:     '',
+    esl:      ' with ESL support',
+    literacy: ' with literacy support',
+    both:     ' with ESL and literacy support',
 };
 
 export default function RewriteModal({ bandName, fkglStr, onConfirm, onCancel }) {
@@ -43,16 +43,18 @@ export default function RewriteModal({ bandName, fkglStr, onConfirm, onCancel })
 
     const targetFkgl = learner && support ? FKGL_MAP[learner]?.[support] : null;
     const targetBand = targetFkgl != null ? getBandForFkgl(targetFkgl) : null;
-    const bothSelected = learner && support;
+    const bothSelected = !!(learner && support);
 
-    const handleConfirm = () => {
+    const handleConfirm = (e) => {
+        e.stopPropagation();
         if (!bothSelected) return;
         const learnerDesc = LEARNER_DESCRIPTIONS[learner];
         const supportSuffix = SUPPORT_SUFFIXES[support];
+        console.log('[RewriteModal] handleConfirm fired', { learner, support, targetFkgl });
         onConfirm({
             targetFkgl,
             learnerLabel: LEARNER_OPTIONS.find(o => o.value === learner)?.label || learnerDesc,
-            prompt: `Rewrite the following document to FKGL ${targetFkgl} — suitable for ${learnerDesc} learners${supportSuffix}.\nReturn ONLY the rewritten text. No scoring. No explanations.`,
+            prompt: `Rewrite the following document to FKGL ${targetFkgl} — suitable for ${learnerDesc} learners${supportSuffix}.\nRules:\n- Return ONLY the rewritten text\n- No scoring blocks\n- No explanations\n- No markdown headers\n- No commentary\n- Preserve all factual content\n- Shorten sentences\n- Replace complex words with simpler ones`,
         });
     };
 
@@ -66,25 +68,30 @@ export default function RewriteModal({ bandName, fkglStr, onConfirm, onCancel })
         backgroundColor: '#ffffff',
         outline: 'none',
         cursor: 'pointer',
+        color: '#0d2444',
+        appearance: 'auto',
     };
 
     return (
+        /* Overlay — clicking backdrop calls onCancel */
         <div
             className="fixed inset-0 z-50 flex items-center justify-center"
             style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-            onClick={e => { if (e.target === e.currentTarget) onCancel(); }}
+            onClick={onCancel}
         >
+            {/* Card — stop ALL clicks from reaching the overlay */}
             <div
                 onClick={e => e.stopPropagation()}
                 style={{
-                backgroundColor: '#ffffff',
-                borderRadius: '16px',
-                maxWidth: '480px',
-                width: '100%',
-                margin: '0 16px',
-                padding: '28px',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
-            }}>
+                    backgroundColor: '#ffffff',
+                    borderRadius: '16px',
+                    maxWidth: '480px',
+                    width: '100%',
+                    margin: '0 16px',
+                    padding: '28px',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+                }}
+            >
                 {/* Header */}
                 <div className="flex items-start justify-between" style={{ marginBottom: '20px' }}>
                     <div>
@@ -95,7 +102,10 @@ export default function RewriteModal({ bandName, fkglStr, onConfirm, onCancel })
                             Current level: {bandName} — Reading Grade Level {fkglStr}
                         </p>
                     </div>
-                    <button onClick={onCancel} style={{ color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}>
+                    <button
+                        onClick={onCancel}
+                        style={{ color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}
+                    >
                         <X className="h-4 w-4" />
                     </button>
                 </div>
@@ -107,11 +117,11 @@ export default function RewriteModal({ bandName, fkglStr, onConfirm, onCancel })
                 <select
                     value={learner}
                     onChange={e => setLearner(e.target.value)}
-                    style={{ ...selectStyle, color: learner ? '#0d2444' : '#9ca3af' }}
+                    style={selectStyle}
                 >
                     <option value="" disabled>Select your learners...</option>
                     {LEARNER_OPTIONS.map(o => (
-                        <option key={o.value} value={o.value} style={{ color: '#0d2444' }}>{o.label}</option>
+                        <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                 </select>
 
@@ -122,24 +132,27 @@ export default function RewriteModal({ bandName, fkglStr, onConfirm, onCancel })
                 <select
                     value={support}
                     onChange={e => setSupport(e.target.value)}
-                    style={{ ...selectStyle, color: support ? '#0d2444' : '#9ca3af' }}
+                    style={selectStyle}
                 >
                     <option value="" disabled>Select support needs...</option>
                     {SUPPORT_OPTIONS.map(o => (
-                        <option key={o.value} value={o.value} style={{ color: '#0d2444' }}>{o.label}</option>
+                        <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                 </select>
 
                 {/* Live confirmation */}
                 {bothSelected && targetBand && (
                     <p style={{ fontSize: '12px', color: '#6b7280', fontStyle: 'italic', marginTop: '12px' }}>
-                        We'll rewrite this to approximately <strong style={{ fontStyle: 'normal', color: '#0d2444' }}>{targetBand.name}</strong> level — suitable for {LEARNER_DESCRIPTIONS[learner]}{SUPPORT_SUFFIXES[support]}.
+                        We'll rewrite this to approximately{' '}
+                        <strong style={{ fontStyle: 'normal', color: '#0d2444' }}>{targetBand.name}</strong>{' '}
+                        level — suitable for {LEARNER_DESCRIPTIONS[learner]}{SUPPORT_SUFFIXES[support]}.
                     </p>
                 )}
 
                 {/* Footer */}
                 <div className="flex gap-3" style={{ marginTop: '24px' }}>
                     <button
+                        type="button"
                         onClick={onCancel}
                         style={{
                             flex: 1, height: '44px', borderRadius: '8px', fontSize: '14px', fontWeight: 500,
@@ -149,14 +162,15 @@ export default function RewriteModal({ bandName, fkglStr, onConfirm, onCancel })
                         Cancel
                     </button>
                     <button
+                        type="button"
                         onClick={handleConfirm}
-                        disabled={!bothSelected}
                         style={{
                             flex: 1, height: '44px', borderRadius: '8px', fontSize: '14px', fontWeight: 500,
                             backgroundColor: bothSelected ? '#c9a84c' : '#e5e7eb',
                             color: bothSelected ? '#0d2444' : '#9ca3af',
                             border: 'none',
                             cursor: bothSelected ? 'pointer' : 'not-allowed',
+                            opacity: bothSelected ? 1 : 0.6,
                             transition: 'background-color 0.15s',
                         }}
                     >
