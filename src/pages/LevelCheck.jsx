@@ -2,8 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { Upload, CheckCircle, ArrowRight } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { downloadAsDocx } from '@/lib/downloadDocx';
+import { downloadRewrittenAsDocx } from '@/lib/downloadRewrittenDocx';
 import { ResultCard, BeforeAfterCards } from '@/components/chat/ReadabilityResultCard';
-import { parseReadabilityResult, getBandForFkgl } from '@/lib/parseReadabilityResult';
+import { getBandForFkgl } from '@/lib/parseReadabilityResult';
+import { calculateReadability } from '@/lib/calculateReadability';
 import { useNavigate } from 'react-router-dom';
 import RewriteModal from '@/components/levelcheck/RewriteModal';
 
@@ -23,6 +25,7 @@ export default function LevelCheck() {
     const [rewritingProgress, setRewritingProgress] = useState('');
     const [rewriteResult, setRewriteResult] = useState(null); // { before, after }
     const [rewrittenText, setRewrittenText] = useState(null);
+    const [originalFileBase64, setOriginalFileBase64] = useState(null);
     const inputRef = useRef(null);
     const secondaryInputRef = useRef(null);
     const navigate = useNavigate();
@@ -56,10 +59,19 @@ export default function LevelCheck() {
         setExtractedText(null);
         setWordCount(null);
         setRewriteResult(null);
+        setOriginalFileBase64(null);
         setError(null);
         clearPersisted();
+        
+        // Store original file as base64
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const base64 = e.target.result.split(',')[1];
+            setOriginalFileBase64(base64);
+        };
+        reader.readAsDataURL(f);
+        
         if (autoCheck) {
-            // Run check immediately after state settles
             setTimeout(() => runCheck(f), 0);
         }
     };
@@ -74,28 +86,44 @@ export default function LevelCheck() {
             const res = await base44.functions.invoke('extractDocumentText', payload);
             const text = res?.data?.text || '';
             if (!text) throw new Error('Could not extract text from this document.');
-            const wc = text.trim().split(/\s+/).filter(w => w.length > 0).length;
-            const prompt = `Score the following text for readability using FKGL and FRE formulas.
-
-Return ONLY this exact format (no extra commentary):
-FKGL: [number]
-FRE: [number]
-Words: [number]
-Sentences: [number]
-Syllables: [number]
-Summary: [one sentence describing the readability level]
-Benchmark: [nearest AQF level or year level]
-
-Text to score:
-${text.slice(0, 4000)}`;
-            const raw = await base44.integrations.Core.InvokeLLM({ prompt });
-            const parsed = parseReadabilityResult(raw);
-            if (!parsed) throw new Error('Could not parse readability result.');
+            
+            // Use JavaScript calculator instead of AI
+            const scoreResult = calculateReadability(text);
+            if (!scoreResult) throw new Error('Could not calculate readability.');
+            
+            // Build result object matching the old AI-parsed format
+            const band = getBandForFkgl(scoreResult.fkgl);
+            const bandDescriptions = {
+                'Very Easy':         'suitable for early primary school readers',
+                'Easy':              'suitable for upper primary school readers',
+                'Fairly Easy':       'suitable for junior secondary students',
+                'Cert I/II · Yr 10': 'suitable for Year 10 or foundation learners',
+                'Cert III/IV':       'suitable for most apprentices and working adults',
+                'Diploma':           'suitable for diploma and higher VET learners',
+                'Degree / Grad Dip': 'suitable for undergraduate students',
+                'Very Difficult':    'suitable for a postgraduate or specialist professional audience',
+            };
+            const desc = band ? bandDescriptions[band.name] : null;
+            const summary = band && desc
+                ? `This document reads at ${band.name} level — ${desc}.`
+                : `This document reads at FKGL ${scoreResult.fkgl} level.`;
+            
+            const parsed = {
+                fkgl: scoreResult.fkgl,
+                fre: scoreResult.fre,
+                words: scoreResult.wordCount,
+                sentences: scoreResult.sentenceCount,
+                syllables: scoreResult.syllables,
+                summary,
+                benchmark: null,
+                trafficLight: null,
+            };
+            
             setResult(parsed);
             setFileName(f.name);
             setExtractedText(text);
-            setWordCount(wc);
-            persistResult(parsed, f.name, text, wc);
+            setWordCount(scoreResult.wordCount);
+            persistResult(parsed, f.name, text, scoreResult.wordCount);
         } catch (err) {
             setError(err.message || 'Something went wrong. Please try again.');
         } finally {
@@ -247,25 +275,21 @@ ${chunkText}`;
             const fullRewritten = rewrittenChunks.join('\n\n');
             setRewrittenText(fullRewritten);
 
-            // Score the rewritten text (first 4000 chars is representative)
+            // Score the rewritten text using JavaScript calculator
             setRewritingProgress('Scoring rewritten document…');
-            const scorePrompt = `Score the following text for readability using FKGL and FRE formulas.
-
-Return ONLY this exact format (no extra commentary):
-FKGL: [number]
-FRE: [number]
-Words: [number]
-Sentences: [number]
-Syllables: [number]
-Summary: [one sentence describing the readability level]
-Benchmark: [nearest AQF level or year level]
-
-Text to score:
-${fullRewritten.slice(0, 4000)}`;
-
-            const scoreRaw = await base44.integrations.Core.InvokeLLM({ prompt: scorePrompt });
-            const afterResult = parseReadabilityResult(scoreRaw);
-            if (!afterResult) throw new Error('Could not score the rewritten document.');
+            const afterScore = calculateReadability(fullRewritten);
+            if (!afterScore) throw new Error('Could not score the rewritten document.');
+            
+            const afterResult = {
+                fkgl: afterScore.fkgl,
+                fre: afterScore.fre,
+                words: afterScore.wordCount,
+                sentences: afterScore.sentenceCount,
+                syllables: afterScore.syllables,
+                summary: `This document reads at FKGL ${afterScore.fkgl} level.`,
+                benchmark: null,
+                trafficLight: null,
+            };
 
             setRewriteResult({ before: result, after: afterResult });
         } catch (err) {
@@ -279,7 +303,15 @@ ${fullRewritten.slice(0, 4000)}`;
     const handleDownloadRewrite = () => {
         if (!rewrittenText) return;
         const baseName = (fileName || 'document').replace(/\.(docx?|pdf)$/i, '');
-        downloadAsDocx(rewrittenText, `${baseName}-rewritten`);
+        downloadRewrittenAsDocx(rewrittenText, `${baseName}-rewritten`);
+    };
+
+    const handleDownloadOriginal = () => {
+        if (!originalFileBase64 || !fileName) return;
+        const link = document.createElement('a');
+        link.href = `data:application/octet-stream;base64,${originalFileBase64}`;
+        link.download = fileName;
+        link.click();
     };
 
     const handleBuild = () => {
@@ -462,14 +494,23 @@ ${fullRewritten.slice(0, 4000)}`;
                             onSaveToLibrary={handleSave}
                         />
 
-                        {/* Download rewritten doc */}
-                        <button
-                            onClick={handleDownloadRewrite}
-                            className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
-                            style={{ backgroundColor: '#c9a84c', color: '#0d2444' }}
-                        >
-                            Download rewritten document →
-                        </button>
+                        {/* Download buttons */}
+                        <div className="space-y-2">
+                            <button
+                                onClick={handleDownloadRewrite}
+                                className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
+                                style={{ backgroundColor: '#c9a84c', color: '#0d2444' }}
+                            >
+                                Download rewritten document (.docx)
+                            </button>
+                            <button
+                                onClick={handleDownloadOriginal}
+                                className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-80"
+                                style={{ border: '1px solid #0d2444', color: '#0d2444', backgroundColor: 'transparent' }}
+                            >
+                                Download original document
+                            </button>
+                        </div>
 
                         {/* Build at this level link */}
                         <button
