@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BAND_CONFIG, getBandForFkgl, getBandIndex } from '@/lib/parseReadabilityResult';
@@ -154,7 +154,6 @@ function TrafficLight({ tl, onRewrite }) {
 // ─── Single result card ───────────────────────────────────────────────────────
 
 export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRewrite, onSaveToLibrary }) {
-    const [expanded, setExpanded] = useState(false);
 
     return (
         <div className="bg-white dark:bg-card border rounded-2xl shadow-sm overflow-hidden">
@@ -198,38 +197,47 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
                     <ScaleBar fkgl={result.fkgl} rewriteFkgl={rewriteFkgl} />
                 </div>
 
-                {/* Section 3 — Three key stats */}
-                <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-muted/50 rounded-xl p-3 text-center">
-                        <div className="font-mono text-2xl font-bold text-[#1e3a5f] dark:text-foreground tabular-nums">
-                            {result.fkgl?.toFixed(1) ?? '—'}
+                {/* Section 3 — Key stats */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                        {
+                            abbr: 'FKGL',
+                            label: 'Grade Level',
+                            value: result.fkgl?.toFixed(1) ?? '—',
+                            note: 'higher = harder to read',
+                        },
+                        {
+                            abbr: 'FRE',
+                            label: 'Reading Ease',
+                            value: result.fre?.toFixed(1) ?? '—',
+                            note: '0–100, higher = easier',
+                        },
+                        {
+                            abbr: 'ASL',
+                            label: 'Avg Sentence Length',
+                            value: result.sentences != null && result.words != null && result.sentences > 0
+                                ? (result.words / result.sentences).toFixed(1)
+                                : '—',
+                            note: 'words per sentence',
+                        },
+                        {
+                            abbr: 'ASW',
+                            label: 'Avg Word Length',
+                            value: result.syllables != null && result.words != null && result.words > 0
+                                ? (result.syllables / result.words).toFixed(2)
+                                : '—',
+                            note: 'syllables per word',
+                        },
+                    ].map(stat => (
+                        <div key={stat.abbr} className="bg-muted/50 rounded-xl p-3 text-center">
+                            <div className="font-mono text-2xl font-bold text-[#1e3a5f] dark:text-foreground tabular-nums">
+                                {stat.value}
+                            </div>
+                            <div className="text-[11px] font-semibold text-foreground mt-0.5">{stat.abbr}</div>
+                            <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{stat.label}</div>
+                            <div className="text-[9px] text-muted-foreground mt-0.5 leading-tight italic">{stat.note}</div>
                         </div>
-                        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
-                            Reading Grade Level
-                        </div>
-                        <div className="text-[9px] text-muted-foreground mt-0.5 leading-tight italic">
-                            (higher = harder to read)
-                        </div>
-                    </div>
-                    <div className="bg-muted/50 rounded-xl p-3 text-center">
-                        <div className="font-mono text-2xl font-bold text-[#1e3a5f] dark:text-foreground tabular-nums">
-                            {result.fre?.toFixed(1) ?? '—'}
-                        </div>
-                        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
-                            Reading Ease Score
-                        </div>
-                        <div className="text-[9px] text-muted-foreground mt-0.5 leading-tight italic">
-                            (higher = easier to read)
-                        </div>
-                    </div>
-                    <div className="bg-muted/50 rounded-xl p-3 text-center">
-                        <div className="font-mono text-2xl font-bold text-[#1e3a5f] dark:text-foreground tabular-nums">
-                            {result.words != null ? result.words.toLocaleString() : '—'}
-                        </div>
-                        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
-                            Words
-                        </div>
-                    </div>
+                    ))}
                 </div>
 
                 {/* Section 4 — Traffic light */}
@@ -237,23 +245,7 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
                     <TrafficLight tl={result.trafficLight} onRewrite={onRewrite} />
                 )}
 
-                {/* Section 5 — Expandable detail */}
-                {result.fullDetail && (
-                    <div>
-                        <button
-                            onClick={() => setExpanded(v => !v)}
-                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                            {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                            {expanded ? 'Hide full analysis' : 'Show full analysis'}
-                        </button>
-                        {expanded && (
-                            <pre className="mt-2 text-xs font-mono bg-muted/50 rounded-xl p-3 whitespace-pre-wrap leading-relaxed text-foreground/80 overflow-x-auto">
-                                {result.fullDetail}
-                            </pre>
-                        )}
-                    </div>
-                )}
+
 
                 {/* Action buttons */}
                 <div className="flex gap-2 pt-1">
