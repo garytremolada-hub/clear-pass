@@ -15,6 +15,7 @@ export default function LevelCheck() {
     const [result, setResult] = useState(null);
     const [fileName, setFileName] = useState(null);
     const [extractedText, setExtractedText] = useState(null); // stored for rewrite
+    const [wordCount, setWordCount] = useState(null); // authoritative count from extracted text
     const [error, setError] = useState(null);
     const [showRewriteModal, setShowRewriteModal] = useState(false);
     const [rewriting, setRewriting] = useState(false);
@@ -31,15 +32,15 @@ export default function LevelCheck() {
         try {
             const saved = localStorage.getItem(LS_KEY);
             if (saved) {
-                const { result: r, fileName: n, extractedText: t } = JSON.parse(saved);
-                if (r) { setResult(r); setFileName(n); setExtractedText(t || null); }
+                const { result: r, fileName: n, extractedText: t, wordCount: wc } = JSON.parse(saved);
+                if (r) { setResult(r); setFileName(n); setExtractedText(t || null); setWordCount(wc || null); }
             }
         } catch (_) {}
     }, []);
 
-    const persistResult = (r, name, text) => {
+    const persistResult = (r, name, text, wc) => {
         try {
-            localStorage.setItem(LS_KEY, JSON.stringify({ result: r, fileName: name, extractedText: text }));
+            localStorage.setItem(LS_KEY, JSON.stringify({ result: r, fileName: name, extractedText: text, wordCount: wc }));
         } catch (_) {}
     };
 
@@ -53,6 +54,7 @@ export default function LevelCheck() {
         setResult(null);
         setFileName(null);
         setExtractedText(null);
+        setWordCount(null);
         setRewriteResult(null);
         setError(null);
         clearPersisted();
@@ -72,6 +74,7 @@ export default function LevelCheck() {
             const res = await base44.functions.invoke('extractDocumentText', payload);
             const text = res?.data?.text || '';
             if (!text) throw new Error('Could not extract text from this document.');
+            const wc = text.trim().split(/\s+/).filter(w => w.length > 0).length;
             const prompt = `Score the following text for readability using FKGL and FRE formulas.
 
 Return ONLY this exact format (no extra commentary):
@@ -91,7 +94,8 @@ ${text.slice(0, 4000)}`;
             setResult(parsed);
             setFileName(f.name);
             setExtractedText(text);
-            persistResult(parsed, f.name, text);
+            setWordCount(wc);
+            persistResult(parsed, f.name, text, wc);
         } catch (err) {
             setError(err.message || 'Something went wrong. Please try again.');
         } finally {
@@ -428,6 +432,7 @@ ${fullRewritten.slice(0, 4000)}`;
                         <BeforeAfterCards
                             before={rewriteResult.before}
                             after={rewriteResult.after}
+                            originalWordCount={wordCount}
                             onRewrite={() => setShowRewriteModal(true)}
                             onSaveToLibrary={handleSave}
                         />
@@ -457,6 +462,7 @@ ${fullRewritten.slice(0, 4000)}`;
                     <div className="space-y-4">
                         <ResultCard
                             result={result}
+                            wordCount={wordCount}
                             onRewrite={() => setShowRewriteModal(true)}
                             onSaveToLibrary={handleSave}
                         />

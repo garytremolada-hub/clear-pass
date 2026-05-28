@@ -5,21 +5,31 @@ import { BAND_CONFIG, getBandForFkgl, getBandIndex } from '@/lib/parseReadabilit
 
 // ─── Band scale ──────────────────────────────────────────────────────────────
 
-// Each of the 8 bands occupies 12.5% of the bar.
-// Marker position is interpolated within the band.
+// Each of the 8 bands occupies 12.5% of the bar (centres at 6.25, 18.75, … 93.75%).
+// Band boundaries: 1-3, 4-5, 6-7, 8-9, 10-12, 13-14, 15-16, 17+
 function fkglToPercent(fkgl) {
     if (fkgl == null) return null;
-    const bandWidth = 100 / 8; // 12.5% per band
-    const idx = BAND_CONFIG.findIndex(b => fkgl >= b.fkglMin && fkgl < b.fkglMax);
-    const band = idx >= 0 ? BAND_CONFIG[idx] : BAND_CONFIG[BAND_CONFIG.length - 1];
-    const bandIdx = idx >= 0 ? idx : BAND_CONFIG.length - 1;
 
-    const bandStart = bandIdx * bandWidth;
-    const fkglMin = band.fkglMin;
-    // Cap fkglMax for the last band so it doesn't go to 99
-    const fkglMax = band.fkglMax === 99 ? band.fkglMin + 4 : band.fkglMax;
-    const t = Math.min(Math.max((fkgl - fkglMin) / (fkglMax - fkglMin), 0), 1);
-    return bandStart + t * bandWidth;
+    // [bandMin, bandMax, barStart%] — barStart is the left edge of each 12.5% segment
+    const BANDS = [
+        [0,  3,  0   ],  // Very Easy
+        [3,  5,  12.5],  // Easy
+        [5,  7,  25  ],  // Fairly Easy
+        [7,  9,  37.5],  // Cert I/II
+        [9,  12, 50  ],  // Cert III/IV
+        [12, 14, 62.5],  // Diploma
+        [14, 16, 75  ],  // Degree / Grad Dip
+        [16, 20, 87.5],  // Very Difficult (cap at 20 for interpolation)
+    ];
+
+    let band = BANDS[BANDS.length - 1];
+    for (const b of BANDS) {
+        if (fkgl < b[1]) { band = b; break; }
+    }
+
+    const [bMin, bMax, bStart] = band;
+    const t = Math.min(Math.max((fkgl - bMin) / (bMax - bMin), 0), 1);
+    return bStart + t * 12.5;
 }
 
 function ScaleBar({ fkgl, rewriteFkgl }) {
@@ -151,7 +161,7 @@ function TrafficLight({ tl, onRewrite }) {
 
 // ─── Single result card ───────────────────────────────────────────────────────
 
-export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRewrite, onSaveToLibrary }) {
+export function ResultCard({ result, wordCount, headerLabel, headerColor, rewriteFkgl, onRewrite, onSaveToLibrary }) {
     return (
         <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb' }}>
             {headerLabel && (
@@ -171,11 +181,11 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
                         'Very Easy':         'suitable for early primary school readers',
                         'Easy':              'suitable for upper primary school readers',
                         'Fairly Easy':       'suitable for junior secondary students',
-                        'Cert I/II · Yr 10': 'entry level — suitable for Year 10 or foundation learners',
-                        'Cert III/IV':       'vocational level — suitable for most apprentices and working adults',
-                        'Diploma':           'advanced vocational — suitable for diploma and higher VET learners',
-                        'Degree / Grad Dip': 'undergraduate level — suitable for university students',
-                        'Very Difficult':    'postgraduate level — academic or specialist professional audience',
+                        'Cert I/II · Yr 10': 'suitable for Year 10 or foundation learners',
+                        'Cert III/IV':       'suitable for most apprentices and working adults',
+                        'Diploma':           'suitable for diploma and higher VET learners',
+                        'Degree / Grad Dip': 'suitable for undergraduate students',
+                        'Very Difficult':    'suitable for a postgraduate or specialist professional audience',
                     };
                     const desc = band ? bandDescriptions[band.name] : null;
                     const headline = band && desc
@@ -198,7 +208,7 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
                     {[
                         { abbr: 'Reading Grade Level', label: 'Grade Level',   value: result.fkgl?.toFixed(1) ?? '—', note: 'lower = easier' },
                         { abbr: 'Reading Ease Score',  label: 'Reading Ease',  value: result.fre?.toFixed(1) ?? '—',  note: '0–100, higher = easier' },
-                        { abbr: 'Words',               label: 'Word Count',    value: result.words ?? '—',            note: null },
+                        { abbr: 'Words',               label: 'Word Count',    value: (wordCount ?? result.words) ?? '—', note: null },
                     ].map(stat => (
                         <div key={stat.abbr} className="rounded-xl p-3 text-center" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
                             <div className="font-mono text-2xl font-medium tabular-nums" style={{ color: '#0d2444' }}>
@@ -253,7 +263,7 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
 
 // ─── Before / After pair ──────────────────────────────────────────────────────
 
-export function BeforeAfterCards({ before, after, onRewrite, onSaveToLibrary }) {
+export function BeforeAfterCards({ before, after, originalWordCount, onRewrite, onSaveToLibrary }) {
     const beforeBand = getBandForFkgl(before.fkgl);
     const afterBand  = getBandForFkgl(after.fkgl);
 
@@ -308,6 +318,7 @@ export function BeforeAfterCards({ before, after, onRewrite, onSaveToLibrary }) 
             {/* Before card */}
             <ResultCard
                 result={before}
+                wordCount={originalWordCount}
                 headerLabel="Before"
                 headerColor="#0d2444"
                 onRewrite={onRewrite}
