@@ -1,13 +1,48 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, CheckCircle, ArrowRight } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { downloadAsDocx } from '@/lib/downloadDocx';
-import { downloadRewrittenAsDocx } from '@/lib/downloadRewrittenDocx';
 import { ResultCard, BeforeAfterCards } from '@/components/chat/ReadabilityResultCard';
 import { getBandForFkgl } from '@/lib/parseReadabilityResult';
 import { calculateReadability } from '@/lib/calculateReadability';
 import { useNavigate } from 'react-router-dom';
 import RewriteModal from '@/components/levelcheck/RewriteModal';
+
+// ── Paragraph helpers (Step 2 from spec) ─────────────────────────────────────
+
+function isProtected(text) {
+    const patterns = [
+        /^\d+\.\d+/,
+        /^[A-Z]{3,}\d{3,}/,
+        /S\s*\/\s*N[Ss]/,
+        /[Ss]atisfactory/,
+        /[Nn]ot [Yy]et [Ss]atisfactory/,
+        /[Pp]erformance [Ee]vidence/,
+        /[Kk]nowledge [Ee]vidence/,
+        /[Aa]ssessment [Cc]onditions/,
+        /[Ff]oundation [Ss]kills/,
+        /^Element$/i,
+        /^Performance Criteria$/i,
+        /[Ii] declare/,
+        /□/,
+    ];
+    return patterns.some(p => p.test(text));
+}
+
+function extractAndNumberParagraphs(extractedText) {
+    const lines = extractedText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    return lines.map((text, index) => ({ id: index + 1, text, protected: isProtected(text) }));
+}
+
+function validateRewriteJson(jsonString) {
+    const clean = jsonString.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+    const items = JSON.parse(clean);
+    if (!Array.isArray(items)) throw new Error('AI response was not a list.');
+    items.forEach((item, i) => {
+        if (typeof item.id !== 'number') throw new Error(`Item ${i} missing id`);
+        if (typeof item.rewritten !== 'string') throw new Error(`Item ${i} missing rewritten`);
+    });
+    return items;
+}
 
 const LS_KEY = 'clearpass_last_level_check';
 
@@ -26,6 +61,8 @@ export default function LevelCheck() {
     const [rewriteResult, setRewriteResult] = useState(null); // { before, after }
     const [rewrittenText, setRewrittenText] = useState(null);
     const [originalFileBase64, setOriginalFileBase64] = useState(null);
+    const [numberedParagraphs, setNumberedParagraphs] = useState(null); // [{id, text, protected}]
+    const [aiRewriteJson, setAiRewriteJson] = useState(null); // raw JSON string from AI
     const inputRef = useRef(null);
     const secondaryInputRef = useRef(null);
     const navigate = useNavigate();
@@ -60,6 +97,8 @@ export default function LevelCheck() {
         setWordCount(null);
         setRewriteResult(null);
         setOriginalFileBase64(null);
+        setNumberedParagraphs(null);
+        setAiRewriteJson(null);
         setError(null);
         clearPersisted();
         
@@ -119,6 +158,8 @@ export default function LevelCheck() {
                 trafficLight: null,
             };
             
+            const paragraphs = extractAndNumberParagraphs(text);
+            setNumberedParagraphs(paragraphs);
             setResult(parsed);
             setFileName(f.name);
             setExtractedText(text);
@@ -142,28 +183,7 @@ export default function LevelCheck() {
         runCheck(file);
     };
 
-    // Split text into ~2000-word chunks on paragraph boundaries
-    const splitIntoChunks = (text, wordsPerChunk = 2000) => {
-        const paragraphs = text.split(/\n\n+/);
-        const chunks = [];
-        let current = [];
-        let wordCount = 0;
-        for (const para of paragraphs) {
-            const paraWords = para.split(/\s+/).length;
-            if (wordCount + paraWords > wordsPerChunk && current.length > 0) {
-                chunks.push(current.join('\n\n'));
-                current = [para];
-                wordCount = paraWords;
-            } else {
-                current.push(para);
-                wordCount += paraWords;
-            }
-        }
-        if (current.length > 0) chunks.push(current.join('\n\n'));
-        return chunks;
-    };
-
-    // Rewrite modal confirm — chunk-based rewrite then score
+    // Rewrite modal confirm — paragraph-based rewrite (Steps 3–5 from spec)
     const handleRewriteConfirm = async ({ targetFkgl, learnerLabel, learnerDesc, support }) => {
         setShowRewriteModal(false);
         setRewriting(true);
@@ -173,113 +193,94 @@ export default function LevelCheck() {
         setRewritingProgress('');
         setRewriteResult(null);
         setRewrittenText(null);
+        setAiRewriteJson(null);
         setError(null);
 
-        const text = extractedText || '';
-        if (!text) {
+        const allParagraphs = numberedParagraphs || extractAndNumberParagraphs(extractedText || '');
+        if (!allParagraphs.length) {
             setError('No document text found. Please re-upload the document.');
             setRewriting(false);
             return;
         }
 
-        const gradeReduction = result?.fkgl != null && targetFkgl != null 
-            ? (result.fkgl - targetFkgl).toFixed(1) 
-            : 'significant';
-        
-        const buildPrompt = (chunkText) => `You are rewriting an assessment document to make it much simpler.
+        // Filter to only unprotected paragraphs with meaningful content
+        const toRewrite = allParagraphs.filter(p => !p.protected && p.text.length > 20);
+        const paragraphsText = toRewrite.map(p => `${p.id}. ${p.text}`).join('\n');
 
-CURRENT READING LEVEL: FKGL ${result?.fkgl != null ? result.fkgl.toFixed(1) : 'unknown'}
-TARGET READING LEVEL: FKGL ${targetFkgl}
-YOU MUST REDUCE COMPLEXITY BY APPROXIMATELY ${gradeReduction} GRADE LEVELS.
+        // Split into batches of ~150 paragraphs to stay within LLM context
+        const BATCH_SIZE = 150;
+        const batches = [];
+        for (let i = 0; i < toRewrite.length; i += BATCH_SIZE) {
+            batches.push(toRewrite.slice(i, i + BATCH_SIZE));
+        }
 
-This is a large reduction. You must make dramatic changes to sentence length and word complexity.
+        const buildPrompt = (batchParagraphs) => {
+            const batchText = batchParagraphs.map(p => `${p.id}. ${p.text}`).join('\n');
+            return `Rewrite these paragraphs to FKGL ${targetFkgl}.
+Learner type: ${learnerDesc}
+Support needs: ${support}
 
-MANDATORY RULES — every single one:
+Rules:
+- Return a JSON array only. No explanation. No commentary.
+- Each element must have: "id" (original number as integer), "rewritten" (new text as string)
+- Shorten sentences to maximum 12 words each
+- Replace complex words with simpler ones:
+  demonstrate → show
+  implement → use
+  identify → find or name
+  organisational → workplace
+  utilise → use
+  facilitate → help
+  collaborate → work together
+  communicate → share or tell
+  requirements → rules or needs
+  procedures → steps
+  documentation → records
+  undertake → do or complete
+  prior to → before
+  in accordance with → following
+  in order to → to
+- Keep all numbers, dates, and proper nouns unchanged
+- Keep all question numbers unchanged (Q1, Q2 etc)
+- Do NOT add information that was not in the original
+- Do NOT remove information from the original
 
-SENTENCE LENGTH:
-- Break every sentence longer than 12 words into two or more sentences
-- Target average sentence length: 8-10 words per sentence
-- No sentence may exceed 15 words
-- Count words as you write each sentence. If over 12 words — split it.
+Return ONLY valid JSON. No markdown. No code fences.
+Start your response with [ and end with ]
 
-WORD SIMPLIFICATION — replace every complex word:
-demonstrate → show
-implement → use / put in place
-identify → find / name / list
-organisational → workplace / your
-utilise → use
-facilitate → help / support
-collaborate → work together
-communicate → share / tell / discuss
-requirements → rules / needs / steps
-procedures → steps / process
-documentation → forms / records
-assessment → test / task / check
-satisfactory → passed / good enough
-undertake → do / complete
-prior to → before
-in accordance with → following / using / as per
-in relation to → about / for
-in order to → to
-regarding → about
-sufficient → enough
-relevant → right / needed
-
-STRUCTURE RULES:
-- Keep all headings exactly as they are
-- Keep all table structures intact
-- Keep all form fields and blank lines
-- Keep all S/NS decision fields
-- Keep all assessor sections unchanged
-- Keep all Performance Criteria text word for word — never simplify these
-- Keep all Element names unchanged
-- Keep unit codes unchanged
-
-WHAT TO SIMPLIFY:
-- All student-facing instructions
-- All question text
-- All scenario descriptions
-- All overview paragraphs
-- All submission instructions
-- All declaration text
-
-DO NOT simplify:
-- Performance Criteria text
-- Element names
-- Knowledge Evidence text
-- Performance Evidence text
-- Assessment Conditions text
-- Unit codes or unit titles
-
-OUTPUT: Return only the rewritten text. No explanations. No commentary. No scoring. Just the document.
-
-Document section to rewrite:
-${chunkText}`;
+Paragraphs to rewrite:
+${batchText}`;
+        };
 
         try {
-            const chunks = splitIntoChunks(text, 2000);
-            const rewrittenChunks = [];
+            const allRewrittenItems = [];
 
-            for (let i = 0; i < chunks.length; i++) {
-                setRewritingProgress(`Rewriting section ${i + 1} of ${chunks.length}…`);
-                const rewritten = await base44.integrations.Core.InvokeLLM({
-                    prompt: buildPrompt(chunks[i]),
+            for (let i = 0; i < batches.length; i++) {
+                setRewritingProgress(`Rewriting section ${i + 1} of ${batches.length}…`);
+                const raw = await base44.integrations.Core.InvokeLLM({
+                    prompt: buildPrompt(batches[i]),
                     model: 'claude_sonnet_4_6',
                 });
-                if (!rewritten || rewritten.trim().length < 10) {
-                    throw new Error(`Section ${i + 1} could not be rewritten. Please try again.`);
-                }
-                rewrittenChunks.push(rewritten.trim());
+                const items = validateRewriteJson(raw);
+                allRewrittenItems.push(...items);
             }
 
-            const fullRewritten = rewrittenChunks.join('\n\n');
+            const jsonString = JSON.stringify(allRewrittenItems);
+            setAiRewriteJson(jsonString);
+
+            // Build a plain-text version for scoring (merge rewrites into original order)
+            const rewriteMap = {};
+            allRewrittenItems.forEach(item => { rewriteMap[item.id] = item.rewritten; });
+            const fullRewritten = allParagraphs
+                .map(p => rewriteMap[p.id] || p.text)
+                .join('\n');
             setRewrittenText(fullRewritten);
 
-            // Score the rewritten text using JavaScript calculator
+            // Score using JS calculator
             setRewritingProgress('Scoring rewritten document…');
             const afterScore = calculateReadability(fullRewritten);
             if (!afterScore) throw new Error('Could not score the rewritten document.');
-            
+
             const afterResult = {
                 fkgl: afterScore.fkgl,
                 fre: afterScore.fre,
@@ -300,18 +301,47 @@ ${chunkText}`;
         }
     };
 
-    const handleDownloadRewrite = () => {
-        if (!rewrittenText) return;
-        const baseName = (fileName || 'document').replace(/\.(docx?|pdf)$/i, '');
-        downloadRewrittenAsDocx(rewrittenText, `${baseName}-rewritten`);
+    // Download: use backend to patch original .docx with rewrites (Step 6 from spec)
+    const handleDownloadRewrite = async () => {
+        if (!originalFileBase64 || !aiRewriteJson || !fileName) return;
+        try {
+            setRewritingProgress('Preparing download…');
+            const res = await base44.functions.invoke('rewriteDocumentFormatted', {
+                file_base64: originalFileBase64,
+                rewrite_json: aiRewriteJson,
+                filename: fileName,
+            });
+            if (res?.data?.error) throw new Error(res.data.error);
+            const { file_base64: outB64, filename: outFilename } = res.data;
+            const bytes = atob(outB64);
+            const buf = new Uint8Array(bytes.length);
+            for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+            const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = outFilename;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            setError('Download failed: ' + err.message);
+        } finally {
+            setRewritingProgress('');
+        }
     };
 
     const handleDownloadOriginal = () => {
         if (!originalFileBase64 || !fileName) return;
-        const link = document.createElement('a');
-        link.href = `data:application/octet-stream;base64,${originalFileBase64}`;
-        link.download = fileName;
-        link.click();
+        const bytes = atob(originalFileBase64);
+        const buf = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+        const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     const handleBuild = () => {
@@ -349,6 +379,9 @@ ${chunkText}`;
         setFileName(null);
         setExtractedText(null);
         setRewriteResult(null);
+        setNumberedParagraphs(null);
+        setAiRewriteJson(null);
+        setRewrittenText(null);
         clearPersisted();
     };
 
@@ -498,11 +531,17 @@ ${chunkText}`;
                         <div className="space-y-2">
                             <button
                                 onClick={handleDownloadRewrite}
-                                className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
+                                disabled={!originalFileBase64 || !aiRewriteJson}
+                                className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                                 style={{ backgroundColor: '#c9a84c', color: '#0d2444' }}
                             >
-                                Download rewritten document (.docx)
+                                Download rewritten document (changes highlighted in yellow) →
                             </button>
+                            <p style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic', lineHeight: 1.5, textAlign: 'center', margin: '4px 0 0' }}>
+                                Open in Microsoft Word. Yellow highlighting shows simplified text.
+                                Unhighlighted sections are unchanged.
+                                Note: bold and italic within paragraphs may not be preserved.
+                            </p>
                             <button
                                 onClick={handleDownloadOriginal}
                                 className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-80"
