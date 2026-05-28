@@ -204,7 +204,7 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
                             abbr: 'FKGL',
                             label: 'Grade Level',
                             value: result.fkgl?.toFixed(1) ?? '—',
-                            note: 'higher = harder to read',
+                            note: 'lower = easier to read',
                         },
                         {
                             abbr: 'FRE',
