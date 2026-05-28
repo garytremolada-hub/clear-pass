@@ -21,6 +21,7 @@ export default function LevelCheck() {
     const [rewriteResult, setRewriteResult] = useState(null); // { before, after }
     const [rewrittenText, setRewrittenText] = useState(null);
     const inputRef = useRef(null);
+    const secondaryInputRef = useRef(null);
     const navigate = useNavigate();
 
     // Load persisted result on mount
@@ -44,7 +45,7 @@ export default function LevelCheck() {
         try { localStorage.removeItem(LS_KEY); } catch (_) {}
     };
 
-    const handleFile = (f) => {
+    const handleFile = (f, autoCheck = false) => {
         if (!f) return;
         setFile(f);
         setResult(null);
@@ -53,28 +54,22 @@ export default function LevelCheck() {
         setRewriteResult(null);
         setError(null);
         clearPersisted();
+        if (autoCheck) {
+            // Run check immediately after state settles
+            setTimeout(() => runCheck(f), 0);
+        }
     };
 
-    const handleDrop = (e) => {
-        e.preventDefault();
-        const f = e.dataTransfer.files?.[0];
-        if (f) handleFile(f);
-    };
-
-    const handleCheck = async () => {
-        if (!file) return;
+    const runCheck = async (f) => {
         setLoading(true);
         setError(null);
         try {
-            const uploadResult = await base44.integrations.Core.UploadFile({ file });
+            const uploadResult = await base44.integrations.Core.UploadFile({ file: f });
             const fileUrl = uploadResult.file_url;
-
-            const payload = { file_url: fileUrl, file_name: file.name, label: 'Level Check document' };
+            const payload = { file_url: fileUrl, file_name: f.name, label: 'Level Check document' };
             const res = await base44.functions.invoke('extractDocumentText', payload);
             const text = res?.data?.text || '';
-
             if (!text) throw new Error('Could not extract text from this document.');
-
             const prompt = `Score the following text for readability using FKGL and FRE formulas.
 
 Return ONLY this exact format (no extra commentary):
@@ -88,20 +83,29 @@ Benchmark: [nearest AQF level or year level]
 
 Text to score:
 ${text.slice(0, 4000)}`;
-
             const raw = await base44.integrations.Core.InvokeLLM({ prompt });
             const parsed = parseReadabilityResult(raw);
-
             if (!parsed) throw new Error('Could not parse readability result.');
             setResult(parsed);
-            setFileName(file.name);
+            setFileName(f.name);
             setExtractedText(text);
-            persistResult(parsed, file.name, text);
+            persistResult(parsed, f.name, text);
         } catch (err) {
             setError(err.message || 'Something went wrong. Please try again.');
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        const f = e.dataTransfer.files?.[0];
+        if (f) handleFile(f);
+    };
+
+    const handleCheck = () => {
+        if (!file) return;
+        runCheck(file);
     };
 
     // Rewrite modal confirm — two-step: rewrite text, then score it
@@ -305,12 +309,22 @@ ${rewritten.slice(0, 4000)}`;
                 {result && fileName && (
                     <div className="flex items-center justify-between px-4 py-2.5 rounded-lg" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
                         <span className="text-sm" style={{ color: '#6b7280' }}>
-                            Showing your most recent result — <span className="font-medium" style={{ color: '#0d2444' }}>{fileName}</span>
+                            Showing result for — <span className="font-medium" style={{ color: '#0d2444' }}>{fileName}</span>
                         </span>
                         <button
                             onClick={handleCheckAnother}
-                            className="text-xs font-medium ml-3 whitespace-nowrap"
-                            style={{ color: '#c9a84c', background: 'none', border: 'none', cursor: 'pointer' }}
+                            style={{
+                                marginLeft: '12px',
+                                whiteSpace: 'nowrap',
+                                fontSize: '12px',
+                                fontWeight: 500,
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                border: '1px solid #c9a84c',
+                                color: '#c9a84c',
+                                backgroundColor: 'transparent',
+                                cursor: 'pointer',
+                            }}
                         >
                             Check another document
                         </button>
@@ -379,6 +393,44 @@ ${rewritten.slice(0, 4000)}`;
 
                 {error && result && (
                     <p className="text-sm text-center" style={{ color: '#ef4444' }}>{error}</p>
+                )}
+
+                {/* Secondary upload area — always visible when a result is showing */}
+                {result && !rewriting && (
+                    <div>
+                        <input
+                            ref={secondaryInputRef}
+                            type="file"
+                            accept=".pdf,.docx"
+                            className="hidden"
+                            onChange={e => handleFile(e.target.files?.[0], true)}
+                        />
+                        <div
+                            onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0], true); }}
+                            onDragOver={e => e.preventDefault()}
+                            onClick={() => secondaryInputRef.current?.click()}
+                            className="cursor-pointer transition-colors"
+                            style={{
+                                border: '2px dashed #e5e7eb',
+                                borderRadius: '8px',
+                                padding: '16px',
+                                marginTop: '16px',
+                                backgroundColor: '#f9fafb',
+                                textAlign: 'center',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '6px',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.borderColor = '#c9a84c'}
+                            onMouseLeave={e => e.currentTarget.style.borderColor = '#e5e7eb'}
+                        >
+                            <Upload className="h-5 w-5" style={{ color: '#c9a84c' }} />
+                            <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                                Drop a new document here or click to browse
+                            </p>
+                        </div>
+                    </div>
                 )}
             </div>
 
