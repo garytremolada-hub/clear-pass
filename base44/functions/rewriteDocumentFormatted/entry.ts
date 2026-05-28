@@ -75,23 +75,29 @@ Deno.serve(async (req) => {
             }
         );
 
-        // Replace updated document.xml in zip entries
-        zipEntries['word/document.xml'] = strToU8(documentXml);
-
-        // Repack as .docx
-        const outputBytes = zipSync(zipEntries, { level: 6 });
-
-        // Encode to base64 safely (avoid call stack limit on large files)
-        let b64 = '';
-        const chunk = 8192;
-        for (let i = 0; i < outputBytes.length; i += chunk) {
-            b64 += String.fromCharCode(...outputBytes.slice(i, i + chunk));
+        // Repack: compress XML/rels, store binary assets unchanged
+        // fflate tuple format: [Uint8Array, { level }]
+        const zipInput = {};
+        for (const [name, data] of Object.entries(zipEntries)) {
+            const isText = name.endsWith('.xml') || name.endsWith('.rels');
+            zipInput[name] = [data, { level: isText ? 6 : 0 }];
         }
+        // Override with patched document.xml
+        zipInput['word/document.xml'] = [strToU8(documentXml), { level: 6 }];
+        const outputBytes = zipSync(zipInput);
+
+        // Encode to base64 safely (chunk to avoid call stack overflow on large files)
+        const CHUNK = 0x8000;
+        let b64 = '';
+        for (let i = 0; i < outputBytes.length; i += CHUNK) {
+            b64 += String.fromCharCode(...outputBytes.subarray(i, i + CHUNK));
+        }
+        const file_base64_out = btoa(b64);
 
         const outputFilename = filename.replace(/\.docx$/i, '') + '-rewritten.docx';
         console.log(`[rewriteDocumentFormatted] Done. ${inputBytes.length} → ${outputBytes.length} bytes`);
 
-        return Response.json({ file_base64: btoa(b64), filename: outputFilename });
+        return Response.json({ file_base64: file_base64_out, filename: outputFilename });
 
     } catch (error) {
         console.error('[rewriteDocumentFormatted]', error.message, error.stack);
