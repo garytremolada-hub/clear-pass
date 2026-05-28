@@ -8,6 +8,8 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import AppLayout from './components/layout/AppLayout';
 import Chat from './pages/Chat';
 import WorkLibrary from './pages/WorkLibrary';
+import Pricing from './pages/Pricing';
+import SubscriptionSuccess from './pages/SubscriptionSuccess';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -32,9 +34,11 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route path="/" element={<Chat />} />
-        <Route path="/library" element={<WorkLibrary />} />
+      <Route path="/" element={<Chat />} />
+      <Route path="/library" element={<WorkLibrary />} />
+      <Route path="/pricing" element={<Pricing />} />
       </Route>
+      <Route path="/subscription-success" element={<SubscriptionSuccess />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

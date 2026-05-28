@@ -1,17 +1,36 @@
 {
+  "name": "User",
+  "type": "object",
   "properties": {
     "role": {
       "type": "string",
-      "description": "The role of the user in the app",
       "enum": [
         "admin",
         "user"
-      ]
+      ],
+      "default": "user"
+    },
+    "subscription_status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "none"
+      ],
+      "default": "none",
+      "description": "Current Stripe subscription status"
+    },
+    "subscription_id": {
+      "type": "string",
+      "description": "Stripe subscription ID"
+    },
+    "subscription_price_id": {
+      "type": "string",
+      "description": "Stripe price ID of the subscribed plan"
+    },
+    "subscription_product_id": {
+      "type": "string",
+      "description": "Stripe product ID of the subscribed plan"
     }
-  },
-  "required": [
-    "role"
-  ],
-  "name": "User",
-  "type": "object"
+  }
 }

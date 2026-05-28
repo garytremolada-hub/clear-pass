@@ -1,12 +1,13 @@
 import { cn } from '@/lib/utils';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquareText, Library, BarChart3, FileText, PenLine, ClipboardCheck, Hammer, Menu, X } from 'lucide-react';
+import { MessageSquareText, Library, BarChart3, FileText, PenLine, ClipboardCheck, Hammer, Menu, X, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 
 const navItems = [
     { label: 'New Session', path: '/', icon: MessageSquareText },
     { label: 'Work Library', path: '/library', icon: Library },
+    { label: 'Pricing', path: '/pricing', icon: CreditCard },
 ];
 
 const modeItems = [
