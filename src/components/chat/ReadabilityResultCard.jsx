@@ -5,11 +5,21 @@ import { BAND_CONFIG, getBandForFkgl, getBandIndex } from '@/lib/parseReadabilit
 
 // ─── Band scale ──────────────────────────────────────────────────────────────
 
+// Each of the 8 bands occupies 12.5% of the bar.
+// Marker position is interpolated within the band.
 function fkglToPercent(fkgl) {
-    const MIN = 0;
-    const MAX = 20;
-    const clamped = Math.min(Math.max(fkgl, MIN), MAX);
-    return ((clamped - MIN) / (MAX - MIN)) * 100;
+    if (fkgl == null) return null;
+    const bandWidth = 100 / 8; // 12.5% per band
+    const idx = BAND_CONFIG.findIndex(b => fkgl >= b.fkglMin && fkgl < b.fkglMax);
+    const band = idx >= 0 ? BAND_CONFIG[idx] : BAND_CONFIG[BAND_CONFIG.length - 1];
+    const bandIdx = idx >= 0 ? idx : BAND_CONFIG.length - 1;
+
+    const bandStart = bandIdx * bandWidth;
+    const fkglMin = band.fkglMin;
+    // Cap fkglMax for the last band so it doesn't go to 99
+    const fkglMax = band.fkglMax === 99 ? band.fkglMin + 4 : band.fkglMax;
+    const t = Math.min(Math.max((fkgl - fkglMin) / (fkglMax - fkglMin), 0), 1);
+    return bandStart + t * bandWidth;
 }
 
 function ScaleBar({ fkgl, rewriteFkgl }) {
@@ -158,18 +168,18 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
                 {(() => {
                     const band = getBandForFkgl(result.fkgl);
                     const bandDescriptions = {
-                        'Very Easy':         'below AQF entry — primary to early secondary',
-                        'Easy':              'below AQF entry — upper primary to Year 6',
-                        'Fairly Easy':       'below AQF entry — Year 7–8',
-                        'Cert I/II · Yr 10': 'AQF 1–2 — suitable for foundation VET learners',
-                        'Cert III/IV':       'AQF 3–4 — suitable for vocational learners',
-                        'Diploma':           'AQF 5–6 — suitable for advanced VET learners',
-                        'Degree / Grad Dip': 'AQF 7–8 — suitable for undergraduate students',
-                        'Very Difficult':    'AQF 9–10 — postgraduate level',
+                        'Very Easy':         'suitable for early primary school readers',
+                        'Easy':              'suitable for upper primary school readers',
+                        'Fairly Easy':       'suitable for junior secondary students',
+                        'Cert I/II · Yr 10': 'entry level — suitable for Year 10 or foundation learners',
+                        'Cert III/IV':       'vocational level — suitable for most apprentices and working adults',
+                        'Diploma':           'advanced vocational — suitable for diploma and higher VET learners',
+                        'Degree / Grad Dip': 'undergraduate level — suitable for university students',
+                        'Very Difficult':    'postgraduate level — academic or specialist professional audience',
                     };
                     const desc = band ? bandDescriptions[band.name] : null;
                     const headline = band && desc
-                        ? `This document reads at ${band.name} level (${desc}).`
+                        ? `This document reads at ${band.name} level — ${desc}.`
                         : result.summary;
                     return headline ? (
                         <p className="text-base font-medium leading-snug" style={{ color: '#0d2444' }}>
