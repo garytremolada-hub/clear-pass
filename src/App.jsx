@@ -12,6 +12,7 @@ import WorkLibrary from './pages/WorkLibrary';
 import Pricing from './pages/Pricing';
 import SubscriptionSuccess from './pages/SubscriptionSuccess';
 import Settings from './pages/Settings';
+import LevelCheck from './pages/LevelCheck';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -38,6 +39,7 @@ const AuthenticatedApp = () => {
       <Route element={<AppLayout />}>
       <Route path="/" element={<Dashboard />} />
       <Route path="/chat" element={<Chat />} />
+      <Route path="/level-check" element={<LevelCheck />} />
       <Route path="/library" element={<WorkLibrary />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/settings" element={<Settings />} />
