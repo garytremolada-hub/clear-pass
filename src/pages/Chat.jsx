@@ -266,6 +266,25 @@ Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do
                             Used by RTOs and universities across Australia. Results mapped to AQF levels 1–10.<br />
                             Scores are AI estimates — always review with a qualified assessor before submission.
                         </p>
+
+                        {/* Metric definitions */}
+                        <div className="border rounded-xl p-5 bg-muted/30">
+                            <p className="text-xs font-semibold text-foreground mb-3">Metric definitions</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {[
+                                    { abbr: 'FKGL', name: 'Flesch–Kincaid Grade Level', desc: 'US school grade needed to understand the text. Lower = easier.' },
+                                    { abbr: 'FRE',  name: 'Flesch Reading Ease',        desc: 'Score 0–100. Higher = easier to read. Plain English ≈ 60–70.' },
+                                    { abbr: 'ASL',  name: 'Average Sentence Length',    desc: 'Mean number of words per sentence. Shorter sentences read easier.' },
+                                    { abbr: 'ASW',  name: 'Average Syllables per Word', desc: 'Mean syllables per word. Fewer syllables = simpler vocabulary.' },
+                                ].map(m => (
+                                    <div key={m.abbr}>
+                                        <p className="text-sm font-bold text-[#1e3a5f]">{m.abbr}</p>
+                                        <p className="text-[11px] font-medium text-foreground mb-0.5">{m.name}</p>
+                                        <p className="text-[11px] text-muted-foreground leading-relaxed">{m.desc}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
             ) : (
