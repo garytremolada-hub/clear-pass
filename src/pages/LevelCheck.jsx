@@ -105,10 +105,10 @@ ${text.slice(0, 4000)}`;
     };
 
     // Rewrite modal confirm — two-step: rewrite text, then score it
-    const handleRewriteConfirm = async (targetLevel) => {
+    const handleRewriteConfirm = async ({ targetFkgl, learnerLabel, prompt: rewriteInstruction }) => {
         setShowRewriteModal(false);
         setRewriting(true);
-        setRewritingLabel(targetLevel);
+        setRewritingLabel(learnerLabel);
         setRewriteResult(null);
         setRewrittenText(null);
         setError(null);
@@ -122,12 +122,7 @@ ${text.slice(0, 4000)}`;
 
         try {
             // Step 1 — rewrite only, no scoring blocks
-            const rewritePrompt = `Rewrite the following document to ${targetLevel}.
-Return ONLY the rewritten document text — no scoring blocks, no explanations, no markdown headers, no commentary.
-Just the rewritten document text.
-
-Document to rewrite:
-${text.slice(0, 4000)}`;
+            const rewritePrompt = `${rewriteInstruction}\n\nDocument to rewrite:\n${text.slice(0, 4000)}`;
 
             const rewritten = await base44.integrations.Core.InvokeLLM({ prompt: rewritePrompt, model: 'claude_sonnet_4_6' });
 
