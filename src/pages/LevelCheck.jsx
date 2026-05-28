@@ -1,23 +1,49 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, CheckCircle, ArrowRight } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { ResultCard } from '@/components/chat/ReadabilityResultCard';
-import { parseReadabilityResult } from '@/lib/parseReadabilityResult';
+import { parseReadabilityResult, getBandForFkgl } from '@/lib/parseReadabilityResult';
 import { useNavigate } from 'react-router-dom';
+
+const LS_KEY = 'clearpass_last_level_check';
 
 export default function LevelCheck() {
     const [file, setFile] = useState(null);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
+    const [fileName, setFileName] = useState(null);
     const [error, setError] = useState(null);
     const inputRef = useRef(null);
     const navigate = useNavigate();
+
+    // FIX 3 & 4 — load persisted result on mount
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(LS_KEY);
+            if (saved) {
+                const { result: r, fileName: n } = JSON.parse(saved);
+                if (r) { setResult(r); setFileName(n); }
+            }
+        } catch (_) {}
+    }, []);
+
+    const persistResult = (r, name) => {
+        try {
+            localStorage.setItem(LS_KEY, JSON.stringify({ result: r, fileName: name }));
+        } catch (_) {}
+    };
+
+    const clearPersisted = () => {
+        try { localStorage.removeItem(LS_KEY); } catch (_) {}
+    };
 
     const handleFile = (f) => {
         if (!f) return;
         setFile(f);
         setResult(null);
+        setFileName(null);
         setError(null);
+        clearPersisted();
     };
 
     const handleDrop = (e) => {
@@ -31,22 +57,15 @@ export default function LevelCheck() {
         setLoading(true);
         setError(null);
         try {
-            // Upload file to get a URL
             const uploadResult = await base44.integrations.Core.UploadFile({ file });
             const fileUrl = uploadResult.file_url;
 
-            // Extract text — match exact param names the function expects
             const payload = { file_url: fileUrl, file_name: file.name, label: 'Level Check document' };
-            console.log('[LevelCheck] Calling extractDocumentText with:', payload);
-
             const res = await base44.functions.invoke('extractDocumentText', payload);
             const text = res?.data?.text || '';
 
-            console.log('[LevelCheck] Extracted text length:', text?.length, '— preview:', text?.slice(0, 120));
-
             if (!text) throw new Error('Could not extract text from this document.');
 
-            // Score via LLM
             const prompt = `Score the following text for readability using FKGL and FRE formulas.
 
 Return ONLY this exact format (no extra commentary):
@@ -66,6 +85,8 @@ ${text.slice(0, 4000)}`;
 
             if (!parsed) throw new Error('Could not parse readability result.');
             setResult(parsed);
+            setFileName(file.name);
+            persistResult(parsed, file.name);
         } catch (err) {
             setError(err.message || 'Something went wrong. Please try again.');
         } finally {
@@ -73,24 +94,54 @@ ${text.slice(0, 4000)}`;
         }
     };
 
-    const handleBuild = () => {
-        const level = result?.fkgl ? `FKGL ${result.fkgl.toFixed(1)}` : '';
+    // FIX 2 — working buttons
+    const handleRewrite = () => {
+        const band = getBandForFkgl(result?.fkgl);
+        const bandName = band?.name || 'this level';
+        const fkglStr = result?.fkgl != null ? result.fkgl.toFixed(1) : '—';
+        const docName = fileName || 'this document';
         navigate('/chat', {
             state: {
-                quickPrompt: `I want to build a new assessment from a UoC. The target readability level is ${level}.`,
+                quickPrompt: `I want to rewrite ${docName} which scores at FKGL ${fkglStr} (${bandName}). Please ask me what target level I want.`,
+                cohort: false,
+            },
+        });
+    };
+
+    const handleBuild = () => {
+        const band = getBandForFkgl(result?.fkgl);
+        const bandName = band?.name || 'this level';
+        const fkglStr = result?.fkgl != null ? result.fkgl.toFixed(1) : '—';
+        navigate('/chat', {
+            state: {
+                quickPrompt: `I want to build an assessment at ${bandName} level (FKGL ${fkglStr}). Please ask me for the UoC.`,
                 cohort: true,
             },
         });
     };
 
     const handleSave = () => {
-        // Fire save event to chat — navigate first
-        navigate('/chat', {
+        if (!result) return;
+        const band = getBandForFkgl(result?.fkgl);
+        navigate('/library', {
             state: {
-                quickPrompt: 'Please save the last result to the work library.',
-                cohort: false,
+                prefill: {
+                    title: fileName || 'Level Check result',
+                    task_type: 'score',
+                    fkgl: result.fkgl,
+                    fre: result.fre,
+                    band: band?.name,
+                    original_text: fileName || '',
+                },
             },
         });
+    };
+
+    const handleCheckAnother = () => {
+        setResult(null);
+        setFile(null);
+        setFileName(null);
+        clearPersisted();
     };
 
     return (
@@ -116,7 +167,7 @@ ${text.slice(0, 4000)}`;
                     </p>
                 </div>
 
-                {/* Upload area */}
+                {/* Upload area — hidden when result is showing */}
                 {!result && (
                     <div>
                         <div
@@ -182,28 +233,40 @@ ${text.slice(0, 4000)}`;
                     </div>
                 )}
 
+                {/* FIX 3 — sticky result banner */}
+                {result && fileName && (
+                    <div className="flex items-center justify-between px-4 py-2.5 rounded-lg" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
+                        <span className="text-sm" style={{ color: '#6b7280' }}>
+                            Showing your most recent result — <span className="font-medium" style={{ color: '#0d2444' }}>{fileName}</span>
+                        </span>
+                        <button
+                            onClick={handleCheckAnother}
+                            className="text-xs font-medium ml-3 whitespace-nowrap"
+                            style={{ color: '#c9a84c', background: 'none', border: 'none', cursor: 'pointer' }}
+                        >
+                            Check another document
+                        </button>
+                    </div>
+                )}
+
                 {/* Result */}
                 {result && (
-                    <div className="space-y-5">
-                        <ResultCard result={result} />
+                    <div className="space-y-4">
+                        {/* FIX 2 — pass working handlers into ResultCard */}
+                        <ResultCard
+                            result={result}
+                            onRewrite={handleRewrite}
+                            onSaveToLibrary={handleSave}
+                        />
 
-                        <div className="flex flex-col gap-3">
-                            <button
-                                onClick={handleBuild}
-                                className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
-                                style={{ backgroundColor: '#c9a84c', color: '#0d2444' }}
-                            >
-                                Build an assessment for this level
-                                <ArrowRight className="h-4 w-4" />
-                            </button>
-                            <button
-                                onClick={() => { setResult(null); setFile(null); }}
-                                className="text-sm underline text-center"
-                                style={{ color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer' }}
-                            >
-                                Check another document
-                            </button>
-                        </div>
+                        <button
+                            onClick={handleBuild}
+                            className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
+                            style={{ backgroundColor: '#c9a84c', color: '#0d2444' }}
+                        >
+                            Build an assessment for this level
+                            <ArrowRight className="h-4 w-4" />
+                        </button>
                     </div>
                 )}
             </div>
