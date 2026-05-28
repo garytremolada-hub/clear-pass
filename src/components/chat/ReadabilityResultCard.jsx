@@ -266,6 +266,11 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
                     </Button>
                 </div>
 
+                {/* Disclaimer */}
+                <p className="text-[11px] text-muted-foreground italic leading-relaxed">
+                    Scores are AI estimates based on sentence length and word complexity. For critical compliance decisions, verify with a qualified assessor.
+                </p>
+
                 {/* Nearest benchmark */}
                 {result.benchmark && (
                     <p className="text-[11px] text-muted-foreground italic">
