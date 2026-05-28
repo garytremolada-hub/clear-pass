@@ -31,10 +31,18 @@ export default function LevelCheck() {
         setLoading(true);
         setError(null);
         try {
-            // Upload and extract text
-            const { file_url } = await base44.integrations.Core.UploadFile({ file });
-            const extracted = await base44.functions.invoke('extractDocumentText', { fileUrl: file_url });
-            const text = extracted?.data?.text || extracted?.data?.documents?.[0]?.text || '';
+            // Upload file to get a URL
+            const uploadResult = await base44.integrations.Core.UploadFile({ file });
+            const fileUrl = uploadResult.file_url;
+
+            // Extract text — match exact param names the function expects
+            const payload = { file_url: fileUrl, file_name: file.name, label: 'Level Check document' };
+            console.log('[LevelCheck] Calling extractDocumentText with:', payload);
+
+            const res = await base44.functions.invoke('extractDocumentText', payload);
+            const text = res?.data?.text || '';
+
+            console.log('[LevelCheck] Extracted text length:', text?.length, '— preview:', text?.slice(0, 120));
 
             if (!text) throw new Error('Could not extract text from this document.');
 
