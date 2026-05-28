@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Upload, CheckCircle, ArrowRight } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { ResultCard, BeforeAfterCards } from '@/components/chat/ReadabilityResultCard';
-import { parseReadabilityResult, parseBeforeAfter, getBandForFkgl } from '@/lib/parseReadabilityResult';
+import { parseReadabilityResult, getBandForFkgl } from '@/lib/parseReadabilityResult';
 import { useNavigate } from 'react-router-dom';
 import RewriteModal from '@/components/levelcheck/RewriteModal';
 
@@ -17,7 +17,9 @@ export default function LevelCheck() {
     const [error, setError] = useState(null);
     const [showRewriteModal, setShowRewriteModal] = useState(false);
     const [rewriting, setRewriting] = useState(false);
+    const [rewritingLabel, setRewritingLabel] = useState('');
     const [rewriteResult, setRewriteResult] = useState(null); // { before, after }
+    const [rewrittenText, setRewrittenText] = useState(null);
     const inputRef = useRef(null);
     const navigate = useNavigate();
 
@@ -102,44 +104,76 @@ ${text.slice(0, 4000)}`;
         }
     };
 
-    // Rewrite modal confirm — runs inline, shows before/after on this page
+    // Rewrite modal confirm — two-step: rewrite text, then score it
     const handleRewriteConfirm = async (targetLevel) => {
         setShowRewriteModal(false);
         setRewriting(true);
+        setRewritingLabel(targetLevel);
         setRewriteResult(null);
+        setRewrittenText(null);
+        setError(null);
+
+        const text = extractedText || '';
+        if (!text) {
+            setError('No document text found. Please re-upload the document.');
+            setRewriting(false);
+            return;
+        }
+
         try {
-            const band = getBandForFkgl(result?.fkgl);
-            const bandName = band?.name || 'this level';
-            const fkglStr = result?.fkgl != null ? result.fkgl.toFixed(1) : '—';
-            const docName = fileName || 'this document';
-            const text = extractedText || '';
+            // Step 1 — rewrite only, no scoring blocks
+            const rewritePrompt = `Rewrite the following document to ${targetLevel}.
+Return ONLY the rewritten document text — no scoring blocks, no explanations, no markdown headers, no commentary.
+Just the rewritten document text.
 
-            const prompt = `LEVEL CHECK REWRITE REQUEST
-Document: ${docName}
-Current FKGL: ${fkglStr} (${bandName})
-Target level: ${targetLevel}
-
-Please rewrite this document to the target level. Use the full rewrite workflow — score original, rewrite, re-score, check tolerance.
-Here is the document text:
+Document to rewrite:
 ${text.slice(0, 4000)}`;
 
-            const raw = await base44.integrations.Core.InvokeLLM({ prompt, model: 'claude_sonnet_4_6' });
+            const rewritten = await base44.integrations.Core.InvokeLLM({ prompt: rewritePrompt, model: 'claude_sonnet_4_6' });
 
-            // Try to parse as before/after, fall back to single result
-            const ba = parseBeforeAfter(raw);
-            if (ba) {
-                setRewriteResult(ba);
-            } else {
-                const single = parseReadabilityResult(raw);
-                if (single) {
-                    setRewriteResult({ before: result, after: single });
-                }
+            if (!rewritten || rewritten.trim().length < 20) {
+                throw new Error('AI did not return a rewritten document. Please try again.');
             }
+            setRewrittenText(rewritten);
+
+            // Step 2 — score the rewritten text
+            const scorePrompt = `Score the following text for readability using FKGL and FRE formulas.
+
+Return ONLY this exact format (no extra commentary):
+FKGL: [number]
+FRE: [number]
+Words: [number]
+Sentences: [number]
+Syllables: [number]
+Summary: [one sentence describing the readability level]
+Benchmark: [nearest AQF level or year level]
+
+Text to score:
+${rewritten.slice(0, 4000)}`;
+
+            const scoreRaw = await base44.integrations.Core.InvokeLLM({ prompt: scorePrompt });
+            const afterResult = parseReadabilityResult(scoreRaw);
+
+            if (!afterResult) throw new Error('Could not score the rewritten document.');
+
+            setRewriteResult({ before: result, after: afterResult });
         } catch (err) {
             setError(err.message || 'Rewrite failed. Please try again.');
         } finally {
             setRewriting(false);
         }
+    };
+
+    const handleDownloadRewrite = () => {
+        if (!rewrittenText) return;
+        const html = `<html><body style="font-family:Arial,sans-serif;max-width:800px;margin:40px auto;line-height:1.6;">${rewrittenText.replace(/\n/g, '<br/>')}</body></html>`;
+        const blob = new Blob([html], { type: 'application/msword' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `rewritten-${fileName || 'document'}.doc`;
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     const handleBuild = () => {
@@ -290,9 +324,11 @@ ${text.slice(0, 4000)}`;
 
                 {/* Rewrite in progress */}
                 {rewriting && (
-                    <div className="flex items-center justify-center gap-3 py-6" style={{ color: '#6b7280', fontSize: '14px' }}>
-                        <div className="h-5 w-5 border-2 border-gray-300 border-t-[#c9a84c] rounded-full animate-spin" />
-                        Rewriting document to target level…
+                    <div className="flex flex-col items-center justify-center gap-3 py-10">
+                        <div className="h-6 w-6 border-2 border-gray-200 border-t-[#c9a84c] rounded-full animate-spin" />
+                        <p style={{ color: '#0d2444', fontSize: '14px' }}>
+                            Rewriting to <span className="font-medium">{rewritingLabel}</span> level…
+                        </p>
                     </div>
                 )}
 
@@ -305,6 +341,24 @@ ${text.slice(0, 4000)}`;
                             onRewrite={() => setShowRewriteModal(true)}
                             onSaveToLibrary={handleSave}
                         />
+
+                        {/* Download rewritten doc */}
+                        <button
+                            onClick={handleDownloadRewrite}
+                            className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
+                            style={{ backgroundColor: '#c9a84c', color: '#0d2444' }}
+                        >
+                            Download rewritten document →
+                        </button>
+
+                        {/* Build at this level link */}
+                        <button
+                            onClick={handleBuild}
+                            className="w-full text-sm font-medium text-center"
+                            style={{ background: 'none', border: 'none', color: '#0d2444', cursor: 'pointer', textDecoration: 'underline' }}
+                        >
+                            Build an assessment at this level →
+                        </button>
                     </div>
                 )}
 
