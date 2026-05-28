@@ -2,41 +2,18 @@ import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
-const PLANS = [
-    {
-        name: 'Starter',
-        price: '$29',
-        period: '/month',
-        description: 'For individual assessors and trainers.',
-        priceId: 'price_1TbuaxQ5wgeMopoEu0MnJTsf',
-        features: [
-            'Readability scoring (FKGL / FRE)',
-            'Text rewriting to target level',
-            'Assessment audit against UoC',
-            'Work library (save results)',
-            'AQF level mapping',
-        ],
-        color: '#1e3a5f',
-        highlight: false,
-    },
-    {
-        name: 'Professional',
-        price: '$79',
-        period: '/month',
-        description: 'For RTO teams and compliance managers.',
-        priceId: 'price_1TbuaxQ5wgeMopoEQlMDOwEW',
-        features: [
-            'Everything in Starter',
-            'Assessment builder from UoC',
-            'Bulk document upload',
-            'Team cohort profiles',
-            'Priority support',
-        ],
-        color: '#7c3aed',
-        highlight: true,
-    },
+const PRICE_ID = 'price_1TbueJQ5wgeMopoE3lOl0XzB';
+
+const FEATURES = [
+    'Readability scoring (Grade Level & Reading Ease)',
+    'Text rewriting to any AQF target level',
+    'Assessment audit against Unit of Competency',
+    'Assessment builder from UoC',
+    'Work library — save and revisit results',
+    'AQF level 1–10 mapping',
+    'Cohort profile customisation',
+    'Unlimited sessions',
 ];
 
 export default function Pricing() {
@@ -52,21 +29,19 @@ export default function Pricing() {
             .finally(() => setCheckingStatus(false));
     }, []);
 
-    const handleSubscribe = async (priceId) => {
-        // Block if running inside an iframe (preview mode)
+    const handleSubscribe = async () => {
         if (window.self !== window.top) {
             alert('Checkout only works from the published app, not the preview. Please open your published app URL to subscribe.');
             return;
         }
-
-        setLoading(priceId);
-        const res = await base44.functions.invoke('createCheckoutSession', { priceId });
+        setLoading(true);
+        const res = await base44.functions.invoke('createCheckoutSession', { priceId: PRICE_ID });
         if (res.data?.url) {
             window.location.href = res.data.url;
         } else {
             alert('Could not start checkout. Please try again.');
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleManageBilling = async () => {
@@ -86,23 +61,21 @@ export default function Pricing() {
 
     return (
         <div className="min-h-screen bg-background py-16 px-4">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-lg mx-auto">
 
                 {/* Header */}
-                <div className="text-center mb-12 space-y-3">
-                    <h1 className="text-4xl font-bold text-[#1e3a5f] dark:text-foreground">Simple, transparent pricing</h1>
-                    <p className="text-muted-foreground text-lg">
-                        Make your assessments audit-ready. Cancel anytime.
+                <div className="text-center mb-10 space-y-3">
+                    <h1 className="text-4xl font-bold text-[#1e3a5f] dark:text-foreground">Full Access</h1>
+                    <p className="text-muted-foreground text-base">
+                        Everything you need to make your assessments audit-ready.
                     </p>
                 </div>
 
                 {/* Active subscription banner */}
                 {!checkingStatus && isActive && (
-                    <div className="mb-8 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+                    <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
                         <div>
-                            <p className="font-semibold text-green-800">
-                                ✓ You're on the <span className="capitalize">{subscription.plan}</span> plan
-                            </p>
+                            <p className="font-semibold text-green-800">✓ Your subscription is active</p>
                             <p className="text-sm text-green-700">
                                 Renews {new Date(subscription.currentPeriodEnd * 1000).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
                             </p>
@@ -119,60 +92,42 @@ export default function Pricing() {
                     </div>
                 )}
 
-                {/* Plan cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {PLANS.map(plan => (
-                        <div
-                            key={plan.name}
-                            className={cn(
-                                'bg-white dark:bg-card rounded-2xl shadow-sm border flex flex-col',
-                                plan.highlight && 'ring-2 ring-[#7c3aed]'
-                            )}
-                        >
-                            {plan.highlight && (
-                                <div className="text-center py-1.5 rounded-t-2xl text-xs font-semibold text-white" style={{ backgroundColor: plan.color }}>
-                                    Most popular
-                                </div>
-                            )}
-                            <div className="p-7 flex flex-col flex-1 space-y-6">
-                                <div>
-                                    <h2 className="text-xl font-bold" style={{ color: plan.color }}>{plan.name}</h2>
-                                    <p className="text-muted-foreground text-sm mt-1">{plan.description}</p>
-                                    <div className="mt-4 flex items-end gap-1">
-                                        <span className="text-4xl font-bold text-foreground">{plan.price}</span>
-                                        <span className="text-muted-foreground mb-1">{plan.period}</span>
-                                    </div>
-                                </div>
-
-                                <ul className="space-y-2.5 flex-1">
-                                    {plan.features.map(f => (
-                                        <li key={f} className="flex items-start gap-2 text-sm text-foreground/80">
-                                            <Check className="h-4 w-4 shrink-0 mt-0.5" style={{ color: plan.color }} />
-                                            {f}
-                                        </li>
-                                    ))}
-                                </ul>
-
-                                <Button
-                                    className="w-full text-white"
-                                    style={{ backgroundColor: plan.color }}
-                                    disabled={loading === plan.priceId || checkingStatus}
-                                    onClick={() => handleSubscribe(plan.priceId)}
-                                >
-                                    {loading === plan.priceId
-                                        ? 'Redirecting...'
-                                        : isActive && subscription.plan === plan.name.toLowerCase()
-                                            ? 'Current plan'
-                                            : 'Subscribe'}
-                                </Button>
+                {/* Plan card */}
+                <div className="bg-white dark:bg-card rounded-2xl shadow-sm border-2 border-[#1e3a5f] overflow-hidden">
+                    <div className="p-8 space-y-7">
+                        {/* Price */}
+                        <div className="text-center">
+                            <div className="flex items-end justify-center gap-1">
+                                <span className="text-5xl font-bold text-[#1e3a5f] dark:text-foreground">$200</span>
+                                <span className="text-muted-foreground mb-1.5 text-lg">AUD / month</span>
                             </div>
+                            <p className="text-sm text-muted-foreground mt-1">Cancel anytime</p>
                         </div>
-                    ))}
+
+                        {/* Features */}
+                        <ul className="space-y-3">
+                            {FEATURES.map(f => (
+                                <li key={f} className="flex items-start gap-3 text-sm text-foreground/80">
+                                    <Check className="h-4 w-4 shrink-0 mt-0.5 text-[#1e3a5f]" />
+                                    {f}
+                                </li>
+                            ))}
+                        </ul>
+
+                        {/* CTA */}
+                        <Button
+                            className="w-full bg-[#1e3a5f] hover:bg-[#152d4d] text-white h-12 text-base"
+                            disabled={loading || checkingStatus || isActive}
+                            onClick={handleSubscribe}
+                        >
+                            {loading ? 'Redirecting to checkout...' : isActive ? 'Already subscribed' : 'Subscribe now'}
+                        </Button>
+                    </div>
                 </div>
 
-                <p className="text-center text-xs text-muted-foreground mt-8">
-                    Payments processed securely by Stripe. Cancel anytime from your billing portal.<br />
-                    Prices in USD. GST may apply for Australian customers.
+                <p className="text-center text-xs text-muted-foreground mt-6">
+                    Payments processed securely by Stripe.<br />
+                    Price is in Australian Dollars (AUD). GST included.
                 </p>
             </div>
         </div>

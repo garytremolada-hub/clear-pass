@@ -18,8 +18,7 @@ Deno.serve(async (req) => {
         const priceId = subscription.items.data[0]?.price?.id;
 
         const PRICE_PLANS = {
-            'price_1TbuaxQ5wgeMopoEu0MnJTsf': 'starter',
-            'price_1TbuaxQ5wgeMopoEQlMDOwEW': 'professional',
+            'price_1TbueJQ5wgeMopoE3lOl0XzB': 'full_access',
         };
 
         return Response.json({
