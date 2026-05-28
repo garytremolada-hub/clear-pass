@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, CheckCircle, ArrowRight } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { ResultCard } from '@/components/chat/ReadabilityResultCard';
-import { parseReadabilityResult, getBandForFkgl } from '@/lib/parseReadabilityResult';
+import { ResultCard, BeforeAfterCards } from '@/components/chat/ReadabilityResultCard';
+import { parseReadabilityResult, parseBeforeAfter, getBandForFkgl } from '@/lib/parseReadabilityResult';
 import { useNavigate } from 'react-router-dom';
+import RewriteModal from '@/components/levelcheck/RewriteModal';
 
 const LS_KEY = 'clearpass_last_level_check';
 
@@ -12,24 +13,28 @@ export default function LevelCheck() {
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
     const [fileName, setFileName] = useState(null);
+    const [extractedText, setExtractedText] = useState(null); // stored for rewrite
     const [error, setError] = useState(null);
+    const [showRewriteModal, setShowRewriteModal] = useState(false);
+    const [rewriting, setRewriting] = useState(false);
+    const [rewriteResult, setRewriteResult] = useState(null); // { before, after }
     const inputRef = useRef(null);
     const navigate = useNavigate();
 
-    // FIX 3 & 4 — load persisted result on mount
+    // Load persisted result on mount
     useEffect(() => {
         try {
             const saved = localStorage.getItem(LS_KEY);
             if (saved) {
-                const { result: r, fileName: n } = JSON.parse(saved);
-                if (r) { setResult(r); setFileName(n); }
+                const { result: r, fileName: n, extractedText: t } = JSON.parse(saved);
+                if (r) { setResult(r); setFileName(n); setExtractedText(t || null); }
             }
         } catch (_) {}
     }, []);
 
-    const persistResult = (r, name) => {
+    const persistResult = (r, name, text) => {
         try {
-            localStorage.setItem(LS_KEY, JSON.stringify({ result: r, fileName: name }));
+            localStorage.setItem(LS_KEY, JSON.stringify({ result: r, fileName: name, extractedText: text }));
         } catch (_) {}
     };
 
@@ -42,6 +47,8 @@ export default function LevelCheck() {
         setFile(f);
         setResult(null);
         setFileName(null);
+        setExtractedText(null);
+        setRewriteResult(null);
         setError(null);
         clearPersisted();
     };
@@ -86,7 +93,8 @@ ${text.slice(0, 4000)}`;
             if (!parsed) throw new Error('Could not parse readability result.');
             setResult(parsed);
             setFileName(file.name);
-            persistResult(parsed, file.name);
+            setExtractedText(text);
+            persistResult(parsed, file.name, text);
         } catch (err) {
             setError(err.message || 'Something went wrong. Please try again.');
         } finally {
@@ -94,18 +102,44 @@ ${text.slice(0, 4000)}`;
         }
     };
 
-    // FIX 2 — working buttons
-    const handleRewrite = () => {
-        const band = getBandForFkgl(result?.fkgl);
-        const bandName = band?.name || 'this level';
-        const fkglStr = result?.fkgl != null ? result.fkgl.toFixed(1) : '—';
-        const docName = fileName || 'this document';
-        navigate('/chat', {
-            state: {
-                quickPrompt: `I want to rewrite ${docName} which scores at FKGL ${fkglStr} (${bandName}). Please ask me what target level I want.`,
-                cohort: false,
-            },
-        });
+    // Rewrite modal confirm — runs inline, shows before/after on this page
+    const handleRewriteConfirm = async (targetLevel) => {
+        setShowRewriteModal(false);
+        setRewriting(true);
+        setRewriteResult(null);
+        try {
+            const band = getBandForFkgl(result?.fkgl);
+            const bandName = band?.name || 'this level';
+            const fkglStr = result?.fkgl != null ? result.fkgl.toFixed(1) : '—';
+            const docName = fileName || 'this document';
+            const text = extractedText || '';
+
+            const prompt = `LEVEL CHECK REWRITE REQUEST
+Document: ${docName}
+Current FKGL: ${fkglStr} (${bandName})
+Target level: ${targetLevel}
+
+Please rewrite this document to the target level. Use the full rewrite workflow — score original, rewrite, re-score, check tolerance.
+Here is the document text:
+${text.slice(0, 4000)}`;
+
+            const raw = await base44.integrations.Core.InvokeLLM({ prompt, model: 'claude_sonnet_4_6' });
+
+            // Try to parse as before/after, fall back to single result
+            const ba = parseBeforeAfter(raw);
+            if (ba) {
+                setRewriteResult(ba);
+            } else {
+                const single = parseReadabilityResult(raw);
+                if (single) {
+                    setRewriteResult({ before: result, after: single });
+                }
+            }
+        } catch (err) {
+            setError(err.message || 'Rewrite failed. Please try again.');
+        } finally {
+            setRewriting(false);
+        }
     };
 
     const handleBuild = () => {
@@ -141,8 +175,14 @@ ${text.slice(0, 4000)}`;
         setResult(null);
         setFile(null);
         setFileName(null);
+        setExtractedText(null);
+        setRewriteResult(null);
         clearPersisted();
     };
+
+    const band = getBandForFkgl(result?.fkgl);
+    const bandName = band?.name || '—';
+    const fkglStr = result?.fkgl != null ? result.fkgl.toFixed(1) : '—';
 
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
@@ -167,7 +207,7 @@ ${text.slice(0, 4000)}`;
                     </p>
                 </div>
 
-                {/* Upload area — hidden when result is showing */}
+                {/* Upload area */}
                 {!result && (
                     <div>
                         <div
@@ -192,7 +232,6 @@ ${text.slice(0, 4000)}`;
                                 className="hidden"
                                 onChange={e => handleFile(e.target.files?.[0])}
                             />
-
                             {file ? (
                                 <div className="flex flex-col items-center gap-2">
                                     <CheckCircle className="h-8 w-8" style={{ color: '#22c55e' }} />
@@ -233,7 +272,7 @@ ${text.slice(0, 4000)}`;
                     </div>
                 )}
 
-                {/* FIX 3 — sticky result banner */}
+                {/* Sticky result banner */}
                 {result && fileName && (
                     <div className="flex items-center justify-between px-4 py-2.5 rounded-lg" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
                         <span className="text-sm" style={{ color: '#6b7280' }}>
@@ -249,13 +288,32 @@ ${text.slice(0, 4000)}`;
                     </div>
                 )}
 
-                {/* Result */}
-                {result && (
+                {/* Rewrite in progress */}
+                {rewriting && (
+                    <div className="flex items-center justify-center gap-3 py-6" style={{ color: '#6b7280', fontSize: '14px' }}>
+                        <div className="h-5 w-5 border-2 border-gray-300 border-t-[#c9a84c] rounded-full animate-spin" />
+                        Rewriting document to target level…
+                    </div>
+                )}
+
+                {/* Before/After rewrite result */}
+                {rewriteResult && !rewriting && (
                     <div className="space-y-4">
-                        {/* FIX 2 — pass working handlers into ResultCard */}
+                        <BeforeAfterCards
+                            before={rewriteResult.before}
+                            after={rewriteResult.after}
+                            onRewrite={() => setShowRewriteModal(true)}
+                            onSaveToLibrary={handleSave}
+                        />
+                    </div>
+                )}
+
+                {/* Original result (only show when no rewrite yet) */}
+                {result && !rewriteResult && !rewriting && (
+                    <div className="space-y-4">
                         <ResultCard
                             result={result}
-                            onRewrite={handleRewrite}
+                            onRewrite={() => setShowRewriteModal(true)}
                             onSaveToLibrary={handleSave}
                         />
 
@@ -269,7 +327,21 @@ ${text.slice(0, 4000)}`;
                         </button>
                     </div>
                 )}
+
+                {error && result && (
+                    <p className="text-sm text-center" style={{ color: '#ef4444' }}>{error}</p>
+                )}
             </div>
+
+            {/* Rewrite modal */}
+            {showRewriteModal && (
+                <RewriteModal
+                    bandName={bandName}
+                    fkglStr={fkglStr}
+                    onConfirm={handleRewriteConfirm}
+                    onCancel={() => setShowRewriteModal(false)}
+                />
+            )}
         </div>
     );
 }
