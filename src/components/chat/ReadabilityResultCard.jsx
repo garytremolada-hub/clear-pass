@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BAND_CONFIG, getBandForFkgl, getBandIndex } from '@/lib/parseReadabilityResult';
 
@@ -247,41 +246,94 @@ export function ResultCard({ result, headerLabel, headerColor, rewriteFkgl, onRe
 export function BeforeAfterCards({ before, after, onRewrite, onSaveToLibrary }) {
     const beforeBand = getBandForFkgl(before.fkgl);
     const afterBand  = getBandForFkgl(after.fkgl);
-    const diff = after.fkgl != null && before.fkgl != null
-        ? (before.fkgl - after.fkgl).toFixed(1)
+
+    const rawDiff = before.fkgl != null && after.fkgl != null
+        ? before.fkgl - after.fkgl
         : null;
-    const direction = diff != null
-        ? (parseFloat(diff) > 0 ? 'simpler' : 'more complex')
-        : null;
+    const absDiff = rawDiff != null ? Math.abs(rawDiff).toFixed(1) : null;
+
+    // Determine movement status
+    let movementStatus = null; // 'simpler' | 'complex' | 'minimal'
+    if (rawDiff != null) {
+        if (Math.abs(rawDiff) <= 0.5) movementStatus = 'minimal';
+        else if (rawDiff > 0) movementStatus = 'simpler';
+        else movementStatus = 'complex';
+    }
+
+    const movementConfig = {
+        simpler: {
+            color: '#14532d',
+            text: () => (
+                <span>
+                    Moved from <span style={{ fontWeight: 600 }}>{beforeBand?.name}</span> to{' '}
+                    <span style={{ fontWeight: 600 }}>{afterBand?.name}</span>
+                    {' '}— {absDiff} grade level{absDiff !== '1.0' ? 's' : ''} simpler ✓
+                </span>
+            ),
+        },
+        complex: {
+            color: '#991b1b',
+            text: () => (
+                <span>
+                    The rewrite increased complexity by {absDiff} grade level{absDiff !== '1.0' ? 's' : ''} — try again or adjust manually
+                </span>
+            ),
+            showRetry: true,
+        },
+        minimal: {
+            color: '#713f12',
+            text: () => (
+                <span>
+                    Minimal change — the document may need manual editing to reach{' '}
+                    <span style={{ fontWeight: 600 }}>{afterBand?.name}</span> level
+                </span>
+            ),
+        },
+    };
+
+    const cfg = movementStatus ? movementConfig[movementStatus] : null;
 
     return (
         <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-start">
-                <ResultCard
-                    result={before}
-                    headerLabel="Before"
-                    headerColor="#0d2444"
-                    onRewrite={onRewrite}
-                    onSaveToLibrary={onSaveToLibrary}
-                />
-                <div className="flex items-center justify-center py-2 sm:py-0 sm:pt-20">
-                    <ArrowRight className="h-5 w-5" style={{ color: '#6b7280' }} />
-                </div>
-                <ResultCard
-                    result={after}
-                    headerLabel="After"
-                    headerColor="#c9a84c"
-                    onRewrite={onRewrite}
-                    onSaveToLibrary={onSaveToLibrary}
-                />
+            {/* Before card */}
+            <ResultCard
+                result={before}
+                headerLabel="Before"
+                headerColor="#0d2444"
+                onRewrite={onRewrite}
+                onSaveToLibrary={onSaveToLibrary}
+            />
+
+            {/* Down arrow */}
+            <div className="flex justify-center">
+                <ArrowDown className="h-6 w-6" style={{ color: '#6b7280' }} />
             </div>
 
-            {beforeBand && afterBand && diff && (
-                <p className="text-sm font-medium text-center" style={{ color: '#374151' }}>
-                    Moved from <span style={{ color: beforeBand.color }}>{beforeBand.name}</span> to{' '}
-                    <span style={{ color: afterBand.color }}>{afterBand.name}</span>
-                    {' '}— {Math.abs(parseFloat(diff))} grade level{Math.abs(parseFloat(diff)) !== 1 ? 's' : ''} {direction}
-                </p>
+            {/* After card */}
+            <ResultCard
+                result={after}
+                headerLabel="After"
+                headerColor="#c9a84c"
+                onRewrite={onRewrite}
+                onSaveToLibrary={onSaveToLibrary}
+            />
+
+            {/* Movement summary */}
+            {cfg && (
+                <div className="text-center space-y-2">
+                    <p className="text-sm font-medium" style={{ color: cfg.color }}>
+                        {cfg.text()}
+                    </p>
+                    {cfg.showRetry && (
+                        <button
+                            onClick={onRewrite}
+                            className="px-4 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
+                            style={{ backgroundColor: '#0d2444', color: '#ffffff', border: 'none', cursor: 'pointer' }}
+                        >
+                            Try rewrite again →
+                        </button>
+                    )}
+                </div>
             )}
         </div>
     );

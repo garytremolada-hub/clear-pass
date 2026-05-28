@@ -54,7 +54,8 @@ export default function RewriteModal({ bandName, fkglStr, onConfirm, onCancel })
         onConfirm({
             targetFkgl,
             learnerLabel: LEARNER_OPTIONS.find(o => o.value === learner)?.label || learnerDesc,
-            prompt: `Rewrite the following document to FKGL ${targetFkgl} — suitable for ${learnerDesc} learners${supportSuffix}.\nRules:\n- Return ONLY the rewritten text\n- No scoring blocks\n- No explanations\n- No markdown headers\n- No commentary\n- Preserve all factual content\n- Shorten sentences\n- Replace complex words with simpler ones`,
+            learnerDesc,
+            support,
         });
     };
 

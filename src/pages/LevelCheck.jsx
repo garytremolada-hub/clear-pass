@@ -109,7 +109,7 @@ ${text.slice(0, 4000)}`;
     };
 
     // Rewrite modal confirm — two-step: rewrite text, then score it
-    const handleRewriteConfirm = async ({ targetFkgl, learnerLabel, prompt: rewriteInstruction }) => {
+    const handleRewriteConfirm = async ({ targetFkgl, learnerLabel, learnerDesc, support }) => {
         setShowRewriteModal(false);
         setRewriting(true);
         setRewritingLabel(learnerLabel);
@@ -126,7 +126,38 @@ ${text.slice(0, 4000)}`;
 
         try {
             // Step 1 — rewrite only, no scoring blocks
-            const rewritePrompt = `${rewriteInstruction}\n\nDocument to rewrite:\n${text.slice(0, 4000)}`;
+            const rewritePrompt = `You are rewriting a document to make it simpler and easier to read.
+
+Target reading level: FKGL ${targetFkgl}
+Current reading level: FKGL ${result?.fkgl != null ? result.fkgl.toFixed(1) : 'unknown'}
+Learner type: ${learnerDesc || learnerLabel}
+Support needs: ${support || 'none'}
+
+REWRITING RULES — follow every rule:
+1. Break every long sentence into two or three shorter sentences.
+   Target: maximum 15 words per sentence for Cert III/IV and below.
+   Maximum 20 words for Diploma and above.
+2. Replace every word with 3+ syllables with a simpler word where possible.
+   Examples:
+   'demonstrate' → 'show'
+   'implement' → 'use' or 'put in place'
+   'identify' → 'find' or 'name'
+   'organisational' → 'workplace'
+   'requirements' → 'rules' or 'needs'
+   'procedures' → 'steps' or 'process'
+3. Use active voice. Change passive sentences to active.
+   Example: 'must be completed by the student' → 'you must complete'
+4. Remove unnecessary words and phrases.
+5. Keep all factual content and assessment requirements intact.
+6. Keep question numbers and structure.
+
+Return ONLY the rewritten text.
+No explanations. No scoring.
+No commentary. No headers.
+Just the rewritten document.
+
+Document to rewrite:
+${text.slice(0, 4000)}`;
 
             const rewritten = await base44.integrations.Core.InvokeLLM({ prompt: rewritePrompt, model: 'claude_sonnet_4_6' });
 
