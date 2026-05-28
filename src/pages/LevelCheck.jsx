@@ -139,7 +139,9 @@ ${text.slice(0, 4000)}`;
     const handleRewriteConfirm = async ({ targetFkgl, learnerLabel, learnerDesc, support }) => {
         setShowRewriteModal(false);
         setRewriting(true);
-        setRewritingLabel(learnerLabel);
+        const currentGrade = result?.fkgl != null ? Math.round(result.fkgl) : '?';
+        const targetGrade = targetFkgl != null ? Math.round(targetFkgl) : '?';
+        setRewritingLabel(`Grade ${currentGrade} to Grade ${targetGrade}`);
         setRewritingProgress('');
         setRewriteResult(null);
         setRewrittenText(null);
@@ -152,53 +154,76 @@ ${text.slice(0, 4000)}`;
             return;
         }
 
-        const buildPrompt = (chunkText) => `You are rewriting a document to make it simpler and easier to read.
+        const gradeReduction = result?.fkgl != null && targetFkgl != null 
+            ? (result.fkgl - targetFkgl).toFixed(1) 
+            : 'significant';
+        
+        const buildPrompt = (chunkText) => `You are rewriting an assessment document to make it much simpler.
 
-Target reading level: FKGL ${targetFkgl}
-Current reading level: FKGL ${result?.fkgl != null ? result.fkgl.toFixed(1) : 'unknown'}
-Learner type: ${learnerDesc || learnerLabel}
-Support needs: ${support || 'none'}
+CURRENT READING LEVEL: FKGL ${result?.fkgl != null ? result.fkgl.toFixed(1) : 'unknown'}
+TARGET READING LEVEL: FKGL ${targetFkgl}
+YOU MUST REDUCE COMPLEXITY BY APPROXIMATELY ${gradeReduction} GRADE LEVELS.
 
-REWRITING RULES — follow every rule:
-1. Break every long sentence into two or three shorter sentences.
-   Target: maximum 15 words per sentence for Cert III/IV and below.
-   Maximum 20 words for Diploma and above.
-2. Replace every word with 3+ syllables with a simpler word where possible.
-   Examples:
-   'demonstrate' → 'show'
-   'implement' → 'use' or 'put in place'
-   'identify' → 'find' or 'name'
-   'organisational' → 'workplace'
-   'requirements' → 'rules' or 'needs'
-   'procedures' → 'steps' or 'process'
-3. Use active voice. Change passive sentences to active.
-   Example: 'must be completed by the student' → 'you must complete'
-4. Remove unnecessary words and phrases.
-5. Keep all factual content and assessment requirements intact.
-6. Keep question numbers and structure.
+This is a large reduction. You must make dramatic changes to sentence length and word complexity.
 
-PROTECTED TEXT — DO NOT CHANGE:
-The following must be copied exactly as they appear in the original — word for word, no changes:
-- All Element names and numbers
-- All Performance Criteria text
-- All Performance Evidence text
-- All Knowledge Evidence text
-- All Assessment Conditions text
-- All unit codes and unit titles
-- All text inside tables headed Element or Performance Criteria
+MANDATORY RULES — every single one:
 
-Only rewrite:
-- Instructions to students
-- Question text
-- Scenario descriptions
-- Administrative text
-- Overview and introduction paragraphs
-- Assessor instructions (simplify these separately at FKGL 12-14)
+SENTENCE LENGTH:
+- Break every sentence longer than 12 words into two or more sentences
+- Target average sentence length: 8-10 words per sentence
+- No sentence may exceed 15 words
+- Count words as you write each sentence. If over 12 words — split it.
 
-Return ONLY the rewritten text.
-No explanations. No scoring.
-No commentary. No headers.
-Just the rewritten document section.
+WORD SIMPLIFICATION — replace every complex word:
+demonstrate → show
+implement → use / put in place
+identify → find / name / list
+organisational → workplace / your
+utilise → use
+facilitate → help / support
+collaborate → work together
+communicate → share / tell / discuss
+requirements → rules / needs / steps
+procedures → steps / process
+documentation → forms / records
+assessment → test / task / check
+satisfactory → passed / good enough
+undertake → do / complete
+prior to → before
+in accordance with → following / using / as per
+in relation to → about / for
+in order to → to
+regarding → about
+sufficient → enough
+relevant → right / needed
+
+STRUCTURE RULES:
+- Keep all headings exactly as they are
+- Keep all table structures intact
+- Keep all form fields and blank lines
+- Keep all S/NS decision fields
+- Keep all assessor sections unchanged
+- Keep all Performance Criteria text word for word — never simplify these
+- Keep all Element names unchanged
+- Keep unit codes unchanged
+
+WHAT TO SIMPLIFY:
+- All student-facing instructions
+- All question text
+- All scenario descriptions
+- All overview paragraphs
+- All submission instructions
+- All declaration text
+
+DO NOT simplify:
+- Performance Criteria text
+- Element names
+- Knowledge Evidence text
+- Performance Evidence text
+- Assessment Conditions text
+- Unit codes or unit titles
+
+OUTPUT: Return only the rewritten text. No explanations. No commentary. No scoring. Just the document.
 
 Document section to rewrite:
 ${chunkText}`;

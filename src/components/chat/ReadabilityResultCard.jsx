@@ -5,31 +5,33 @@ import { BAND_CONFIG, getBandForFkgl, getBandIndex } from '@/lib/parseReadabilit
 
 // ─── Band scale ──────────────────────────────────────────────────────────────
 
-// Each of the 8 bands occupies 12.5% of the bar (centres at 6.25, 18.75, … 93.75%).
-// Band boundaries: 1-3, 4-5, 6-7, 8-9, 10-12, 13-14, 15-16, 17+
-function fkglToPercent(fkgl) {
+function getMarkerPosition(fkgl) {
     if (fkgl == null) return null;
-
-    // [bandMin, bandMax, barStart%] — barStart is the left edge of each 12.5% segment
-    const BANDS = [
-        [0,  3,  0   ],  // Very Easy
-        [3,  5,  12.5],  // Easy
-        [5,  7,  25  ],  // Fairly Easy
-        [7,  9,  37.5],  // Cert I/II
-        [9,  12, 50  ],  // Cert III/IV
-        [12, 14, 62.5],  // Diploma
-        [14, 16, 75  ],  // Degree / Grad Dip
-        [16, 20, 87.5],  // Very Difficult (cap at 20 for interpolation)
+    
+    // Each band is 12.5% of the bar width
+    // Bands and their FKGL ranges:
+    const bands = [
+        { min: 0,  max: 3,  start: 0    },
+        { min: 3,  max: 5,  start: 12.5 },
+        { min: 5,  max: 7,  start: 25   },
+        { min: 7,  max: 9,  start: 37.5 },
+        { min: 9,  max: 12, start: 50   },
+        { min: 12, max: 14, start: 62.5 },
+        { min: 14, max: 16, start: 75   },
+        { min: 16, max: 30, start: 87.5 },
     ];
-
-    let band = BANDS[BANDS.length - 1];
-    for (const b of BANDS) {
-        if (fkgl < b[1]) { band = b; break; }
-    }
-
-    const [bMin, bMax, bStart] = band;
-    const t = Math.min(Math.max((fkgl - bMin) / (bMax - bMin), 0), 1);
-    return bStart + t * 12.5;
+    
+    const band = bands.find(
+        b => fkgl >= b.min && fkgl < b.max
+    ) || bands[bands.length - 1];
+    
+    const bandWidth = 12.5;
+    const rangeSize = band.max - band.min;
+    const posWithinBand = (fkgl - band.min) / rangeSize;
+    
+    const position = band.start + (posWithinBand * bandWidth);
+    
+    return Math.min(Math.max(position, 1), 99);
 }
 
 function ScaleBar({ fkgl, rewriteFkgl }) {
@@ -37,8 +39,8 @@ function ScaleBar({ fkgl, rewriteFkgl }) {
     const rewriteBandIdx = rewriteFkgl != null ? getBandIndex(rewriteFkgl) : -1;
     const band = getBandForFkgl(fkgl);
 
-    const primaryPct = fkgl != null ? fkglToPercent(fkgl) : null;
-    const rewritePct = rewriteFkgl != null ? fkglToPercent(rewriteFkgl) : null;
+    const primaryPct = fkgl != null ? getMarkerPosition(fkgl) : null;
+    const rewritePct = rewriteFkgl != null ? getMarkerPosition(rewriteFkgl) : null;
 
     return (
         <div>
