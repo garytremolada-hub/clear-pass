@@ -184,19 +184,36 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* AQF band legend */}
+                {/* AQF band legend — linear scale */}
                 <div className="bg-white rounded-2xl border shadow-sm p-5">
-                    <h2 className="font-semibold text-[#1e3a5f] mb-3">Readability band reference</h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <h2 className="font-semibold text-[#1e3a5f] mb-4">Readability band reference</h2>
+                    {/* Colour bar */}
+                    <div className="flex rounded-lg overflow-hidden h-5">
                         {BAND_CONFIG.map(band => (
-                            <div key={band.name} className="flex items-center gap-2">
-                                <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: band.color }} />
-                                <div>
-                                    <p className="text-xs font-medium text-foreground leading-tight">{band.name}</p>
-                                    <p className="text-[10px] text-muted-foreground">{band.aqf}</p>
-                                </div>
+                            <div
+                                key={band.name}
+                                className="flex-1"
+                                style={{ backgroundColor: band.color }}
+                            />
+                        ))}
+                    </div>
+                    {/* Labels */}
+                    <div className="flex mt-2">
+                        {BAND_CONFIG.map(band => (
+                            <div key={band.name} className="flex-1 min-w-0 px-0.5">
+                                <p className="text-[10px] font-medium text-foreground leading-tight truncate">{band.name}</p>
+                                <p className="text-[9px] text-muted-foreground leading-tight truncate">{band.aqf}</p>
                             </div>
                         ))}
+                    </div>
+                    {/* FKGL axis */}
+                    <div className="flex mt-1">
+                        {BAND_CONFIG.map(band => (
+                            <div key={band.name} className="flex-1 min-w-0 px-0.5">
+                                <p className="text-[9px] text-muted-foreground tabular-nums">{band.fkglMin}</p>
+                            </div>
+                        ))}
+                        <p className="text-[9px] text-muted-foreground tabular-nums">17+</p>
                     </div>
                 </div>
 
