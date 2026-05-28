@@ -50,7 +50,7 @@ export default function Sidebar() {
                             <FileText className="h-5 w-5 text-primary-foreground" />
                         </div>
                         <div>
-                            <h1 className="font-semibold text-sm tracking-tight">RTReadability</h1>
+                            <h1 className="font-semibold text-sm tracking-tight">RTO Readability</h1>
                             <p className="text-[11px] text-muted-foreground">AQF Assessment Tool v24</p>
                         </div>
                     </div>
