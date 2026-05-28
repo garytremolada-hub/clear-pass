@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, CheckCircle, ArrowRight } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { downloadAsDocx } from '@/lib/downloadDocx';
 import { ResultCard, BeforeAfterCards } from '@/components/chat/ReadabilityResultCard';
 import { parseReadabilityResult, getBandForFkgl } from '@/lib/parseReadabilityResult';
 import { useNavigate } from 'react-router-dom';
@@ -248,14 +249,8 @@ ${fullRewritten.slice(0, 4000)}`;
 
     const handleDownloadRewrite = () => {
         if (!rewrittenText) return;
-        const html = `<html><body style="font-family:Arial,sans-serif;max-width:800px;margin:40px auto;line-height:1.6;">${rewrittenText.replace(/\n/g, '<br/>')}</body></html>`;
-        const blob = new Blob([html], { type: 'application/msword' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `rewritten-${fileName || 'document'}.doc`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const baseName = (fileName || 'document').replace(/\.(docx?|pdf)$/i, '');
+        downloadAsDocx(rewrittenText, `${baseName}-rewritten`);
     };
 
     const handleBuild = () => {
