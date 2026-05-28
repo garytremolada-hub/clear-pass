@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import WorkLibrary from './pages/WorkLibrary';
 import Pricing from './pages/Pricing';
 import SubscriptionSuccess from './pages/SubscriptionSuccess';
+import Settings from './pages/Settings';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -39,6 +40,7 @@ const AuthenticatedApp = () => {
       <Route path="/chat" element={<Chat />} />
       <Route path="/library" element={<WorkLibrary />} />
       <Route path="/pricing" element={<Pricing />} />
+      <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="/subscription-success" element={<SubscriptionSuccess />} />
       <Route path="*" element={<PageNotFound />} />

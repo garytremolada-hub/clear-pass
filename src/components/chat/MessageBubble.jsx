@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { parseReadabilityResult, parseBeforeAfter } from '@/lib/parseReadabilityResult';
 import { ResultCard, BeforeAfterCards } from './ReadabilityResultCard';
+import BuildOutputViewer from './BuildOutputViewer';
 
 const FunctionDisplay = ({ toolCall }) => {
     const [expanded, setExpanded] = useState(false);
@@ -85,9 +86,16 @@ const FunctionDisplay = ({ toolCall }) => {
     );
 };
 
+function isBuildOutput(text) {
+    if (!text) return false;
+    // Must have assessor section markers
+    return /ASSESSOR\s*(PACK|SECTION)?\s*\n/i.test(text) || /^#+\s*ASSESSOR/im.test(text);
+}
+
 function AssistantContent({ content }) {
     const beforeAfter = parseBeforeAfter(content);
     const singleResult = !beforeAfter ? parseReadabilityResult(content) : null;
+    const isBuild = !beforeAfter && !singleResult && isBuildOutput(content);
 
     const handleRewrite = useCallback(() => {
         // Dispatch a custom event that Chat.jsx can listen to
@@ -117,6 +125,10 @@ function AssistantContent({ content }) {
                 />
             </div>
         );
+    }
+
+    if (isBuild) {
+        return <BuildOutputViewer text={content} />;
     }
 
     if (singleResult) {

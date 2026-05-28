@@ -1,13 +1,13 @@
 import { cn } from '@/lib/utils';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquareText, Library, BarChart3, FileText, CreditCard, Menu, X } from 'lucide-react';
+import { Home, Library, Settings, FileText, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 
 const navItems = [
-{ label: 'Dashboard', path: '/', icon: BarChart3 },
-{ label: 'New Session', path: '/chat', icon: MessageSquareText },
-{ label: 'Work Library', path: '/library', icon: Library },
+    { label: 'Home', path: '/', icon: Home },
+    { label: 'Work Library', path: '/library', icon: Library },
+    { label: 'Settings', path: '/settings', icon: Settings },
 ];
 
 
@@ -75,21 +75,8 @@ export default function Sidebar() {
                 </nav>
 
                 {/* Footer */}
-                <div className="p-4 border-t space-y-1">
-                    <Link
-                        to="/pricing"
-                        onClick={() => setMobileOpen(false)}
-                        className={cn(
-                            "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
-                            location.pathname === '/pricing'
-                                ? "bg-primary/10 text-primary font-medium"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                        )}
-                    >
-                        <CreditCard className="h-4 w-4" />
-                        Pricing
-                    </Link>
-                    <p className="text-[10px] text-muted-foreground text-center pt-1">
+                <div className="p-4 border-t">
+                    <p className="text-[10px] text-muted-foreground text-center">
                         Scores are AI-estimated. Use for guidance only.
                     </p>
                 </div>
