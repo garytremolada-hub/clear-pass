@@ -4,8 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useCohort } from '@/lib/CohortContext';
 import BuildProgress from '@/components/build/BuildProgress.jsx';
 import HelpIcon from '@/components/build/HelpIcon.jsx';
-import { downloadAsDocx } from '@/lib/downloadDocx';
-const downloadDocx = downloadAsDocx;
+import { downloadDocx } from '@/lib/downloadDocx';
 import { CheckCircle, Upload, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
 
 // ── Cohort config ─────────────────────────────────────────────────────────────
