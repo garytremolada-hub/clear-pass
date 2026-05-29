@@ -319,6 +319,30 @@ function Screen1({ onConfirm }) {
                     </div>
                 )}
 
+                {/* Info note */}
+                <div style={{
+                    backgroundColor: '#f0f7ff',
+                    borderLeft: '3px solid #c9a84c',
+                    borderRadius: '4px',
+                    padding: '10px 14px',
+                    marginTop: '12px',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
+                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                        <p style={{ color: '#6b7280', fontSize: '12px', lineHeight: 1.6, margin: 0 }}>
+                            For best results, download your UoC from{' '}
+                            <a href="https://training.gov.au" target="_blank" rel="noopener noreferrer" style={{ color: '#c9a84c', textDecoration: 'underline' }}>training.gov.au</a>
+                            {' '}— this gives you the most current version in a readable format.
+                            <br />
+                            Accepted: .docx and text-based .pdf only. Scanned PDFs cannot be read — use the paste box below instead.
+                            <br />
+                            You can upload up to 4 UoCs at once if they share common outcomes.
+                        </p>
+                    </div>
+                </div>
+
                 {/* OR divider */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '16px 0' }}>
                     <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }} />

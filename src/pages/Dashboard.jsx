@@ -4,9 +4,9 @@ import { base44 } from '@/api/base44Client';
 import { getBandForFkgl, BAND_CONFIG } from '@/lib/parseReadabilityResult';
 
 const TRUST_ITEMS = [
-    { icon: '✓', text: 'Aligned to AQF & AQTF standards' },
-    { icon: '✓', text: 'Built for RTOs and TAFEs' },
-    { icon: '✓', text: 'Audit-ready documentation included' },
+    { icon: '✓', text: 'Mapped to AQF levels 1–10' },
+    { icon: '✓', text: 'Every requirement covered' },
+    { icon: '✓', text: 'Exports as Word document' },
 ];
 
 export default function Dashboard() {
