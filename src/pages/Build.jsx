@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useCohort } from '@/lib/CohortContext';
+import { downloadDocx } from '@/lib/downloadDocx';
+import { CheckCircle, Upload, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
 // ── Inlined: BuildProgress ────────────────────────────────────────────────────
 const BP_STEPS = ['Upload UoC', 'Learners', 'Review', 'Done'];
 function BuildProgress({ step, contextNote }) {
@@ -64,9 +66,6 @@ function HelpIcon({ url, heading, description }) {
         </span>
     );
 }
-import { downloadDocx } from '@/lib/downloadDocx';
-import { CheckCircle, Upload, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
-
 // ── Cohort config ─────────────────────────────────────────────────────────────
 
 const LEARNER_OPTIONS = [
