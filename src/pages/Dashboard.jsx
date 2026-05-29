@@ -55,29 +55,12 @@ export default function Dashboard() {
                 </div>
 
                 {/* Task cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Level Check */}
-                    <button
-                        onClick={() => navigate('/level-check')}
-                        className="text-left rounded-xl p-5 transition-shadow hover:shadow-md"
-                        style={{ border: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}
-                    >
-                        <div className="h-9 w-9 rounded-lg flex items-center justify-center mb-3" style={{ backgroundColor: '#0d2444' }}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-                            </svg>
-                        </div>
-                        <h3 className="text-sm font-medium mb-1" style={{ color: '#0d2444' }}>Level Check</h3>
-                        <p className="text-xs leading-relaxed" style={{ color: '#6b7280' }}>
-                            Upload a document and instantly see where it sits on the readability scale. Rewrite to a different level in one click.
-                        </p>
-                    </button>
-
+                <div>
                     {/* Build */}
                     <button
                         onClick={() => navigate('/build')}
                         className="text-left rounded-xl p-5 transition-shadow hover:shadow-md"
-                        style={{ border: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}
+                        style={{ border: '1px solid #e5e7eb', backgroundColor: '#f9fafb', width: '100%' }}
                     >
                         <div className="h-9 w-9 rounded-lg flex items-center justify-center mb-3" style={{ backgroundColor: '#0d2444' }}>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
