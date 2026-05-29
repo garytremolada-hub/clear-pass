@@ -146,8 +146,14 @@ ${cohortBlock}
 Please proceed directly with the EVALUATE workflow. Do not ask what mode to use. Do not ask for the cohort profile. Both documents and the cohort profile are provided above.`;
 
         } else if (mode === 'build') {
-            const uoc = extracted.uoc?.text || '';
-            message =
+            // Support single or multiple UoC files (clustered build)
+            const uocKeys = Object.keys(extracted).filter(k => k === 'uoc' || k.startsWith('uoc'));
+            const uocCount = uocKeys.length;
+
+            if (uocCount === 1) {
+                // Single UoC build
+                const uoc = extracted.uoc?.text || '';
+                message =
 `BUILD MODE — UOC PROVIDED
 
 DOCUMENT 1 — UNIT OF COMPETENCY:
@@ -159,6 +165,27 @@ COHORT PROFILE:
 ${cohortBlock}
 
 Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do not ask for the cohort profile. The UoC and cohort profile are provided above.`;
+            } else {
+                // Clustered build — multiple UoCs
+                const uocBlocks = uocKeys.map((key, i) => {
+                    const text = extracted[key]?.text || '';
+                    const name = extracted[key]?.name || `UoC ${i + 1}`;
+                    return `DOCUMENT ${i + 1} — UNIT OF COMPETENCY (${name}):\n${text}`;
+                }).join('\n\n---\n\n');
+
+                message =
+`BUILD MODE — CLUSTERED ASSESSMENT (${uocCount} UoCs provided)
+
+${uocBlocks}
+
+---
+
+COHORT PROFILE:
+${cohortBlock}
+
+Please proceed with the BUILD workflow for a CLUSTERED assessment covering all ${uocCount} units above. Apply CLUSTERING RULES. Do not ask what mode to use. Do not ask for the cohort profile. All UoCs and the cohort profile are provided above.
+After confirming the UoCs, silently analyse shared outcomes and announce: "Found [n] shared outcomes across ${uocCount} units — analysing..."`;
+            }
 
         } else {
             // score / rewrite — single doc, no cohort injection needed

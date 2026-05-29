@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Download, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Download, CheckCircle2, XCircle, AlertCircle, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { base44 } from '@/api/base44Client';
 
 // ─── Parse the AI output into student + assessor sections ────────────────────
 
@@ -12,6 +13,23 @@ function parseBuildOutput(text) {
     // Detect BUILD output: must have assessor section markers
     const hasAssessor = /ASSESSOR|MARKING GUIDE|EVIDENCE COVERAGE|COMPLIANCE/i.test(text);
     if (!hasAssessor) return null;
+
+    // Extract mapping document block if present
+    let mappingText = null;
+    let mappingFilename = null;
+    const mappingStartIdx = text.indexOf('<!-- MAPPING_DOCUMENT_START -->');
+    const mappingEndIdx = text.indexOf('<!-- MAPPING_DOCUMENT_END -->');
+    if (mappingStartIdx !== -1 && mappingEndIdx !== -1) {
+        mappingText = text.slice(mappingStartIdx + '<!-- MAPPING_DOCUMENT_START -->'.length, mappingEndIdx).trim();
+        // Extract filename hint
+        const fnMatch = mappingText.match(/<!--\s*MAPPING_FILENAME:\s*([^\s>]+)\s*-->/);
+        if (fnMatch) {
+            mappingFilename = fnMatch[1].trim();
+            mappingText = mappingText.replace(/<!--\s*MAPPING_FILENAME:[^>]+-->\n?/, '').trim();
+        }
+        // Remove mapping block from main text
+        text = (text.slice(0, mappingStartIdx) + text.slice(mappingEndIdx + '<!-- MAPPING_DOCUMENT_END -->'.length)).trim();
+    }
 
     // Try to split on a clear assessor divider
     const splitPatterns = [
@@ -44,18 +62,23 @@ function parseBuildOutput(text) {
             studentText = lines.slice(0, splitIdx).join('\n').trim();
             assessorText = lines.slice(splitIdx).join('\n').trim();
         } else {
-            return null; // Can't parse as build output
+            return null;
         }
     }
 
-    // Parse compliance stats from assessor section
     const compliance = parseCompliance(assessorText);
 
-    return { studentText, assessorText, compliance };
+    // Try to extract unit codes from the text for the mapping doc filename
+    const unitCodes = [];
+    const codeMatches = text.matchAll(/\b([A-Z]{3,8}\d{3,6}[A-Z]?)\b/g);
+    for (const m of codeMatches) {
+        if (!unitCodes.includes(m[1])) unitCodes.push(m[1]);
+    }
+
+    return { studentText, assessorText, compliance, mappingText, mappingFilename, unitCodes };
 }
 
 function parseCompliance(text) {
-    // Look for coverage counts like "4/5" or "4 of 5"
     const keMatch = text.match(/Knowledge Evidence[^:\n]*:?\s*(\d+)\s*[/of]+\s*(\d+)/i);
     const peMatch = text.match(/Performance Evidence[^:\n]*:?\s*(\d+)\s*[/of]+\s*(\d+)/i);
     const pcMatch = text.match(/Performance Criteria[^:\n]*:?\s*(\d+)\s*[/of]+\s*(\d+)/i);
@@ -79,9 +102,9 @@ function ComplianceSummaryCard({ compliance }) {
     if (!ke && !pe && !pc && !status) return null;
 
     const rows = [
-        ke && { label: 'Knowledge Evidence', covered: ke.covered, total: ke.total },
-        pe && { label: 'Performance Evidence', covered: pe.covered, total: pe.total },
-        pc && { label: 'Performance Criteria', covered: pc.covered, total: pc.total },
+        ke && { label: 'Knowledge Evidence (KE)', covered: ke.covered, total: ke.total },
+        pe && { label: 'Performance Evidence (PE)', covered: pe.covered, total: pe.total },
+        pc && { label: 'Performance Criteria (PC)', covered: pc.covered, total: pc.total },
     ].filter(Boolean);
 
     return (
@@ -149,15 +172,11 @@ function DocumentContent({ children }) {
     );
 }
 
-// ─── Download handler ─────────────────────────────────────────────────────────
+// ─── Download handlers ────────────────────────────────────────────────────────
 
 function downloadAsWord(studentText, assessorText) {
-    // Build a minimal HTML doc that Word can open
-    const escHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-    // Convert basic markdown to HTML for Word
-    function mdToHtml(md) {
-        return md
+    const mdToHtml = (md) =>
+        md
             .replace(/^### (.+)$/gm, '<h3>$1</h3>')
             .replace(/^## (.+)$/gm, '<h2>$1</h2>')
             .replace(/^# (.+)$/gm, '<h1>$1</h1>')
@@ -168,7 +187,26 @@ function downloadAsWord(studentText, assessorText) {
             .replace(/\n\n/g, '</p><p>')
             .replace(/^(?!<[hlip])/gm, '<p>')
             .replace(/<\/p><p>(<[hlip])/g, '$1');
-    }
+
+    const glossary = `
+<div style="page-break-before:always">
+<h1 style="text-align:center;font-size:12pt;color:#0d2444">GLOSSARY OF TERMS USED IN THIS DOCUMENT</h1>
+<p style="font-style:italic;color:#6b7280;font-size:10pt">The following terms and short forms are used in this document. If you are new to VET assessment, this list will help you understand what each term means.</p>
+<hr/>
+<p><strong style="color:#0d2444">AC — Assessment Conditions</strong><br/><span style="margin-left:8mm;display:inline-block">The environment, resources, and requirements that must be in place when assessment takes place.</span></p>
+<p><strong style="color:#0d2444">AQF — Australian Qualifications Framework</strong><br/><span style="margin-left:8mm;display:inline-block">The national policy that sets the standards for all qualifications in Australia, from Certificate I through to Doctoral Degree.</span></p>
+<p><strong style="color:#0d2444">ASQA — Australian Skills Quality Authority</strong><br/><span style="margin-left:8mm;display:inline-block">The national regulator for Registered Training Organisations and vocational qualifications in Australia.</span></p>
+<p><strong style="color:#0d2444">FKGL — Flesch-Kincaid Grade Level</strong><br/><span style="margin-left:8mm;display:inline-block">A number that shows the school grade level a reader needs to comfortably understand a text. A higher number means harder to read.</span></p>
+<p><strong style="color:#0d2444">FRE — Flesch Reading Ease Score</strong><br/><span style="margin-left:8mm;display:inline-block">A score from 0 to 100 that shows how easy a text is to read. A higher number means the text is easier to read.</span></p>
+<p><strong style="color:#0d2444">KE — Knowledge Evidence</strong><br/><span style="margin-left:8mm;display:inline-block">What a learner must know and be able to explain to be assessed as competent in this unit.</span></p>
+<p><strong style="color:#0d2444">NYS — Not Yet Satisfactory</strong><br/><span style="margin-left:8mm;display:inline-block">The learner has not yet met the requirements for this task or question and needs to resubmit.</span></p>
+<p><strong style="color:#0d2444">PC — Performance Criteria</strong><br/><span style="margin-left:8mm;display:inline-block">The specific standards a learner must meet to demonstrate competency within each Element of the unit.</span></p>
+<p><strong style="color:#0d2444">PE — Performance Evidence</strong><br/><span style="margin-left:8mm;display:inline-block">What a learner must be able to DO and demonstrate in practice to be assessed as competent in this unit.</span></p>
+<p><strong style="color:#0d2444">RTO — Registered Training Organisation</strong><br/><span style="margin-left:8mm;display:inline-block">A training provider registered with ASQA or a state regulator to deliver and assess vocational qualifications.</span></p>
+<p><strong style="color:#0d2444">S — Satisfactory</strong><br/><span style="margin-left:8mm;display:inline-block">The learner has met the requirements for this task or question.</span></p>
+<p><strong style="color:#0d2444">UoC — Unit of Competency</strong><br/><span style="margin-left:8mm;display:inline-block">A single unit from an Australian Training Package that describes exactly what a learner must know and be able to do to be considered competent in that area of work.</span></p>
+<p><strong style="color:#0d2444">VET — Vocational Education and Training</strong><br/><span style="margin-left:8mm;display:inline-block">The Australian system of practical qualifications, from Certificate I through to Advanced Diploma, delivered by RTOs and TAFEs.</span></p>
+</div>`;
 
     const html = `
 <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -195,6 +233,7 @@ function downloadAsWord(studentText, assessorText) {
   <div class="page-break"></div>
   <h1>Assessor Pack</h1>
   ${mdToHtml(assessorText)}
+  ${glossary}
 </body>
 </html>`;
 
@@ -211,10 +250,46 @@ function downloadAsWord(studentText, assessorText) {
 
 export default function BuildOutputViewer({ text }) {
     const [activeTab, setActiveTab] = useState('student');
+    const [downloadingMapping, setDownloadingMapping] = useState(false);
+    const [mappingError, setMappingError] = useState(null);
+
     const parsed = parseBuildOutput(text);
     if (!parsed) return null;
 
-    const { studentText, assessorText, compliance } = parsed;
+    const { studentText, assessorText, compliance, mappingText, mappingFilename, unitCodes } = parsed;
+
+    const handleDownloadMapping = async () => {
+        if (!mappingText) return;
+        setDownloadingMapping(true);
+        setMappingError(null);
+        try {
+            const filename = mappingFilename || (unitCodes.length > 0
+                ? unitCodes.slice(0, 4).join('-') + '-mapping-document.docx'
+                : 'mapping-document.docx');
+
+            const res = await base44.functions.invoke('buildMappingDocument', {
+                mapping_text: mappingText,
+                unit_codes: unitCodes,
+                filename,
+            });
+            if (res?.data?.error) throw new Error(res.data.error);
+            const { file_base64, filename: outFilename } = res.data;
+            const bytes = atob(file_base64);
+            const buf = new Uint8Array(bytes.length);
+            for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+            const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = outFilename;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            setMappingError('Download failed: ' + err.message);
+        } finally {
+            setDownloadingMapping(false);
+        }
+    };
 
     return (
         <div className="space-y-3 w-full">
@@ -253,7 +328,7 @@ export default function BuildOutputViewer({ text }) {
                 </div>
             </div>
 
-            {/* Download button */}
+            {/* Download — Assessment */}
             <Button
                 className="w-full gap-2 transition-opacity hover:opacity-90"
                 size="lg"
@@ -263,6 +338,34 @@ export default function BuildOutputViewer({ text }) {
                 <Download className="h-4 w-4" />
                 Download as Word document
             </Button>
+
+            {/* Download — Mapping document (only shown when mapping data present) */}
+            {mappingText && (
+                <Button
+                    className="w-full gap-2 transition-opacity hover:opacity-80"
+                    size="lg"
+                    variant="outline"
+                    disabled={downloadingMapping}
+                    style={{ border: '1px solid #0d2444', color: '#0d2444', backgroundColor: 'transparent' }}
+                    onClick={handleDownloadMapping}
+                >
+                    {downloadingMapping ? (
+                        <>
+                            <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            Building mapping document…
+                        </>
+                    ) : (
+                        <>
+                            <FileText className="h-4 w-4" />
+                            Download mapping document →
+                        </>
+                    )}
+                </Button>
+            )}
+
+            {mappingError && (
+                <p className="text-xs text-red-600 text-center">{mappingError}</p>
+            )}
         </div>
     );
 }
