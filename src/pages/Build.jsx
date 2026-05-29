@@ -4,7 +4,8 @@ import { base44 } from '@/api/base44Client';
 import { useCohort } from '@/lib/CohortContext';
 import BuildProgress from '@/components/build/BuildProgress.jsx';
 import HelpIcon from '@/components/build/HelpIcon.jsx';
-import { downloadAsDocx as downloadDocx } from '@/lib/downloadDocx';
+import { downloadAsDocx } from '@/lib/downloadDocx';
+const downloadDocx = downloadAsDocx;
 import { CheckCircle, Upload, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
 
 // ── Cohort config ─────────────────────────────────────────────────────────────
@@ -528,7 +529,7 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, onBac
     const gapCount = hasGaps ? (assessmentText.match(/GAP \d+:/g) || []).length : 0;
 
     const handleDownloadAssessment = () => {
-        downloadDocx(assessmentText, `${unitInfo.code}-assessment.docx`);
+        downloadDocx(assessmentText, `${unitInfo.code}-assessment`);
     };
 
     const handleDownloadMapping = async () => {
@@ -553,7 +554,7 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, onBac
             }
         } catch (e) {
             // fallback
-            downloadDocx(mappingText, `${unitInfo.code}-mapping-document.docx`);
+            downloadDocx(mappingText, `${unitInfo.code}-mapping-document`);
         }
     };
 

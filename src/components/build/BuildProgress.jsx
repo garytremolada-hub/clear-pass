@@ -3,8 +3,7 @@ const STEPS = ['Upload UoC', 'Learners', 'Review', 'Done'];
 export default function BuildProgress({ step, contextNote }) {
     return (
         <div style={{ marginBottom: '28px' }}>
-            {/* Step indicators */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
                 {STEPS.map((label, i) => {
                     const idx = i + 1;
                     const done = idx < step;
@@ -44,8 +43,6 @@ export default function BuildProgress({ step, contextNote }) {
                     );
                 })}
             </div>
-
-            {/* Context note */}
             {contextNote && (
                 <p style={{ color: '#6b7280', fontSize: '13px', lineHeight: 1.5 }}>{contextNote}</p>
             )}

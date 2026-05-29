@@ -78,6 +78,10 @@ function parseTableLines(lines) {
  * @param {string} text  - The rewritten document text
  * @param {string} filename - Desired filename (without extension)
  */
+export async function downloadDocx(text, filename = 'document') {
+    return downloadAsDocx(text, filename);
+}
+
 export async function downloadAsDocx(text, filename = 'document') {
     const lines = text.split('\n');
     const children = [];
