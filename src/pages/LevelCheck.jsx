@@ -301,13 +301,13 @@ ${batchText}`;
         }
     };
 
-    // Download: use backend to patch original .docx with rewrites (Step 6 from spec)
+    // Download: build new .docx from scratch using docx package
     const handleDownloadRewrite = async () => {
-        if (!originalFileBase64 || !aiRewriteJson || !fileName) return;
+        if (!numberedParagraphs || !aiRewriteJson || !fileName) return;
         try {
             setRewritingProgress('Preparing download…');
             const res = await base44.functions.invoke('rewriteDocumentFormatted', {
-                file_base64: originalFileBase64,
+                original_paragraphs: numberedParagraphs,
                 rewrite_json: aiRewriteJson,
                 filename: fileName,
             });
@@ -531,16 +531,16 @@ ${batchText}`;
                         <div className="space-y-2">
                             <button
                                 onClick={handleDownloadRewrite}
-                                disabled={!originalFileBase64 || !aiRewriteJson}
+                                disabled={!numberedParagraphs || !aiRewriteJson}
                                 className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                                 style={{ backgroundColor: '#c9a84c', color: '#0d2444' }}
                             >
                                 Download rewritten document (changes highlighted in yellow) →
                             </button>
                             <p style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic', lineHeight: 1.5, textAlign: 'center', margin: '4px 0 0' }}>
-                                Open in Microsoft Word. Yellow highlighting shows simplified text.
-                                Unhighlighted sections are unchanged.
-                                Note: bold and italic within paragraphs may not be preserved.
+                                Downloaded document contains all assessment content with simplified language.
+                                Yellow highlighting shows changed sections.
+                                Tables and complex formatting are simplified — apply your RTO template before submitting.
                             </p>
                             <button
                                 onClick={handleDownloadOriginal}

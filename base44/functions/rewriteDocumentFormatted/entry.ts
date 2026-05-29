@@ -1,5 +1,12 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
-import { unzipSync, zipSync, strToU8, strFromU8 } from 'npm:fflate@0.8.2';
+import {
+    Document,
+    Paragraph,
+    TextRun,
+    HeadingLevel,
+    Packer,
+    AlignmentType,
+} from 'npm:docx@8.5.0';
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
@@ -9,95 +16,100 @@ Deno.serve(async (req) => {
         const user = await base44.auth.me();
         if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-        const { file_base64, rewrite_json, filename } = await req.json();
-        if (!file_base64 || !rewrite_json || !filename) {
-            return Response.json({ error: 'file_base64, rewrite_json, and filename are required' }, { status: 400 });
+        const { original_paragraphs, rewrite_json, filename } = await req.json();
+        if (!original_paragraphs || !rewrite_json || !filename) {
+            return Response.json({ error: 'original_paragraphs, rewrite_json, and filename are required' }, { status: 400 });
         }
 
         // Parse rewrite map: { paragraphId -> rewrittenText }
-        let rewrites;
+        let rewriteMap;
         try {
             const clean = rewrite_json.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
             const items = JSON.parse(clean);
-            rewrites = {};
-            for (const item of items) rewrites[item.id] = item.rewritten;
+            rewriteMap = {};
+            for (const item of items) rewriteMap[item.id] = item.rewritten;
         } catch (e) {
             return Response.json({ error: 'Could not parse rewrite JSON: ' + e.message }, { status: 400 });
         }
 
-        console.log(`[rewriteDocumentFormatted] ${Object.keys(rewrites).length} rewrites for "${filename}"`);
+        console.log(`[rewriteDocumentFormatted] ${Object.keys(rewriteMap).length} rewrites, ${original_paragraphs.length} paragraphs, file="${filename}"`);
 
-        // Decode base64 → Uint8Array
-        const binaryStr = atob(file_base64);
-        const inputBytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) inputBytes[i] = binaryStr.charCodeAt(i);
+        // Build document children
+        const children = [];
 
-        // Unzip the .docx
-        let zipEntries;
-        try {
-            zipEntries = unzipSync(inputBytes);
-        } catch (e) {
-            return Response.json({ error: 'Could not open .docx file: ' + e.message }, { status: 400 });
-        }
+        for (const para of original_paragraphs) {
+            const isChanged = !para.protected && !!rewriteMap[para.id];
+            const text = isChanged ? rewriteMap[para.id] : para.text;
 
-        if (!zipEntries['word/document.xml']) {
-            return Response.json({ error: 'Invalid .docx — word/document.xml not found' }, { status: 400 });
-        }
-
-        // Decode document.xml
-        let documentXml = strFromU8(zipEntries['word/document.xml']);
-
-        // Patch paragraphs in document order
-        let paraIndex = 1;
-        documentXml = documentXml.replace(
-            /(<w:p[ >])([\s\S]*?)(<\/w:p>)/g,
-            (match, open, content, close) => {
-                const idx = paraIndex++;
-                if (!rewrites[idx]) return match;
-
-                const newText = rewrites[idx]
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;');
-
-                // Preserve paragraph properties (indent, numbering, spacing etc)
-                const pPrMatch = content.match(/<w:pPr[\s\S]*?<\/w:pPr>/);
-                const pPr = pPrMatch ? pPrMatch[0] : '';
-
-                // Preserve run properties and inject yellow highlight
-                const rPrMatch = content.match(/<w:rPr[\s\S]*?<\/w:rPr>/);
-                const rPr = rPrMatch
-                    ? rPrMatch[0].replace('</w:rPr>', '<w:highlight w:val="yellow"/></w:rPr>')
-                    : '<w:rPr><w:highlight w:val="yellow"/></w:rPr>';
-
-                return `${open}${pPr}<w:r>${rPr}<w:t xml:space="preserve">${newText}</w:t></w:r>${close}`;
+            if (!text || !text.trim()) {
+                // Empty paragraph — add spacing
+                children.push(new Paragraph({ spacing: { after: 80 } }));
+                continue;
             }
-        );
 
-        // Repack: compress XML/rels, store binary assets unchanged
-        // fflate tuple format: [Uint8Array, { level }]
-        const zipInput = {};
-        for (const [name, data] of Object.entries(zipEntries)) {
-            const isText = name.endsWith('.xml') || name.endsWith('.rels');
-            zipInput[name] = [data, { level: isText ? 6 : 0 }];
+            // Detect heading style from original text
+            const trimmed = para.text.trim();
+            const isHeading1 = /^[A-Z][A-Z\s]{4,}$/.test(trimmed) && trimmed.length < 80;
+            const isHeading2 = trimmed.endsWith(':') && trimmed.length < 60 && !trimmed.includes('\n');
+
+            if (isHeading1) {
+                children.push(new Paragraph({
+                    text: text,
+                    heading: HeadingLevel.HEADING_1,
+                    spacing: { before: 240, after: 120 },
+                }));
+            } else if (isHeading2) {
+                children.push(new Paragraph({
+                    text: text,
+                    heading: HeadingLevel.HEADING_2,
+                    spacing: { before: 160, after: 80 },
+                }));
+            } else {
+                children.push(new Paragraph({
+                    children: [new TextRun({
+                        text: text,
+                        highlight: isChanged ? 'yellow' : undefined,
+                        size: 22,
+                        font: 'Arial',
+                    })],
+                    spacing: { after: 120 },
+                }));
+            }
         }
-        // Override with patched document.xml
-        zipInput['word/document.xml'] = [strToU8(documentXml), { level: 6 }];
-        const outputBytes = zipSync(zipInput);
 
-        // Encode to base64 safely (chunk to avoid call stack overflow on large files)
+        const doc = new Document({
+            styles: {
+                default: {
+                    document: {
+                        run: { font: 'Arial', size: 22 },
+                    },
+                },
+            },
+            sections: [{
+                properties: {
+                    page: {
+                        margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 },
+                    },
+                },
+                children,
+            }],
+        });
+
+        const buffer = await Packer.toBuffer(doc);
+
+        // Convert Node Buffer / Uint8Array to base64 safely
+        const bytes = new Uint8Array(buffer);
         const CHUNK = 0x8000;
         let b64 = '';
-        for (let i = 0; i < outputBytes.length; i += CHUNK) {
-            b64 += String.fromCharCode(...outputBytes.subarray(i, i + CHUNK));
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+            b64 += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
         }
-        const file_base64_out = btoa(b64);
+        const file_base64 = btoa(b64);
 
         const outputFilename = filename.replace(/\.docx$/i, '') + '-rewritten.docx';
-        console.log(`[rewriteDocumentFormatted] Done. ${inputBytes.length} → ${outputBytes.length} bytes`);
+        console.log(`[rewriteDocumentFormatted] Done. Output ${bytes.length} bytes → "${outputFilename}"`);
 
-        return Response.json({ file_base64: file_base64_out, filename: outputFilename });
+        return Response.json({ file_base64, filename: outputFilename });
 
     } catch (error) {
         console.error('[rewriteDocumentFormatted]', error.message, error.stack);
