@@ -3,6 +3,12 @@ import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { getBandForFkgl, BAND_CONFIG } from '@/lib/parseReadabilityResult';
 
+const TRUST_ITEMS = [
+    { icon: '✓', text: 'Aligned to AQF & AQTF standards' },
+    { icon: '✓', text: 'Built for RTOs and TAFEs' },
+    { icon: '✓', text: 'Audit-ready documentation included' },
+];
+
 export default function Dashboard() {
     const navigate = useNavigate();
     const [recentItems, setRecentItems] = useState([]);
@@ -19,27 +25,47 @@ export default function Dashboard() {
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
             {/* Header */}
             <div className="flex items-center px-6 py-4" style={{ backgroundColor: '#0d2444', borderBottom: '1px solid #162d50' }}>
-                <span style={{ color: '#c9a84c', letterSpacing: '2px', fontSize: '13px', fontWeight: 500, marginRight: '24px' }}>
-                    CLEARPASS
+                <span style={{ color: '#c9a84c', letterSpacing: '2px', fontSize: '13px', fontWeight: 500 }}>
+                    ASSESSMENT COMPLIANCE TOOL
                 </span>
-                <h1 className="text-base font-medium" style={{ color: '#ffffff' }}>Dashboard</h1>
             </div>
 
-            <div className="mx-auto px-6 py-10 space-y-10" style={{ maxWidth: '680px' }}>
+            <div className="mx-auto px-6 py-12 space-y-10" style={{ maxWidth: '600px' }}>
 
                 {/* Hero */}
-                <div className="space-y-2">
-                    <h2 style={{ color: '#0d2444', fontSize: '26px', fontWeight: 500, lineHeight: 1.3 }}>
-                        Assessment readability tools
-                    </h2>
-                    <p style={{ color: '#6b7280', fontSize: '14px', lineHeight: 1.6 }}>
-                        Check, rewrite, and build audit-ready assessments aligned to AQF levels.
+                <div className="space-y-4">
+                    <h1 style={{ color: '#0d2444', fontSize: '32px', fontWeight: 600, lineHeight: 1.25 }}>
+                        Build audit-ready assessments in minutes
+                    </h1>
+                    <p style={{ color: '#6b7280', fontSize: '15px', lineHeight: 1.7 }}>
+                        Upload your Unit of Competency and we'll generate a complete, compliant assessment instrument — tailored to your learner cohort and reading level.
                     </p>
+
+                    {/* CTA button */}
+                    <button
+                        onClick={() => navigate('/build')}
+                        style={{
+                            marginTop: '8px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '14px 28px',
+                            backgroundColor: '#c9a84c',
+                            color: '#0d2444',
+                            borderRadius: '10px',
+                            border: 'none',
+                            fontSize: '15px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        Upload your UoC and get started →
+                    </button>
                 </div>
 
-                {/* Band scale */}
+                {/* Readability scale */}
                 <div>
-                    <p className="text-xs font-medium mb-2" style={{ color: '#374151' }}>Readability scale</p>
+                    <p className="text-xs font-medium mb-2" style={{ color: '#374151' }}>Readability scale — your assessment will be written to the right level for your learners</p>
                     <div className="flex rounded-lg overflow-hidden h-3 w-full">
                         {BAND_CONFIG.map(b => (
                             <div key={b.name} className="flex-1" style={{ backgroundColor: b.color }} title={b.name} />
@@ -54,37 +80,20 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* Task cards */}
-                <div>
-                    {/* Build */}
-                    <button
-                        onClick={() => navigate('/build')}
-                        className="text-left rounded-xl p-5 transition-shadow hover:shadow-md"
-                        style={{ border: '1px solid #e5e7eb', backgroundColor: '#f9fafb', width: '100%' }}
-                    >
-                        <div className="h-9 w-9 rounded-lg flex items-center justify-center mb-3" style={{ backgroundColor: '#0d2444' }}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-                            </svg>
+                {/* Trust indicators */}
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                    {TRUST_ITEMS.map(item => (
+                        <div key={item.text} className="flex items-center gap-2">
+                            <span style={{ color: '#c9a84c', fontWeight: 700, fontSize: '14px' }}>{item.icon}</span>
+                            <span style={{ color: '#6b7280', fontSize: '13px' }}>{item.text}</span>
                         </div>
-                        <h3 className="text-sm font-medium mb-1" style={{ color: '#0d2444' }}>Build Assessment</h3>
-                        <p className="text-xs leading-relaxed" style={{ color: '#6b7280' }}>
-                            Upload a Unit of Competency and generate a complete, audit-ready assessment tailored to your learner cohort.
-                        </p>
-                    </button>
+                    ))}
                 </div>
 
-                {/* Recent work */}
-                <div>
-                    <p className="text-xs font-medium mb-3" style={{ color: '#374151' }}>Recent work</p>
-                    {loading ? (
-                        <div className="flex items-center gap-2 py-4">
-                            <div className="h-4 w-4 border-2 border-gray-200 border-t-[#c9a84c] rounded-full animate-spin" />
-                            <span style={{ fontSize: '13px', color: '#6b7280' }}>Loading…</span>
-                        </div>
-                    ) : recentItems.length === 0 ? (
-                        <p style={{ fontSize: '13px', color: '#9ca3af' }}>No saved items yet. Results you save will appear here.</p>
-                    ) : (
+                {/* Recent work — only shown when there are items */}
+                {!loading && recentItems.length > 0 && (
+                    <div>
+                        <p className="text-xs font-medium mb-3" style={{ color: '#374151' }}>Recent work</p>
                         <div className="space-y-2">
                             {recentItems.map(item => {
                                 const band = getBandForFkgl(item.fkgl);
@@ -97,7 +106,7 @@ export default function Dashboard() {
                                         <div className="min-w-0">
                                             <p className="text-sm font-medium truncate" style={{ color: '#0d2444' }}>{item.title}</p>
                                             <p className="text-xs mt-0.5" style={{ color: '#6b7280' }}>
-                                                {item.task_type} {band ? `· ${band.name}` : ''} {item.fkgl != null ? `· FKGL ${item.fkgl.toFixed(1)}` : ''}
+                                                {item.task_type}{band ? ` · ${band.name}` : ''}{item.fkgl != null ? ` · FKGL ${item.fkgl.toFixed(1)}` : ''}
                                             </p>
                                         </div>
                                         {band && (
@@ -118,8 +127,8 @@ export default function Dashboard() {
                                 View all in library →
                             </button>
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
 
             </div>
         </div>
