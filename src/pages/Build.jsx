@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useCohort } from '@/lib/CohortContext';
 import { downloadDocx } from '@/lib/downloadDocx';
-import { CheckCircle, Upload, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
+import { CheckCircle, Upload, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 // ── Inlined: BuildProgress ────────────────────────────────────────────────────
 const BP_STEPS = ['Upload UoC', 'Learners', 'Review', 'Done'];
 function BuildProgress({ step, contextNote }) {
@@ -100,24 +100,18 @@ function getBand(learner, support) {
     return (BAND_MAP[learner] || {})[support] || 'Cert III/IV';
 }
 
-// ── Loading messages ──────────────────────────────────────────────────────────
+// ── Loading progress stages ───────────────────────────────────────────────────
 
-const LOADING_MESSAGES = [
-    { from: 0,  text: 'Reading your UoC...' },
-    { from: 15, text: 'Designing your assessment...' },
-    { from: 30, text: 'Checking all requirements...' },
-    { from: 45, text: 'Almost ready...' },
+const PROGRESS_STAGES = [
+    { from: 0,  to: 8,  pct: 20, label: 'Reading your UoC...' },
+    { from: 8,  to: 20, pct: 45, label: 'Designing your assessment...' },
+    { from: 20, to: 35, pct: 70, label: 'Writing questions and tasks...' },
+    { from: 35, to: 50, pct: 90, label: 'Checking all requirements...' },
+    { from: 50, to: Infinity, pct: 95, label: 'Almost ready...' },
 ];
 
-function useLoadingMessage(active) {
-    const [elapsed, setElapsed] = useState(0);
-    useEffect(() => {
-        if (!active) { setElapsed(0); return; }
-        const t = setInterval(() => setElapsed(s => s + 1), 1000);
-        return () => clearInterval(t);
-    }, [active]);
-    const msg = [...LOADING_MESSAGES].reverse().find(m => elapsed >= m.from);
-    return msg?.text || LOADING_MESSAGES[0].text;
+function getStage(elapsed) {
+    return [...PROGRESS_STAGES].reverse().find(s => elapsed >= s.from) || PROGRESS_STAGES[0];
 }
 
 // ── Shared header ─────────────────────────────────────────────────────────────
@@ -585,20 +579,87 @@ function Screen3({ unitInfo, cohortInfo, sections, onBack, onBuild }) {
 
 // ── Screen 4 — Building / Ready ───────────────────────────────────────────────
 
-function Screen4Loading() {
-    const msg = useLoadingMessage(true);
+function Screen4Loading({ onReset }) {
+    const [elapsed, setElapsed] = useState(0);
+    const [timedOut, setTimedOut] = useState(false);
+
+    useEffect(() => {
+        const t = setInterval(() => setElapsed(s => {
+            const next = s + 1;
+            if (next >= 90) setTimedOut(true);
+            return next;
+        }), 1000);
+        return () => clearInterval(t);
+    }, []);
+
+    const stage = getStage(elapsed);
+
+    if (timedOut) {
+        return (
+            <div className="flex-1 flex flex-col" style={{ backgroundColor: '#ffffff' }}>
+                <div style={{ maxWidth: '480px', margin: '0 auto', padding: '32px 24px', width: '100%' }}>
+                    <BuildProgress step={4} contextNote="" />
+                    <div style={{
+                        border: '1px solid #ef4444',
+                        backgroundColor: '#fef2f2',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        marginTop: '40px',
+                        textAlign: 'center',
+                    }}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 10px' }}>
+                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                        <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
+                            This is taking longer than expected
+                        </p>
+                        <p style={{ color: '#6b7280', fontSize: '13px', marginBottom: '16px' }}>
+                            Your assessment may still be building. Wait a moment and refresh, or start again.
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                            <button
+                                onClick={onReset}
+                                style={{ padding: '8px 18px', border: '1px solid #0d2444', borderRadius: '6px', backgroundColor: 'transparent', color: '#0d2444', fontSize: '13px', cursor: 'pointer' }}
+                            >
+                                ← Start again
+                            </button>
+                            <button
+                                onClick={() => window.location.reload()}
+                                style={{ padding: '8px 18px', border: 'none', borderRadius: '6px', backgroundColor: '#c9a84c', color: '#0d2444', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
+                            >
+                                Refresh page →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex-1 flex flex-col" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '540px', margin: '0 auto', padding: '32px 24px', width: '100%' }}>
+            <div style={{ maxWidth: '480px', margin: '0 auto', padding: '32px 24px', width: '100%' }}>
                 <BuildProgress step={4} contextNote="" />
-                <div style={{ textAlign: 'center', paddingTop: '40px' }}>
-                    <Loader2 style={{ color: '#c9a84c', width: '40px', height: '40px', margin: '0 auto 20px', animation: 'spin 1s linear infinite' }} />
-                    <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-                    <h2 style={{ color: '#0d2444', fontSize: '20px', fontWeight: 500, marginBottom: '8px' }}>
+                <div style={{ paddingTop: '40px' }}>
+                    <h2 style={{ color: '#0d2444', fontSize: '20px', fontWeight: 500, marginBottom: '32px', textAlign: 'center' }}>
                         Building your assessment...
                     </h2>
-                    <p style={{ color: '#6b7280', fontSize: '13px', marginBottom: '16px' }}>This usually takes about 45 seconds.</p>
-                    <p style={{ color: '#9ca3af', fontSize: '13px', fontStyle: 'italic' }}>{msg}</p>
+                    {/* Progress bar */}
+                    <div style={{ width: '100%', height: '8px', borderRadius: '4px', backgroundColor: '#e5e7eb', overflow: 'hidden' }}>
+                        <div style={{
+                            height: '100%',
+                            width: `${stage.pct}%`,
+                            borderRadius: '4px',
+                            backgroundColor: '#c9a84c',
+                            transition: 'width 1s ease',
+                        }} />
+                    </div>
+                    <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 700, textAlign: 'center', marginTop: '10px' }}>
+                        {stage.pct}%
+                    </p>
+                    <p style={{ color: '#6b7280', fontSize: '13px', fontStyle: 'italic', textAlign: 'center', marginTop: '4px' }}>
+                        {stage.label}
+                    </p>
                 </div>
             </div>
         </div>
@@ -844,7 +905,7 @@ Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do
             {screen === 1 && <Screen1 onConfirm={handleScreen1Confirm} />}
             {screen === 2 && <Screen2 unitInfo={unitInfo} onBack={() => setScreen(1)} onConfirm={handleScreen2Confirm} />}
             {screen === 3 && <Screen3 unitInfo={unitInfo} cohortInfo={cohortInfo} sections={sections} onBack={() => setScreen(2)} onBuild={handleBuild} />}
-            {screen === 4 && building && <Screen4Loading />}
+            {screen === 4 && building && <Screen4Loading onReset={handleReset} />}
             {screen === 4 && !building && (
                 <Screen4Ready
                     unitInfo={unitInfo}
