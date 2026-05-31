@@ -100,19 +100,18 @@ function getBand(learner, support) {
     return (BAND_MAP[learner] || {})[support] || 'Cert III/IV';
 }
 
-// ── Loading progress stages ───────────────────────────────────────────────────
+// ── Progress stages (driven externally by build steps) ────────────────────────
 
-const PROGRESS_STAGES = [
-    { from: 0,  to: 8,  pct: 20, label: 'Reading your UoC...' },
-    { from: 8,  to: 20, pct: 45, label: 'Designing your assessment...' },
-    { from: 20, to: 35, pct: 70, label: 'Writing questions and tasks...' },
-    { from: 35, to: 50, pct: 90, label: 'Checking all requirements...' },
-    { from: 50, to: Infinity, pct: 95, label: 'Almost ready...' },
+const BUILD_STAGES = [
+    { pct: 0,   label: 'Starting...' },
+    { pct: 10,  label: 'Reading your UoC...' },
+    { pct: 30,  label: 'Writing knowledge questions...' },
+    { pct: 50,  label: 'Building observation checklist...' },
+    { pct: 65,  label: 'Writing project tasks...' },
+    { pct: 80,  label: 'Creating marking guides...' },
+    { pct: 95,  label: 'Building mapping document...' },
+    { pct: 100, label: 'Done ✓' },
 ];
-
-function getStage(elapsed) {
-    return [...PROGRESS_STAGES].reverse().find(s => elapsed >= s.from) || PROGRESS_STAGES[0];
-}
 
 // ── Shared header ─────────────────────────────────────────────────────────────
 
@@ -579,22 +578,10 @@ function Screen3({ unitInfo, cohortInfo, sections, onBack, onBuild }) {
 
 // ── Screen 4 — Building / Ready ───────────────────────────────────────────────
 
-function Screen4Loading({ onReset }) {
-    const [elapsed, setElapsed] = useState(0);
-    const [timedOut, setTimedOut] = useState(false);
+function Screen4Loading({ onReset, progress, buildError }) {
+    const stage = [...BUILD_STAGES].reverse().find(s => progress >= s.pct) || BUILD_STAGES[0];
 
-    useEffect(() => {
-        const t = setInterval(() => setElapsed(s => {
-            const next = s + 1;
-            if (next >= 90) setTimedOut(true);
-            return next;
-        }), 1000);
-        return () => clearInterval(t);
-    }, []);
-
-    const stage = getStage(elapsed);
-
-    if (timedOut) {
+    if (buildError) {
         return (
             <div className="flex-1 flex flex-col" style={{ backgroundColor: '#ffffff' }}>
                 <div style={{ maxWidth: '480px', margin: '0 auto', padding: '32px 24px', width: '100%' }}>
@@ -611,10 +598,10 @@ function Screen4Loading({ onReset }) {
                             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                         </svg>
                         <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
-                            This is taking longer than expected
+                            Something went wrong
                         </p>
                         <p style={{ color: '#6b7280', fontSize: '13px', marginBottom: '16px' }}>
-                            Your assessment may still be building. Wait a moment and refresh, or start again.
+                            {buildError}
                         </p>
                         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
                             <button
@@ -622,12 +609,6 @@ function Screen4Loading({ onReset }) {
                                 style={{ padding: '8px 18px', border: '1px solid #0d2444', borderRadius: '6px', backgroundColor: 'transparent', color: '#0d2444', fontSize: '13px', cursor: 'pointer' }}
                             >
                                 ← Start again
-                            </button>
-                            <button
-                                onClick={() => window.location.reload()}
-                                style={{ padding: '8px 18px', border: 'none', borderRadius: '6px', backgroundColor: '#c9a84c', color: '#0d2444', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
-                            >
-                                Refresh page →
                             </button>
                         </div>
                     </div>
@@ -644,18 +625,17 @@ function Screen4Loading({ onReset }) {
                     <h2 style={{ color: '#0d2444', fontSize: '20px', fontWeight: 500, marginBottom: '32px', textAlign: 'center' }}>
                         Building your assessment...
                     </h2>
-                    {/* Progress bar */}
                     <div style={{ width: '100%', height: '8px', borderRadius: '4px', backgroundColor: '#e5e7eb', overflow: 'hidden' }}>
                         <div style={{
                             height: '100%',
-                            width: `${stage.pct}%`,
+                            width: `${progress}%`,
                             borderRadius: '4px',
                             backgroundColor: '#c9a84c',
-                            transition: 'width 1s ease',
+                            transition: 'width 0.6s ease',
                         }} />
                     </div>
                     <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 700, textAlign: 'center', marginTop: '10px' }}>
-                        {stage.pct}%
+                        {progress}%
                     </p>
                     <p style={{ color: '#6b7280', fontSize: '13px', fontStyle: 'italic', textAlign: 'center', marginTop: '4px' }}>
                         {stage.label}
@@ -806,14 +786,17 @@ export default function Build() {
     const [cohortInfo, setCohortInfo] = useState(null);
     const [sections, setSections] = useState(DEFAULT_SECTIONS);
     const [building, setBuilding] = useState(false);
+    const [buildProgress, setBuildProgress] = useState(0);
+    const [buildError, setBuildError] = useState(null);
     const [assessmentText, setAssessmentText] = useState('');
     const [mappingText, setMappingText] = useState('');
 
     const buildCohortProfile = (ci) => {
         const learnerLabel = LEARNER_OPTIONS.find(o => o.value === ci.learner)?.label || ci.learner;
-        const supportLabel = SUPPORT_OPTIONS.find(o => o.value === ci.support)?.label || ci.support;
         return `1. Delivery mode: mixed\n2. Learner literacy level: ${ci.support.includes('literacy') ? 'foundation' : 'standard'}\n3. Language background: ${ci.support.includes('esl') ? 'LLNP/ESL cohort' : 'English first language'}\n4. Age group: ${learnerLabel}`;
     };
+
+    const llmCall = (prompt) => base44.integrations.Core.InvokeLLM({ prompt, model: 'claude_sonnet_4_6' });
 
     const handleScreen1Confirm = (info) => {
         setUnitInfo(info);
@@ -827,51 +810,201 @@ export default function Build() {
 
     const handleBuild = async () => {
         setBuilding(true);
+        setBuildProgress(0);
+        setBuildError(null);
         setScreen(4);
 
         const cohortBlock = buildCohortProfile(cohortInfo);
-        const message = `BUILD MODE — UOC PROVIDED
+        const uoc = unitInfo.text;
+        const band = cohortInfo.band;
+        const levelNote = `Target reading level: ${band}\nCohort: ${cohortBlock}`;
 
-DOCUMENT 1 — UNIT OF COMPETENCY:
-${unitInfo.text}
+        try {
+            // CALL 1 — Parse UoC structure
+            setBuildProgress(10);
+            const structure = await llmCall(
+                `You are an Australian VET assessment designer. Parse this Unit of Competency and return a JSON object only (no other text) with these fields:
+- unit_code: string
+- unit_title: string  
+- ke_items: array of strings (each Knowledge Evidence item, verbatim)
+- pe_items: array of strings (each Performance Evidence item, verbatim)
+- pc_items: array of strings (each Performance Criteria item, formatted as "X.X — description")
+
+UoC TEXT:
+${uoc.slice(0, 8000)}`
+            );
+
+            let parsed;
+            try {
+                const jsonStr = typeof structure === 'string'
+                    ? structure.replace(/```json|```/g, '').trim()
+                    : JSON.stringify(structure);
+                parsed = JSON.parse(jsonStr);
+            } catch {
+                parsed = { ke_items: [], pe_items: [], pc_items: [] };
+            }
+
+            const keList = (parsed.ke_items || []).join('\n');
+            const peList = (parsed.pe_items || []).join('\n');
+
+            // CALL 2 — Knowledge Questions
+            setBuildProgress(30);
+            const knowledgeSection = await llmCall(
+                `You are an Australian VET assessment writer. Write a Knowledge Questions section for an assessment instrument.
+
+${levelNote}
+Unit: ${unitInfo.code} — ${unitInfo.title}
+
+KNOWLEDGE EVIDENCE ITEMS TO COVER:
+${keList || uoc.slice(0, 3000)}
+
+Instructions:
+- Write 8–12 questions that cover all knowledge evidence items
+- Use short-answer format (2–4 sentences expected per answer)
+- Write at ${band} reading level
+- Number each question (Q1, Q2, etc.)
+- Include a "Model Answer" for each question in italics below the question
+- Use plain, clear language appropriate for the cohort
+- Do NOT include any other sections
+
+Output format: Markdown. Start with: ## Part A — Knowledge Questions`
+            );
+
+            // CALL 3 — Observation Checklist
+            setBuildProgress(50);
+            const observationSection = await llmCall(
+                `You are an Australian VET assessment writer. Write an Observation Checklist section for an assessment instrument.
+
+${levelNote}
+Unit: ${unitInfo.code} — ${unitInfo.title}
+
+PERFORMANCE EVIDENCE AND CRITERIA TO COVER:
+${peList || ''}
+${parsed.pc_items?.join('\n') || ''}
+
+Instructions:
+- Write a checklist of 10–15 observable behaviours/tasks the assessor will observe
+- Each item should be a clear, observable action (Satisfactory / Not Yet Satisfactory checkboxes)
+- Cover all performance evidence and key performance criteria
+- Write at ${band} reading level
+- Include an "Assessor Notes" field at the end
+
+Output format: Markdown table with columns: Item | Observable Behaviour | S | NYS | Comments
+Start with: ## Part B — Observation Checklist`
+            );
+
+            // CALL 4 — Workplace Project / Scenario
+            setBuildProgress(65);
+            const projectSection = await llmCall(
+                `You are an Australian VET assessment writer. Write a Workplace Project task for an assessment instrument.
+
+${levelNote}
+Unit: ${unitInfo.code} — ${unitInfo.title}
+
+PERFORMANCE EVIDENCE TO COVER:
+${peList || uoc.slice(0, 2000)}
+
+Instructions:
+- Write one practical workplace project task that covers all performance evidence
+- Include: scenario context, task instructions (numbered steps), resources required, submission requirements
+- Write at ${band} reading level
+- The task should produce a physical or digital work product as evidence
+- Include word count guidance for any written components
+
+Output format: Markdown. Start with: ## Part C — Workplace Project`
+            );
+
+            // CALL 5 — Marking Guide
+            setBuildProgress(80);
+            const markingGuide = await llmCall(
+                `You are an Australian VET assessment writer. Write a Marking Guide / Assessor Pack for the following assessment sections.
+
+${levelNote}
+Unit: ${unitInfo.code} — ${unitInfo.title}
+
+KNOWLEDGE QUESTIONS (already written):
+${typeof knowledgeSection === 'string' ? knowledgeSection.slice(0, 3000) : ''}
+
+OBSERVATION CHECKLIST (already written):
+${typeof observationSection === 'string' ? observationSection.slice(0, 2000) : ''}
+
+WORKPLACE PROJECT (already written):
+${typeof projectSection === 'string' ? projectSection.slice(0, 2000) : ''}
+
+Instructions:
+- Write a complete Assessor Marking Guide
+- For knowledge questions: include model answers and acceptable variations
+- For observation: include specific observable indicators for each checklist item
+- For the project: include assessment criteria and evidence requirements
+- Include a Reasonable Adjustment note
+- Include a Judgement of Competence summary section
+
+Output format: Markdown. Start with: # Assessor Marking Guide — ${unitInfo.code}`
+            );
+
+            // CALL 6 — Mapping Document
+            setBuildProgress(95);
+            const mappingDoc = await llmCall(
+                `You are an Australian VET compliance specialist. Produce a mapping document showing how the assessment instrument covers all requirements of the unit.
+
+Unit: ${unitInfo.code} — ${unitInfo.title}
+
+KNOWLEDGE EVIDENCE ITEMS:
+${keList || '(see UoC)'}
+
+PERFORMANCE EVIDENCE ITEMS:
+${peList || '(see UoC)'}
+
+PERFORMANCE CRITERIA:
+${parsed.pc_items?.join('\n') || '(see UoC)'}
+
+ASSESSMENT INSTRUMENT SECTIONS:
+- Part A: Knowledge Questions
+- Part B: Observation Checklist
+- Part C: Workplace Project
+
+Instructions:
+- Create a mapping table showing each KE item, PE item, and PC mapped to which assessment part covers it
+- Include a coverage summary confirming all requirements are met
+- Flag any gaps with ⚠
+- Format as a Markdown table
+
+Output format: Markdown. Start with: # Assessment Mapping Document — ${unitInfo.code}`
+            );
+
+            // Assemble final document
+            const kText = typeof knowledgeSection === 'string' ? knowledgeSection : JSON.stringify(knowledgeSection);
+            const oText = typeof observationSection === 'string' ? observationSection : JSON.stringify(observationSection);
+            const pText = typeof projectSection === 'string' ? projectSection : JSON.stringify(projectSection);
+            const mText = typeof markingGuide === 'string' ? markingGuide : JSON.stringify(markingGuide);
+            const mapText = typeof mappingDoc === 'string' ? mappingDoc : JSON.stringify(mappingDoc);
+
+            const fullAssessment = `# Assessment Instrument
+## ${unitInfo.code} — ${unitInfo.title}
+*Reading level: ${band}*
 
 ---
 
-COHORT PROFILE:
-${cohortBlock}
-Target reading level: ${cohortInfo.band}
+${kText}
 
-Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do not ask for the cohort profile. The UoC and cohort profile are provided above.`;
+---
 
-        try {
-            const conv = await base44.agents.createConversation({
-                agent_name: 'fk_readability_tool',
-                metadata: { name: `Build: ${unitInfo.code}` }
-            });
+${oText}
 
-            await base44.agents.addMessage(conv, { role: 'user', content: message });
+---
 
-            // Poll for completion
-            await new Promise((resolve) => {
-                const unsub = base44.agents.subscribeToConversation(conv.id, (data) => {
-                    const last = data.messages?.[data.messages.length - 1];
-                    if (last?.role === 'assistant' && last?.content && !last?.is_streaming) {
-                        const text = last.content;
-                        setAssessmentText(text);
+${pText}
 
-                        // Extract mapping document if present
-                        const mapMatch = text.match(/<!--\s*MAPPING_DOCUMENT_START\s*-->([\s\S]*?)<!--\s*MAPPING_DOCUMENT_END\s*-->/);
-                        if (mapMatch) {
-                            setMappingText(mapMatch[1].trim());
-                        }
+---
 
-                        unsub();
-                        resolve();
-                    }
-                });
-            });
+${mText}`;
+
+            setAssessmentText(fullAssessment);
+            setMappingText(mapText);
+            setBuildProgress(100);
+
         } catch (e) {
-            setAssessmentText('An error occurred. Please try again.');
+            setBuildError('One of the build steps timed out or failed. Please try again — each step is smaller now and should complete successfully.');
         } finally {
             setBuilding(false);
         }
@@ -905,8 +1038,8 @@ Please proceed directly with the BUILD workflow. Do not ask what mode to use. Do
             {screen === 1 && <Screen1 onConfirm={handleScreen1Confirm} />}
             {screen === 2 && <Screen2 unitInfo={unitInfo} onBack={() => setScreen(1)} onConfirm={handleScreen2Confirm} />}
             {screen === 3 && <Screen3 unitInfo={unitInfo} cohortInfo={cohortInfo} sections={sections} onBack={() => setScreen(2)} onBuild={handleBuild} />}
-            {screen === 4 && building && <Screen4Loading onReset={handleReset} />}
-            {screen === 4 && !building && (
+            {screen === 4 && (building || buildError) && <Screen4Loading onReset={handleReset} progress={buildProgress} buildError={buildError} />}
+            {screen === 4 && !building && !buildError && (
                 <Screen4Ready
                     unitInfo={unitInfo}
                     cohortInfo={cohortInfo}
