@@ -782,6 +782,7 @@ Return this JSON structure:
       "name": "Knowledge Questions",
       "description": "Tests understanding of all key concepts from the UoC",
       "justification": "your UoC has [n] Knowledge Evidence items",
+      "uocRequirement": "UoC requires: [n] Knowledge Evidence items — minimum [n] questions",
       "formatOptions": ["Written", "Verbal"] or null if locked,
       "formatLocked": true or false,
       "format": "Written" (default, or "Verbal" if AC specifies),
@@ -795,13 +796,18 @@ Return this JSON structure:
 }
 
 For Practical Observation use id "practical_observation", name "Practical Observation".
+- Set uocRequirement to the exact PE occasion text if a number of occasions is specified (e.g. "UoC requires: at least 4 occasions with different individuals or groups"), otherwise "UoC requires: demonstrated performance in a workplace or simulated environment".
 For Workplace Project use id "workplace_project", name "Workplace Project" (or "Case Study" id "case_study", name "Case Study").
+- Set uocRequirement to "UoC requires: [brief comma-separated list of 2-4 key product requirements from PE, verbatim where possible]".
+- For Case Study, set uocRequirement to "UoC requires: application of knowledge to a realistic workplace scenario".
 For Supervisor Report use id "supervisor_report", name "Supervisor Report", and set addedNote to ["Your supervisor will need to complete this form. It includes:", "· Observable behaviours from your UoC", "· Space for comments and a signature field", "· Used as evidence of competency"].
 For Work Documents use id "work_documents", name "Work Documents / Portfolio".
 For Verbal Questions (as optional) use id "verbal_questions", name "Verbal Questions".
 
-Each section needs: id, name, description, justification (for required) or reason (for optional).
-Do not include a section unless its rule is satisfied. State the justification clearly.`
+Each required section needs: id, name, description, justification, uocRequirement.
+Each optional section needs: id, name, description, reason (plain English reason why it may be useful).
+Do not include a section unless its rule is satisfied. State the justification clearly.
+IMPORTANT: uocRequirement must always be populated for required sections. Use exact UoC language. Fallback if nothing specific: "UoC requires: [section type] to assess [KE/PE category]".`
             );
 
             let proposal;
