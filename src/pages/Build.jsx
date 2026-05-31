@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useCohort } from '@/lib/CohortContext';
 import { downloadDocx } from '@/lib/downloadDocx';
 import { buildBSBLDR413Mapping } from '@/lib/buildBSBLDR413Mapping';
+import Screen3Structure from '@/components/build/Screen3Structure.jsx';
 import { CheckCircle, Upload, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 // ── Inlined: BuildProgress ────────────────────────────────────────────────────
 const BP_STEPS = ['Upload UoC', 'Learners', 'Review', 'Done'];
@@ -501,81 +502,7 @@ function Screen2({ unitInfo, onBack, onConfirm }) {
     );
 }
 
-// ── Screen 3 — Review structure ───────────────────────────────────────────────
-
-const SECTION_ICONS = { 'Knowledge Questions': '📝', 'Observation Checklist': '👁', 'Workplace Project': '📋', 'Scenario / Case Study': '💬', 'Third Party Report': '📄', 'Verbal Questions': '🎙' };
-
-function Screen3({ unitInfo, cohortInfo, sections, onBack, onBuild }) {
-    return (
-        <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '540px', margin: '0 auto', padding: '32px 24px' }}>
-                <BuildProgress step={3} contextNote="Based on your UoC, here's what we recommend building. You can edit the content after downloading — click Build when ready." />
-
-                <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '16px' }}>
-                    Here's what we'll build
-                </h2>
-
-                {/* Unit bar */}
-                <div style={{
-                    backgroundColor: '#162d50', borderRadius: '8px',
-                    padding: '12px 16px', marginBottom: '20px',
-                }}>
-                    <p style={{ color: '#ffffff', fontSize: '14px', fontWeight: 500, marginBottom: '2px' }}>
-                        {unitInfo.code} — {unitInfo.title}
-                    </p>
-                    <p style={{ color: '#c9a84c', fontSize: '12px' }}>
-                        Reading level: {cohortInfo.band} · Target aligned to {cohortInfo.learnerDesc}
-                    </p>
-                </div>
-
-                {/* Structure card */}
-                <div style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px', marginBottom: '20px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        {sections.map((s, i) => (
-                            <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                                <span style={{ fontSize: '20px', flexShrink: 0 }}>{SECTION_ICONS[s.name] || '📄'}</span>
-                                <div>
-                                    <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, marginBottom: '2px' }}>{s.name}</p>
-                                    <p style={{ color: '#6b7280', fontSize: '12px' }}>{s.description}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Coverage summary */}
-                    <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
-                        {[
-                            '✓ All practical tasks covered',
-                            '✓ All knowledge questions covered',
-                            '✓ All learning outcomes mapped',
-                        ].map(line => (
-                            <p key={line} style={{ color: '#6b7280', fontSize: '13px', marginBottom: '4px' }}>{line}</p>
-                        ))}
-                        <p style={{ color: '#9ca3af', fontSize: '12px', fontStyle: 'italic', marginTop: '8px' }}>
-                            You can edit question counts and content after downloading.
-                        </p>
-                    </div>
-                </div>
-
-                {/* Buttons */}
-                <div style={{ display: 'flex', gap: '12px' }}>
-                    <button
-                        onClick={onBack}
-                        style={{ flex: 1, height: '44px', border: '1px solid #0d2444', borderRadius: '8px', backgroundColor: 'transparent', color: '#0d2444', fontSize: '14px', cursor: 'pointer' }}
-                    >
-                        ← Back
-                    </button>
-                    <button
-                        onClick={onBuild}
-                        style={{ flex: 1, height: '44px', backgroundColor: '#c9a84c', color: '#0d2444', borderRadius: '8px', border: 'none', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}
-                    >
-                        Build my assessment →
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
+// Screen3 is now in components/build/Screen3Structure.jsx
 
 // ── Screen 4 — Building / Ready ───────────────────────────────────────────────
 
@@ -778,19 +705,15 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, onBac
 
 // ── Main Build page ───────────────────────────────────────────────────────────
 
-const DEFAULT_SECTIONS = [
-    { name: 'Knowledge Questions', description: 'Tests understanding of all key concepts from the UoC' },
-    { name: 'Observation Checklist', description: 'Assessor observes the learner completing practical tasks' },
-    { name: 'Workplace Project', description: 'Learner produces evidence of real workplace performance' },
-];
-
 export default function Build() {
     const navigate = useNavigate();
     const { profile, getLabel } = useCohort();
     const [screen, setScreen] = useState(1);
     const [unitInfo, setUnitInfo] = useState(null);
     const [cohortInfo, setCohortInfo] = useState(null);
-    const [sections, setSections] = useState(DEFAULT_SECTIONS);
+    const [structureProposal, setStructureProposal] = useState(null);
+    const [structureLoading, setStructureLoading] = useState(false);
+    const [activeSections, setActiveSections] = useState([]);
     const [building, setBuilding] = useState(false);
     const [buildProgress, setBuildProgress] = useState(0);
     const [buildError, setBuildError] = useState(null);
@@ -809,12 +732,112 @@ export default function Build() {
         setScreen(2);
     };
 
-    const handleScreen2Confirm = (ci) => {
+    const handleScreen2Confirm = async (ci) => {
         setCohortInfo(ci);
+        setStructureLoading(true);
         setScreen(3);
+
+        const isESL = ci.support === 'esl' || ci.support === 'both';
+        const isLiteracy = ci.support === 'literacy' || ci.support === 'both';
+        const isWorkplace = true; // default delivery
+
+        try {
+            const result = await llmCall(
+                `You are an Australian VET assessment designer. Analyse this Unit of Competency and return a JSON object ONLY (no other text).
+
+UoC TEXT (first 6000 chars):
+${unitInfo.text.slice(0, 6000)}
+
+COHORT: ${ci.learnerDesc}, reading level: ${ci.band}
+ESL learners: ${isESL}, Literacy support: ${isLiteracy}, Workplace delivery: ${isWorkplace}
+
+Apply these exact rules to determine section types:
+
+RULE 1 — Knowledge Questions (REQUIRED if any KE items exist):
+Always required when KE items exist. Format: check AC for "written" or "verbal".
+
+RULE 2 — Practical Observation (REQUIRED only if PE explicitly contains):
+- "demonstrate" or "demonstrated"
+- "perform" or "performance" in context of showing a skill
+- A specified number of occasions (e.g. "at least X occasions")
+- "in the course of" followed by practical tasks
+- "in a workplace or simulated environment"
+NOT required if PE only has: develop/produce/create/write/prepare (product evidence only).
+
+RULE 3 — Workplace Project or Case Study (REQUIRED if PE requires producing a tangible work product):
+- "develop", "produce", "create", "plan", "document", "record", "submit", "portfolio"
+Format: Workplace Project if workplace delivery, Case Study if classroom/online.
+
+RULE 4 — Supervisor Report (OPTIONAL, offer only if workplace delivery AND observation is required).
+
+RULE 5 — Work Documents/Portfolio (OPTIONAL, offer only if AC mentions "workplace documentation", "work products", or "portfolio of evidence").
+
+RULE 6 — Verbal Questions (OPTIONAL, offer only if ESL=${isESL} or literacy=${isLiteracy} AND AC does not prohibit verbal).
+
+Return this JSON structure:
+{
+  "required": [
+    {
+      "id": "knowledge_questions",
+      "name": "Knowledge Questions",
+      "description": "Tests understanding of all key concepts from the UoC",
+      "justification": "your UoC has [n] Knowledge Evidence items",
+      "formatOptions": ["Written", "Verbal"] or null if locked,
+      "formatLocked": true or false,
+      "format": "Written" (default, or "Verbal" if AC specifies),
+      "formatNote": null or "Verbal questions are written at assessor reading level. Learner readability scoring does not apply." (only if verbal)
+    },
+    ... (Practical Observation and/or Workplace Project if rules apply)
+  ],
+  "optional": [
+    ... (only sections where rules say to offer as optional)
+  ]
+}
+
+For Practical Observation use id "practical_observation", name "Practical Observation".
+For Workplace Project use id "workplace_project", name "Workplace Project" (or "Case Study" id "case_study", name "Case Study").
+For Supervisor Report use id "supervisor_report", name "Supervisor Report", and set addedNote to ["Your supervisor will need to complete this form. It includes:", "· Observable behaviours from your UoC", "· Space for comments and a signature field", "· Used as evidence of competency"].
+For Work Documents use id "work_documents", name "Work Documents / Portfolio".
+For Verbal Questions (as optional) use id "verbal_questions", name "Verbal Questions".
+
+Each section needs: id, name, description, justification (for required) or reason (for optional).
+Do not include a section unless its rule is satisfied. State the justification clearly.`
+            );
+
+            let proposal;
+            try {
+                const jsonStr = typeof result === 'string'
+                    ? result.replace(/```json|```/g, '').trim()
+                    : JSON.stringify(result);
+                proposal = JSON.parse(jsonStr);
+            } catch {
+                // Fallback to sensible defaults
+                proposal = {
+                    required: [
+                        { id: 'knowledge_questions', name: 'Knowledge Questions', description: 'Tests understanding of all key concepts from the UoC', justification: 'your UoC has Knowledge Evidence items', formatOptions: ['Written', 'Verbal'], formatLocked: false, format: 'Written' },
+                        { id: 'practical_observation', name: 'Practical Observation', description: 'Assessor observes the learner completing practical tasks', justification: 'your UoC requires demonstrated performance', formatOptions: null, formatLocked: false, format: null },
+                        { id: 'workplace_project', name: 'Workplace Project', description: 'Learner produces evidence of real workplace performance', justification: 'your UoC requires a tangible work product', formatOptions: ['Project', 'Case Study'], formatLocked: false, format: 'Project' },
+                    ],
+                    optional: [],
+                };
+            }
+            setStructureProposal(proposal);
+        } catch (e) {
+            // Fallback silently
+            setStructureProposal({
+                required: [
+                    { id: 'knowledge_questions', name: 'Knowledge Questions', description: 'Tests understanding of all key concepts from the UoC', justification: 'your UoC has Knowledge Evidence items', formatOptions: ['Written', 'Verbal'], formatLocked: false, format: 'Written' },
+                    { id: 'workplace_project', name: 'Workplace Project', description: 'Learner produces evidence of real workplace performance', justification: 'your UoC requires a tangible work product', formatOptions: ['Project', 'Case Study'], formatLocked: false, format: 'Project' },
+                ],
+                optional: [],
+            });
+        } finally {
+            setStructureLoading(false);
+        }
     };
 
-    const handleBuild = async () => {
+    const handleBuild = async (sections) => {
+        setActiveSections(sections);
         setBuilding(true);
         setBuildProgress(0);
         setBuildError(null);
@@ -1032,6 +1055,8 @@ ${mText}`;
         setScreen(1);
         setUnitInfo(null);
         setCohortInfo(null);
+        setStructureProposal(null);
+        setActiveSections([]);
         setAssessmentText('');
         setMappingText('');
         setBuilding(false);
@@ -1043,7 +1068,23 @@ ${mText}`;
 
             {screen === 1 && <Screen1 onConfirm={handleScreen1Confirm} />}
             {screen === 2 && <Screen2 unitInfo={unitInfo} onBack={() => setScreen(1)} onConfirm={handleScreen2Confirm} />}
-            {screen === 3 && <Screen3 unitInfo={unitInfo} cohortInfo={cohortInfo} sections={sections} onBack={() => setScreen(2)} onBuild={handleBuild} />}
+            {screen === 3 && (
+                structureLoading ? (
+                    <div className="flex-1 flex flex-col items-center justify-center" style={{ backgroundColor: '#ffffff' }}>
+                        <Loader2 style={{ color: '#c9a84c', width: '28px', height: '28px', animation: 'spin 1s linear infinite' }} />
+                        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+                        <p style={{ color: '#6b7280', fontSize: '13px', marginTop: '12px' }}>Analysing your UoC...</p>
+                    </div>
+                ) : (
+                    <Screen3Structure
+                        unitInfo={unitInfo}
+                        cohortInfo={cohortInfo}
+                        structureProposal={structureProposal}
+                        onBack={() => setScreen(2)}
+                        onBuild={handleBuild}
+                    />
+                )
+            )}
             {screen === 4 && (building || buildError) && <Screen4Loading onReset={handleReset} progress={buildProgress} buildError={buildError} />}
             {screen === 4 && !building && !buildError && (
                 <Screen4Ready
