@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useCohort } from '@/lib/CohortContext';
 import { downloadDocx } from '@/lib/downloadDocx';
+import { buildBSBLDR413Mapping } from '@/lib/buildBSBLDR413Mapping';
 import { CheckCircle, Upload, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 // ── Inlined: BuildProgress ────────────────────────────────────────────────────
 const BP_STEPS = ['Upload UoC', 'Learners', 'Review', 'Done'];
@@ -656,6 +657,12 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, onBac
     };
 
     const handleDownloadMapping = async () => {
+        // Use the fully-formatted hardcoded builder for BSBLDR413
+        if (unitInfo.code === 'BSBLDR413') {
+            await buildBSBLDR413Mapping(cohortInfo.learnerDesc || 'Working adults', cohortInfo.band || 'Cert III/IV');
+            return;
+        }
+        // For all other units, use the AI-generated mapping text
         if (!mappingText) return;
         try {
             const res = await base44.functions.invoke('buildMappingDocument', {
@@ -676,7 +683,6 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, onBac
                 URL.revokeObjectURL(url);
             }
         } catch (e) {
-            // fallback
             downloadDocx(mappingText, `${unitInfo.code}-mapping-document`);
         }
     };
