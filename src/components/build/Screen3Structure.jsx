@@ -1,7 +1,5 @@
 import { useState } from 'react';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 const SECTION_ICONS = {
     knowledge_questions:   '📝',
     practical_observation: '👁',
@@ -87,7 +85,6 @@ function RequiredCard({ section, onFormatChange }) {
                                     fontSize: '11px',
                                     cursor: 'pointer',
                                     fontWeight: section.format === opt ? 500 : 400,
-                                    transition: 'all 0.1s',
                                 }}
                             >
                                 {opt}
@@ -120,7 +117,6 @@ function OptionalCard({ section, added, onToggle }) {
             display: 'flex',
             gap: '12px',
             alignItems: 'flex-start',
-            transition: 'all 0.15s',
         }}>
             <span style={{ fontSize: '20px', flexShrink: 0, marginTop: '1px' }}>
                 {SECTION_ICONS[section.id] || '📄'}
@@ -231,10 +227,7 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                     Here's what we'll build
                 </h2>
 
-                <div style={{
-                    backgroundColor: '#162d50', borderRadius: '8px',
-                    padding: '12px 16px', marginBottom: '20px',
-                }}>
+                <div style={{ backgroundColor: '#162d50', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' }}>
                     <p style={{ color: '#ffffff', fontSize: '14px', fontWeight: 500, marginBottom: '2px' }}>
                         {unitInfo.code} — {unitInfo.title}
                     </p>

@@ -725,7 +725,9 @@ export default function Build() {
         return `1. Delivery mode: mixed\n2. Learner literacy level: ${ci.support.includes('literacy') ? 'foundation' : 'standard'}\n3. Language background: ${ci.support.includes('esl') ? 'LLNP/ESL cohort' : 'English first language'}\n4. Age group: ${learnerLabel}`;
     };
 
-    const llmCall = (prompt) => base44.integrations.Core.InvokeLLM({ prompt, model: 'claude_sonnet_4_6' });
+    const NO_DASH_RULE = 'CRITICAL STYLE RULE: Never use em dashes (—) or en dashes (–) anywhere in your output. Rewrite sentences using correct grammar instead: use a colon (:) to introduce a list, a full stop to separate two complete thoughts, and a comma to join closely related ideas within a sentence. Restructure sentences as needed so they read naturally without dashes.\n\n';
+
+    const llmCall = (prompt) => base44.integrations.Core.InvokeLLM({ prompt: NO_DASH_RULE + prompt, model: 'claude_sonnet_4_6' });
 
     const handleScreen1Confirm = (info) => {
         setUnitInfo(info);
