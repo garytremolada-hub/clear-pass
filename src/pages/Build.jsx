@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useCohort } from '@/lib/CohortContext';
 import { downloadDocx } from '@/lib/downloadDocx';
 import { buildBSBLDR413Mapping } from '@/lib/buildBSBLDR413Mapping';
-import Screen3Structure from '@/components/build/Screen3Structure.jsx';
+import Screen3Structure from '../components/build/Screen3Structure';
 import { CheckCircle, Upload, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 // ── Inlined: BuildProgress ────────────────────────────────────────────────────
 const BP_STEPS = ['Upload UoC', 'Learners', 'Review', 'Done'];

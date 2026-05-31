@@ -13,14 +13,14 @@ const SECTION_ICONS = {
 function RequirementLine({ section, isOptional }) {
     if (isOptional) {
         const reasonMap = {
-            supervisor_report: 'Optional — add when direct observation is not always possible',
-            work_documents:    'Optional — add when learners will submit existing workplace documents as evidence',
-            verbal_questions:  'Optional — recommended for ESL learners or those needing literacy support',
+            supervisor_report: 'Optional. Add this when direct observation is not always possible.',
+            work_documents:    'Optional. Add this when learners will submit existing workplace documents as evidence.',
+            verbal_questions:  'Optional. Recommended for ESL learners or those needing literacy support.',
         };
-        const text = reasonMap[section.id] || (section.reason ? `Optional — ${section.reason}` : null);
+        const text = reasonMap[section.id] || (section.reason ? `Optional. ${section.reason}` : null);
         if (!text) return null;
         return (
-            <p style={{ color: '#6b7280', fontSize: '11px', fontStyle: 'italic', marginTop: '4px', marginBottom: 0 }}>
+            <p style={{ color: '#6b7280', fontSize: '12px', fontStyle: 'italic', marginTop: '4px', marginBottom: 0 }}>
                 {text}
             </p>
         );
@@ -29,15 +29,14 @@ function RequirementLine({ section, isOptional }) {
     const req = section.uocRequirement;
     if (!req) return null;
 
-    const isVerbal = section.id === 'verbal_questions';
     return (
         <>
-            <p style={{ color: '#c9a84c', fontSize: '11px', fontStyle: 'italic', marginTop: '4px', marginBottom: 0 }}>
+            <p style={{ color: '#c9a84c', fontSize: '13px', fontStyle: 'italic', marginTop: '4px', marginBottom: 0 }}>
                 {req}
             </p>
-            {isVerbal && (
-                <p style={{ color: '#9ca3af', fontSize: '10px', marginTop: '2px', marginBottom: 0 }}>
-                    Assessor records responses — learner readability scoring not applicable
+            {section.id === 'verbal_questions' && (
+                <p style={{ color: '#9ca3af', fontSize: '11px', marginTop: '2px', marginBottom: 0 }}>
+                    Assessor records responses. Learner readability scoring does not apply.
                 </p>
             )}
         </>
@@ -47,48 +46,29 @@ function RequirementLine({ section, isOptional }) {
 function RequiredCard({ section, onFormatChange }) {
     return (
         <div style={{
-            border: '1px solid #e5e7eb',
-            borderRadius: '10px',
-            padding: '14px 16px',
-            backgroundColor: '#ffffff',
-            display: 'flex',
-            gap: '12px',
-            alignItems: 'flex-start',
+            border: '1px solid #e5e7eb', borderRadius: '10px', padding: '14px 16px',
+            backgroundColor: '#ffffff', display: 'flex', gap: '12px', alignItems: 'flex-start',
         }}>
             <span style={{ fontSize: '20px', flexShrink: 0, marginTop: '1px' }}>
                 {SECTION_ICONS[section.id] || '📄'}
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                    <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, margin: 0 }}>
-                        {section.name}
-                    </p>
+                    <p style={{ color: '#0d2444', fontSize: '16px', fontWeight: 500, margin: 0 }}>{section.name}</p>
                     <span style={{ fontSize: '12px', color: '#9ca3af' }} title="Required by your UoC">🔒</span>
                 </div>
-                <p style={{ color: '#6b7280', fontSize: '12px', margin: 0 }}>
-                    {section.description}
-                </p>
+                <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>{section.description}</p>
                 <RequirementLine section={section} isOptional={false} />
-
                 {section.formatOptions && !section.formatLocked && (
                     <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
                         {section.formatOptions.map(opt => (
-                            <button
-                                key={opt}
-                                onClick={() => onFormatChange(section.id, opt)}
-                                style={{
-                                    padding: '3px 10px',
-                                    borderRadius: '20px',
-                                    border: `1px solid ${section.format === opt ? '#c9a84c' : '#e5e7eb'}`,
-                                    backgroundColor: section.format === opt ? '#fef9ec' : '#f9fafb',
-                                    color: section.format === opt ? '#0d2444' : '#6b7280',
-                                    fontSize: '11px',
-                                    cursor: 'pointer',
-                                    fontWeight: section.format === opt ? 500 : 400,
-                                }}
-                            >
-                                {opt}
-                            </button>
+                            <button key={opt} onClick={() => onFormatChange(section.id, opt)} style={{
+                                padding: '3px 10px', borderRadius: '20px',
+                                border: `1px solid ${section.format === opt ? '#c9a84c' : '#e5e7eb'}`,
+                                backgroundColor: section.format === opt ? '#fef9ec' : '#f9fafb',
+                                color: section.format === opt ? '#0d2444' : '#6b7280',
+                                fontSize: '11px', cursor: 'pointer', fontWeight: section.format === opt ? 500 : 400,
+                            }}>{opt}</button>
                         ))}
                     </div>
                 )}
@@ -110,48 +90,30 @@ function RequiredCard({ section, onFormatChange }) {
 function OptionalCard({ section, added, onToggle }) {
     return (
         <div style={{
-            border: `1px dashed ${added ? '#c9a84c' : '#d1d5db'}`,
-            borderRadius: '10px',
-            padding: '14px 16px',
-            backgroundColor: added ? '#fef9ec' : '#fafafa',
-            display: 'flex',
-            gap: '12px',
-            alignItems: 'flex-start',
+            border: `1px dashed ${added ? '#c9a84c' : '#d1d5db'}`, borderRadius: '10px', padding: '14px 16px',
+            backgroundColor: added ? '#fef9ec' : '#fafafa', display: 'flex', gap: '12px', alignItems: 'flex-start',
         }}>
             <span style={{ fontSize: '20px', flexShrink: 0, marginTop: '1px' }}>
                 {SECTION_ICONS[section.id] || '📄'}
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, margin: '0 0 2px' }}>
-                    {section.name}
-                </p>
-                <p style={{ color: '#6b7280', fontSize: '12px', margin: 0 }}>
-                    {section.description}
-                </p>
+                <p style={{ color: '#0d2444', fontSize: '16px', fontWeight: 500, margin: '0 0 2px' }}>{section.name}</p>
+                <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>{section.description}</p>
                 <RequirementLine section={section} isOptional={true} />
                 {section.addedNote && added && (
                     <div style={{ marginTop: '8px' }}>
                         {section.addedNote.map((line, i) => (
-                            <p key={i} style={{ color: '#6b7280', fontSize: '11px', margin: '1px 0' }}>{line}</p>
+                            <p key={i} style={{ color: '#6b7280', fontSize: '13px', margin: '1px 0' }}>{line}</p>
                         ))}
                     </div>
                 )}
             </div>
-            <button
-                onClick={() => onToggle(section.id)}
-                style={{
-                    flexShrink: 0,
-                    padding: '4px 12px',
-                    borderRadius: '6px',
-                    border: `1px solid ${added ? '#ef4444' : '#c9a84c'}`,
-                    backgroundColor: 'transparent',
-                    color: added ? '#ef4444' : '#c9a84c',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    fontWeight: 500,
-                    whiteSpace: 'nowrap',
-                }}
-            >
+            <button onClick={() => onToggle(section.id)} style={{
+                flexShrink: 0, padding: '4px 12px', borderRadius: '6px',
+                border: `1px solid ${added ? '#ef4444' : '#c9a84c'}`,
+                backgroundColor: 'transparent', color: added ? '#ef4444' : '#c9a84c',
+                fontSize: '12px', cursor: 'pointer', fontWeight: 500, whiteSpace: 'nowrap',
+            }}>
                 {added ? 'Remove' : '+ Add'}
             </button>
         </div>
@@ -198,7 +160,6 @@ function BuildProgress({ step, contextNote }) {
 export default function Screen3Structure({ unitInfo, cohortInfo, structureProposal, onBack, onBuild }) {
     const required = structureProposal?.required || [];
     const optional = structureProposal?.optional || [];
-
     const [sections, setSections] = useState(required);
     const [addedOptional, setAddedOptional] = useState([]);
 
@@ -218,10 +179,7 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
             <div style={{ maxWidth: '540px', margin: '0 auto', padding: '32px 24px' }}>
-                <BuildProgress
-                    step={3}
-                    contextNote="Based on your UoC, here's what we'll build. Add optional sections if needed, then click Build."
-                />
+                <BuildProgress step={3} contextNote="Based on your UoC, here's what we'll build. Add optional sections if needed, then click Build." />
 
                 <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '16px' }}>
                     Here's what we'll build
@@ -238,7 +196,7 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
 
                 {sections.length > 0 && (
                     <div style={{ marginBottom: '20px' }}>
-                        <p style={{ color: '#374151', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
+                        <p style={{ color: '#374151', fontSize: '12px', fontWeight: 600, letterSpacing: '0.05em', marginBottom: '10px' }}>
                             Required by your UoC
                         </p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -251,17 +209,12 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
 
                 {optional.length > 0 && (
                     <div style={{ marginBottom: '20px' }}>
-                        <p style={{ color: '#374151', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
+                        <p style={{ color: '#374151', fontSize: '12px', fontWeight: 600, letterSpacing: '0.05em', marginBottom: '10px' }}>
                             Optional additions
                         </p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {optional.map(s => (
-                                <OptionalCard
-                                    key={s.id}
-                                    section={s}
-                                    added={addedOptional.includes(s.id)}
-                                    onToggle={handleToggleOptional}
-                                />
+                                <OptionalCard key={s.id} section={s} added={addedOptional.includes(s.id)} onToggle={handleToggleOptional} />
                             ))}
                         </div>
                     </div>
@@ -277,16 +230,10 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                 </div>
 
                 <div style={{ display: 'flex', gap: '12px' }}>
-                    <button
-                        onClick={onBack}
-                        style={{ flex: 1, height: '44px', border: '1px solid #0d2444', borderRadius: '8px', backgroundColor: 'transparent', color: '#0d2444', fontSize: '14px', cursor: 'pointer' }}
-                    >
+                    <button onClick={onBack} style={{ flex: 1, height: '44px', border: '1px solid #0d2444', borderRadius: '8px', backgroundColor: 'transparent', color: '#0d2444', fontSize: '14px', cursor: 'pointer' }}>
                         ← Back
                     </button>
-                    <button
-                        onClick={handleBuild}
-                        style={{ flex: 1, height: '44px', backgroundColor: '#c9a84c', color: '#0d2444', borderRadius: '8px', border: 'none', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}
-                    >
+                    <button onClick={handleBuild} style={{ flex: 1, height: '44px', backgroundColor: '#c9a84c', color: '#0d2444', borderRadius: '8px', border: 'none', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>
                         Build my assessment →
                     </button>
                 </div>
