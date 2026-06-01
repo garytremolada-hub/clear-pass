@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useCohort } from '@/lib/CohortContext';
 import { downloadDocx } from '@/lib/downloadDocx';
 import { buildBSBLDR413Mapping } from '@/lib/buildBSBLDR413Mapping';
-import Screen3Structure from '@/components/build/Screen3Structure';
+import Screen3Structure from '@/components/build/Screen3Structure.jsx';
 import { CheckCircle, Upload, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { extractMappingData } from '@/lib/extractMappingData';
 // ── Inlined: BuildProgress ────────────────────────────────────────────────────
@@ -575,7 +575,7 @@ function Screen4Loading({ onReset, progress, buildError }) {
     );
 }
 
-function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, workbookResult, validationResult, workbookError, validationError, onBack, onReset, onSave }) {
+function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, validationResult, mappingError, validationError, onBack, onReset, onSave }) {
     const navigate = useNavigate();
     const hasGaps = assessmentText?.includes('⚠') || assessmentText?.includes('NOT COVERED');
     const gapCount = hasGaps ? (assessmentText.match(/GAP \d+:/g) || []).length : 0;
@@ -652,28 +652,28 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, workb
                         Download assessment as Word document →
                     </button>
 
-                    {/* Button 2 — Mapping workbook */}
+                    {/* Button 2 — Competency mapping */}
                     <div>
                         <button
-                            onClick={() => handleDownloadBase64(workbookResult)}
-                            disabled={!workbookResult}
+                            onClick={() => handleDownloadBase64(mappingResult)}
+                            disabled={!mappingResult}
                             style={{
                                 width: '100%', height: '44px',
                                 backgroundColor: 'transparent',
-                                color: workbookResult ? '#0d2444' : '#9ca3af',
+                                color: mappingResult ? '#0d2444' : '#9ca3af',
                                 borderRadius: '8px',
-                                border: `1px solid ${workbookResult ? '#0d2444' : '#d1d5db'}`,
-                                fontSize: '14px', cursor: workbookResult ? 'pointer' : 'not-allowed',
+                                border: `1px solid ${mappingResult ? '#0d2444' : '#d1d5db'}`,
+                                fontSize: '14px', cursor: mappingResult ? 'pointer' : 'not-allowed',
                             }}
                         >
-                            Download mapping workbook (.xlsx) →
+                            Download competency mapping (.docx) →
                         </button>
                         <p style={{ color: '#9ca3af', fontSize: '11px', fontStyle: 'italic', textAlign: 'center', marginTop: '4px' }}>
-                            For compliance managers — shows exactly how every requirement is covered
+                            Word document — maps every requirement to specific questions and tasks
                         </p>
-                        {workbookError && (
+                        {mappingError && (
                             <p style={{ color: '#d97706', fontSize: '11px', marginTop: '4px', backgroundColor: '#fef3c7', borderRadius: '4px', padding: '6px 8px' }}>
-                                ⚠ {workbookError}
+                                ⚠ {mappingError}
                             </p>
                         )}
                     </div>
@@ -749,10 +749,9 @@ export default function Build() {
     const [buildProgress, setBuildProgress] = useState(0);
     const [buildError, setBuildError] = useState(null);
     const [assessmentText, setAssessmentText] = useState('');
-    const [mappingText, setMappingText] = useState('');
-    const [workbookResult, setWorkbookResult] = useState(null);   // { file_base64, filename }
+    const [mappingResult, setMappingResult] = useState(null);     // { file_base64, filename }
     const [validationResult, setValidationResult] = useState(null); // { file_base64, filename }
-    const [workbookError, setWorkbookError] = useState(null);
+    const [mappingError, setMappingError] = useState(null);
     const [validationError, setValidationError] = useState(null);
 
     const buildCohortProfile = (ci) => {
@@ -1014,12 +1013,14 @@ Instructions:
 Output format: Markdown. Start with: # Assessor Marking Guide — ${unitInfo.code}`
             );
 
-            // CALL 6 — Mapping Document
+            // CALL 6 — Mapping Index (question numbers per requirement)
             setBuildProgress(95);
-            const mappingDoc = await llmCall(
-                `You are an Australian VET compliance specialist. Produce a mapping document showing how the assessment instrument covers all requirements of the unit.
+            const mappingIndexRaw = await llmCall(
+                `You are an Australian VET compliance specialist. You have just seen the following assessment sections built for ${unitInfo.code}:
 
-Unit: ${unitInfo.code} — ${unitInfo.title}
+KNOWLEDGE QUESTIONS (Part A): numbered Q1, Q2, Q3... as written above
+OBSERVATION CHECKLIST (Part B): items numbered Item 1, Item 2... as written above
+WORKPLACE PROJECT (Part C): steps numbered Step 1, Step 2... as written above
 
 KNOWLEDGE EVIDENCE ITEMS:
 ${keList || '(see UoC)'}
@@ -1030,26 +1031,46 @@ ${peList || '(see UoC)'}
 PERFORMANCE CRITERIA:
 ${parsed.pc_items?.join('\n') || '(see UoC)'}
 
-ASSESSMENT INSTRUMENT SECTIONS:
-- Part A: Knowledge Questions
-- Part B: Observation Checklist
-- Part C: Workplace Project
+Your task: produce a mapping index as JSON ONLY (no other text).
+For each knowledge question, observation item, and project step, record which KE items, PE items, and PC references it covers.
+Use the exact reference codes: KE1, KE2, PE1, PE2, 1.1, 1.2, 2.1 etc.
 
-Instructions:
-- Create a mapping table showing each KE item, PE item, and PC mapped to which assessment part covers it
-- Include a coverage summary confirming all requirements are met
-- Flag any gaps with ⚠
-- Format as a Markdown table
+Return this JSON structure:
+{
+  "knowledgeQuestions": [
+    { "num": 1, "covers": { "ke": ["KE1"], "pe": [], "pc": ["1.1", "1.2"] } },
+    { "num": 2, "covers": { "ke": ["KE2"], "pe": [], "pc": ["1.3"] } }
+  ],
+  "observationItems": [
+    { "num": 1, "covers": { "pe": ["PE1", "PE2"], "pc": ["1.1", "2.1"], "fs": [] } }
+  ],
+  "projectSteps": [
+    { "num": 1, "name": "step name", "covers": { "pe": ["PE1"], "pc": ["1.1"], "fs": [] } }
+  ],
+  "portfolioItems": [
+    { "name": "document name", "covers": { "pe": ["PE4"], "pc": [] } }
+  ]
+}
 
-Output format: Markdown. Start with: # Assessment Mapping Document — ${unitInfo.code}`
+Be thorough — every KE, PE, and PC must appear in at least one item's covers array.`
             );
+
+            // Parse mapping index
+            let mappingIndex = {};
+            try {
+                const jsonStr = typeof mappingIndexRaw === 'string'
+                    ? mappingIndexRaw.replace(/```json|```/g, '').trim()
+                    : JSON.stringify(mappingIndexRaw);
+                mappingIndex = JSON.parse(jsonStr);
+            } catch {
+                mappingIndex = { knowledgeQuestions: [], observationItems: [], projectSteps: [], portfolioItems: [] };
+            }
 
             // Assemble final document
             const kText = typeof knowledgeSection === 'string' ? knowledgeSection : JSON.stringify(knowledgeSection);
             const oText = typeof observationSection === 'string' ? observationSection : JSON.stringify(observationSection);
             const pText = typeof projectSection === 'string' ? projectSection : JSON.stringify(projectSection);
             const mText = typeof markingGuide === 'string' ? markingGuide : JSON.stringify(markingGuide);
-            const mapText = typeof mappingDoc === 'string' ? mappingDoc : JSON.stringify(mappingDoc);
 
             const fullAssessment = `# Assessment Instrument
 ## ${unitInfo.code} — ${unitInfo.title}
@@ -1072,23 +1093,22 @@ ${pText}
 ${mText}`;
 
             setAssessmentText(fullAssessment);
-            setMappingText(mapText);
             setBuildProgress(100);
 
             // ── Generate compliance documents ──────────────────────────────
-            const mappingData = extractMappingData(parsed, unitInfo, cohortInfo, sections);
+            const mappingData = extractMappingData(parsed, unitInfo, cohortInfo, sections, mappingIndex);
 
             // Run both in parallel, don't block on errors
-            const [wbRes, vrRes] = await Promise.allSettled([
-                base44.functions.invoke('generateMappingWorkbook', { mappingData }),
+            const [cmRes, vrRes] = await Promise.allSettled([
+                base44.functions.invoke('generateCompetencyMapping', { mappingData }),
                 base44.functions.invoke('generateValidationRecord', { mappingData }),
             ]);
 
-            if (wbRes.status === 'fulfilled' && wbRes.value?.data?.file_base64) {
-                setWorkbookResult(wbRes.value.data);
-                setWorkbookError(null);
+            if (cmRes.status === 'fulfilled' && cmRes.value?.data?.file_base64) {
+                setMappingResult(cmRes.value.data);
+                setMappingError(null);
             } else {
-                setWorkbookError('Mapping workbook could not be generated. Try downloading the assessment first, then rebuild.');
+                setMappingError('Competency mapping could not be generated. Try downloading the assessment first, then rebuild.');
             }
 
             if (vrRes.status === 'fulfilled' && vrRes.value?.data?.file_base64) {
@@ -1124,10 +1144,9 @@ ${mText}`;
         setStructureProposal(null);
         setActiveSections([]);
         setAssessmentText('');
-        setMappingText('');
-        setWorkbookResult(null);
+        setMappingResult(null);
         setValidationResult(null);
-        setWorkbookError(null);
+        setMappingError(null);
         setValidationError(null);
         setBuilding(false);
     };
@@ -1161,10 +1180,9 @@ ${mText}`;
                     unitInfo={unitInfo}
                     cohortInfo={cohortInfo}
                     assessmentText={assessmentText}
-                    mappingText={mappingText}
-                    workbookResult={workbookResult}
+                    mappingResult={mappingResult}
                     validationResult={validationResult}
-                    workbookError={workbookError}
+                    mappingError={mappingError}
                     validationError={validationError}
                     onBack={() => setScreen(2)}
                     onReset={handleReset}

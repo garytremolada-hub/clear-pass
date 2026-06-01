@@ -51,7 +51,7 @@ function flattenKE(keItems) {
  * @param {object} cohortInfo - { band, learnerDesc }
  * @param {Array} activeSections - Array of section objects used in the build
  */
-export function extractMappingData(parsed, unitInfo, cohortInfo, activeSections) {
+export function extractMappingData(parsed, unitInfo, cohortInfo, activeSections, mappingIndex) {
     const dateBuilt = new Date().toLocaleDateString('en-AU', {
         day: '2-digit', month: 'long', year: 'numeric',
     });
@@ -156,6 +156,20 @@ export function extractMappingData(parsed, unitInfo, cohortInfo, activeSections)
         target: cohortInfo?.band || 'Cert III/IV',
     }));
 
+    // Build AC items for the mapping document
+    const acItems = (parsed.assessment_conditions || []).map((ac, i) => ({
+        ref: `AC${i + 1}`,
+        text: typeof ac === 'string' ? ac : (ac.text || ac),
+        howMet: typeof ac === 'string'
+            ? `Addressed through ${buildCoverageRef(activeSections)}`
+            : (ac.howMet || `Addressed through ${buildCoverageRef(activeSections)}`),
+        status: 'MET',
+    }));
+
+    const targetGroup = cohortInfo?.learnerDesc
+        ? `This assessment is designed for ${cohortInfo.learnerDesc}. ${cohortInfo.support && cohortInfo.support !== 'none' ? `Some learners may require additional support: ${cohortInfo.support === 'esl' ? 'English as a second language (ESL)' : cohortInfo.support === 'literacy' ? 'literacy support' : 'ESL and literacy support'}. ` : ''}The assessment has been written at ${cohortInfo.band || 'Cert III/IV'} reading level to suit this cohort.`
+        : '';
+
     return {
         unitCode: parsed.unit_code || unitInfo?.code || '',
         unitTitle: parsed.unit_title || unitInfo?.title || '',
@@ -165,14 +179,24 @@ export function extractMappingData(parsed, unitInfo, cohortInfo, activeSections)
         cohort: cohortInfo?.learnerDesc
             ? `${cohortInfo.learnerDesc}${cohortInfo.support && cohortInfo.support !== 'none' ? ` (with support: ${cohortInfo.support})` : ''}`
             : '',
+        targetGroup,
         readingLevel: cohortInfo?.band || '',
         assessmentFormat: activeSections.map(s => s.name).join(' | '),
+        releaseNumber: parsed.release_number || '1',
+        prerequisites: parsed.prerequisites || 'Not applicable',
+        corequisites: parsed.corequisites || 'Not applicable',
+        assessmentConditions: parsed.assessment_conditions_text || '',
+        legislativeRequirements: parsed.legislative_requirements || '',
         peItems,
         keItems,
         elements,
         foundationSkills,
-        assessmentConditions,
+        acItems,
+        assessmentConditions: (parsed.assessment_conditions_text || (parsed.assessment_conditions || []).map(ac => typeof ac === 'string' ? ac : ac.text).join('. ')),
+        assessmentSections: activeSections,
+        mappingIndex: mappingIndex || {},
         readabilityRows,
+        rtoName: 'Clearpass Assessment Tool',
     };
 }
 
