@@ -4,8 +4,9 @@ import { base44 } from '@/api/base44Client';
 import { useCohort } from '@/lib/CohortContext';
 import { downloadDocx } from '@/lib/downloadDocx';
 import { buildBSBLDR413Mapping } from '@/lib/buildBSBLDR413Mapping';
-import Screen3Structure from '../components/build/Screen3Structure';
+import Screen3Structure from '@/components/build/Screen3Structure';
 import { CheckCircle, Upload, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { extractMappingData } from '@/lib/extractMappingData';
 // ── Inlined: BuildProgress ────────────────────────────────────────────────────
 const BP_STEPS = ['Upload UoC', 'Learners', 'Review', 'Done'];
 function BuildProgress({ step, contextNote }) {
@@ -574,7 +575,7 @@ function Screen4Loading({ onReset, progress, buildError }) {
     );
 }
 
-function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, onBack, onReset, onSave }) {
+function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, workbookResult, validationResult, workbookError, validationError, onBack, onReset, onSave }) {
     const navigate = useNavigate();
     const hasGaps = assessmentText?.includes('⚠') || assessmentText?.includes('NOT COVERED');
     const gapCount = hasGaps ? (assessmentText.match(/GAP \d+:/g) || []).length : 0;
@@ -583,35 +584,22 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, onBac
         downloadDocx(assessmentText, `${unitInfo.code}-assessment`);
     };
 
-    const handleDownloadMapping = async () => {
-        // Use the fully-formatted hardcoded builder for BSBLDR413
-        if (unitInfo.code === 'BSBLDR413') {
-            await buildBSBLDR413Mapping(cohortInfo.learnerDesc || 'Working adults', cohortInfo.band || 'Cert III/IV');
-            return;
-        }
-        // For all other units, use the AI-generated mapping text
-        if (!mappingText) return;
-        try {
-            const res = await base44.functions.invoke('buildMappingDocument', {
-                markdown_content: mappingText,
-                unit_code: unitInfo.code,
-                unit_title: unitInfo.title,
-            });
-            if (res?.data?.file_base64) {
-                const bytes = atob(res.data.file_base64);
-                const buf = new Uint8Array(bytes.length);
-                for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
-                const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${unitInfo.code}-mapping-document.docx`;
-                a.click();
-                URL.revokeObjectURL(url);
-            }
-        } catch (e) {
-            downloadDocx(mappingText, `${unitInfo.code}-mapping-document`);
-        }
+    const handleDownloadBase64 = (result) => {
+        if (!result?.file_base64) return;
+        const isXlsx = result.filename?.endsWith('.xlsx');
+        const mime = isXlsx
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        const bytes = atob(result.file_base64);
+        const buf = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+        const blob = new Blob([buf], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = result.filename;
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     return (
@@ -655,6 +643,8 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, onBac
 
                 {/* Action buttons */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+
+                    {/* Button 1 — Assessment (always works) */}
                     <button
                         onClick={handleDownloadAssessment}
                         style={{ width: '100%', height: '48px', backgroundColor: '#c9a84c', color: '#0d2444', borderRadius: '8px', border: 'none', fontSize: '15px', fontWeight: 500, cursor: 'pointer' }}
@@ -662,21 +652,62 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, onBac
                         Download assessment as Word document →
                     </button>
 
+                    {/* Button 2 — Mapping workbook */}
                     <div>
                         <button
-                            onClick={handleDownloadMapping}
-                            style={{ width: '100%', height: '44px', backgroundColor: 'transparent', color: '#0d2444', borderRadius: '8px', border: '1px solid #0d2444', fontSize: '14px', cursor: 'pointer' }}
+                            onClick={() => handleDownloadBase64(workbookResult)}
+                            disabled={!workbookResult}
+                            style={{
+                                width: '100%', height: '44px',
+                                backgroundColor: 'transparent',
+                                color: workbookResult ? '#0d2444' : '#9ca3af',
+                                borderRadius: '8px',
+                                border: `1px solid ${workbookResult ? '#0d2444' : '#d1d5db'}`,
+                                fontSize: '14px', cursor: workbookResult ? 'pointer' : 'not-allowed',
+                            }}
                         >
-                            Download mapping document →
+                            Download mapping workbook (.xlsx) →
                         </button>
                         <p style={{ color: '#9ca3af', fontSize: '11px', fontStyle: 'italic', textAlign: 'center', marginTop: '4px' }}>
-                            For your validation folder — shows how every requirement is covered
+                            For compliance managers — shows exactly how every requirement is covered
                         </p>
+                        {workbookError && (
+                            <p style={{ color: '#d97706', fontSize: '11px', marginTop: '4px', backgroundColor: '#fef3c7', borderRadius: '4px', padding: '6px 8px' }}>
+                                ⚠ {workbookError}
+                            </p>
+                        )}
                     </div>
 
+                    {/* Button 3 — Validation record */}
+                    <div>
+                        <button
+                            onClick={() => handleDownloadBase64(validationResult)}
+                            disabled={!validationResult}
+                            style={{
+                                width: '100%', height: '44px',
+                                backgroundColor: 'transparent',
+                                color: validationResult ? '#0d2444' : '#9ca3af',
+                                borderRadius: '8px',
+                                border: `1px solid ${validationResult ? '#0d2444' : '#d1d5db'}`,
+                                fontSize: '14px', cursor: validationResult ? 'pointer' : 'not-allowed',
+                            }}
+                        >
+                            Download validation record (.docx) →
+                        </button>
+                        <p style={{ color: '#9ca3af', fontSize: '11px', fontStyle: 'italic', textAlign: 'center', marginTop: '4px' }}>
+                            One-page sign-off document — for your validation folder
+                        </p>
+                        {validationError && (
+                            <p style={{ color: '#d97706', fontSize: '11px', marginTop: '4px', backgroundColor: '#fef3c7', borderRadius: '4px', padding: '6px 8px' }}>
+                                ⚠ {validationError}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Button 4 — Save to library */}
                     <button
                         onClick={onSave}
-                        style={{ width: '100%', height: '44px', backgroundColor: 'transparent', color: '#0d2444', borderRadius: '8px', border: '1px solid #0d2444', fontSize: '14px', cursor: 'pointer' }}
+                        style={{ width: '100%', height: '44px', backgroundColor: 'transparent', color: '#0d2444', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', cursor: 'pointer' }}
                     >
                         Save to library
                     </button>
@@ -685,13 +716,13 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingText, onBac
                 {/* Recovery links */}
                 <div style={{ textAlign: 'center', marginBottom: '16px' }}>
                     <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer', display: 'block', width: '100%', marginBottom: '6px' }}>
-                        Wrong learner type? → Go back to adjust
+                        Wrong learner type? Go back to adjust
                     </button>
                     <button onClick={onReset} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer', display: 'block', width: '100%', marginBottom: '6px' }}>
-                        Not what you expected? → Start again
+                        Not what you expected? Start again
                     </button>
                     <button onClick={onReset} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer', display: 'block', width: '100%' }}>
-                        Wrong unit? → Start again with a new UoC
+                        Wrong unit? Start again with a new UoC
                     </button>
                 </div>
 
@@ -719,6 +750,10 @@ export default function Build() {
     const [buildError, setBuildError] = useState(null);
     const [assessmentText, setAssessmentText] = useState('');
     const [mappingText, setMappingText] = useState('');
+    const [workbookResult, setWorkbookResult] = useState(null);   // { file_base64, filename }
+    const [validationResult, setValidationResult] = useState(null); // { file_base64, filename }
+    const [workbookError, setWorkbookError] = useState(null);
+    const [validationError, setValidationError] = useState(null);
 
     const buildCohortProfile = (ci) => {
         const learnerLabel = LEARNER_OPTIONS.find(o => o.value === ci.learner)?.label || ci.learner;
@@ -1040,6 +1075,29 @@ ${mText}`;
             setMappingText(mapText);
             setBuildProgress(100);
 
+            // ── Generate compliance documents ──────────────────────────────
+            const mappingData = extractMappingData(parsed, unitInfo, cohortInfo, sections);
+
+            // Run both in parallel, don't block on errors
+            const [wbRes, vrRes] = await Promise.allSettled([
+                base44.functions.invoke('generateMappingWorkbook', { mappingData }),
+                base44.functions.invoke('generateValidationRecord', { mappingData }),
+            ]);
+
+            if (wbRes.status === 'fulfilled' && wbRes.value?.data?.file_base64) {
+                setWorkbookResult(wbRes.value.data);
+                setWorkbookError(null);
+            } else {
+                setWorkbookError('Mapping workbook could not be generated. Try downloading the assessment first, then rebuild.');
+            }
+
+            if (vrRes.status === 'fulfilled' && vrRes.value?.data?.file_base64) {
+                setValidationResult(vrRes.value.data);
+                setValidationError(null);
+            } else {
+                setValidationError('Validation record could not be generated. Try downloading the assessment first, then rebuild.');
+            }
+
         } catch (e) {
             setBuildError('One of the build steps timed out or failed. Please try again — each step is smaller now and should complete successfully.');
         } finally {
@@ -1067,6 +1125,10 @@ ${mText}`;
         setActiveSections([]);
         setAssessmentText('');
         setMappingText('');
+        setWorkbookResult(null);
+        setValidationResult(null);
+        setWorkbookError(null);
+        setValidationError(null);
         setBuilding(false);
     };
 
@@ -1100,6 +1162,10 @@ ${mText}`;
                     cohortInfo={cohortInfo}
                     assessmentText={assessmentText}
                     mappingText={mappingText}
+                    workbookResult={workbookResult}
+                    validationResult={validationResult}
+                    workbookError={workbookError}
+                    validationError={validationError}
                     onBack={() => setScreen(2)}
                     onReset={handleReset}
                     onSave={handleSave}
