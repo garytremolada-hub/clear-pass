@@ -327,7 +327,7 @@ function Screen1({ onConfirm }) {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
                             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                         </svg>
-                        <p style={{ color: '#6b7280', fontSize: '12px', lineHeight: 1.6, margin: 0 }}>
+                        <p style={{ color: '#6b7280', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
                             For best results, download your UoC from{' '}
                             <a href="https://training.gov.au" target="_blank" rel="noopener noreferrer" style={{ color: '#c9a84c', textDecoration: 'underline' }}>training.gov.au</a>
                             {' '}— this gives you the most current version in a readable format.
