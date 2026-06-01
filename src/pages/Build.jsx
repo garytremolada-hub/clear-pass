@@ -1127,14 +1127,20 @@ ${mText}`;
 
     const handleSave = async () => {
         if (!unitInfo || !assessmentText) return;
-        await base44.entities.WorkLibraryItem.create({
-            title: `${unitInfo.code} — ${unitInfo.title}`,
-            task_type: 'build',
-            unit_code: unitInfo.code,
-            unit_title: unitInfo.title,
-            output_text: assessmentText,
-        });
-        navigate('/library');
+        try {
+            await base44.entities.WorkLibraryItem.create({
+                title: `${unitInfo.code} — ${unitInfo.title}`,
+                task_type: 'build',
+                unit_code: unitInfo.code,
+                unit_title: unitInfo.title,
+                aqf_level: cohortInfo?.band || '',
+                output_text: assessmentText,
+            });
+            navigate('/library');
+        } catch (error) {
+            console.error('Save error:', error);
+            alert('Failed to save to library. Please try again.');
+        }
     };
 
     const handleReset = () => {

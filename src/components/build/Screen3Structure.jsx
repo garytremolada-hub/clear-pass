@@ -1,9 +1,34 @@
 import { useState } from 'react';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, AlertCircle } from 'lucide-react';
 
+// ── Inlined: HelpIcon ─────────────────────────────────────────────────────────
+function HelpIcon({ url, heading, description }) {
+    const [helpOpen, setHelpOpen] = useState(false);
+    return (
+        <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: '6px' }}>
+            <button type="button" onClick={() => setHelpOpen(o => !o)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+            </button>
+            {helpOpen && (
+                <div style={{ position: 'absolute', top: '24px', left: '0', zIndex: 50, backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', width: '260px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                        <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 500 }}>{heading}</p>
+                        <button type="button" onClick={() => setHelpOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '16px', color: '#9ca3af', lineHeight: 1 }}>×</button>
+                    </div>
+                    <p style={{ color: '#6b7280', fontSize: '12px', lineHeight: 1.5, marginBottom: '8px' }}>{description}</p>
+                    {url && <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#c9a84c', fontSize: '12px', textDecoration: 'underline' }}>Open {heading} →</a>}
+                </div>
+            )}
+        </span>
+    );
+}
+
+// ── Progress component ────────────────────────────────────────────────────────
 const BP_STEPS = ['Upload UoC', 'Learners', 'Review', 'Done'];
-
-function BuildProgress({ step }) {
+function BuildProgress({ step, contextNote }) {
     return (
         <div style={{ marginBottom: '28px' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
@@ -34,159 +59,123 @@ function BuildProgress({ step }) {
                     );
                 })}
             </div>
+            {contextNote && <p style={{ color: '#6b7280', fontSize: '13px', lineHeight: 1.5 }}>{contextNote}</p>}
         </div>
     );
 }
 
 export default function Screen3Structure({ unitInfo, cohortInfo, structureProposal, onBack, onBuild }) {
-    const required = structureProposal?.required || [];
-    const optional = structureProposal?.optional || [];
-
-    // Track which optional sections are toggled on
-    const [enabledOptional, setEnabledOptional] = useState({});
-    // Track format selections per section
-    const [formats, setFormats] = useState(() => {
-        const init = {};
-        (structureProposal?.required || []).forEach(s => { if (s.format) init[s.id] = s.format; });
-        return init;
+    const [selectedSections, setSelectedSections] = useState(() => {
+        const required = structureProposal?.required || [];
+        return required.map(s => s.id);
     });
 
-    const toggleOptional = (id) => setEnabledOptional(prev => ({ ...prev, [id]: !prev[id] }));
-    const setFormat = (id, fmt) => setFormats(prev => ({ ...prev, [id]: fmt }));
+    const toggleSection = (id) => {
+        setSelectedSections(prev =>
+            prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+        );
+    };
 
-    const activeSections = [
-        ...required.map(s => ({ ...s, format: formats[s.id] || s.format })),
-        ...optional.filter(s => enabledOptional[s.id]).map(s => ({ ...s })),
-    ];
+    const handleBuild = () => {
+        const sections = (structureProposal?.required || []).filter(s => selectedSections.includes(s.id))
+            .concat((structureProposal?.optional || []).filter(s => selectedSections.includes(s.id)));
+        onBuild(sections);
+    };
 
-    const handleBuild = () => onBuild(activeSections);
+    const requiredSections = structureProposal?.required || [];
+    const optionalSections = structureProposal?.optional || [];
 
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '540px', margin: '0 auto', padding: '32px 24px' }}>
-                <BuildProgress step={3} />
+            <div style={{ maxWidth: '640px', margin: '0 auto', padding: '32px 24px' }}>
+                <BuildProgress step={3} contextNote="Review your assessment structure — takes 2-3 minutes to build." />
 
-                <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '6px' }}>
-                    Review your assessment structure
+                <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
+                    Your assessment structure
                 </h2>
-                <p style={{ color: '#6b7280', fontSize: '13px', marginBottom: '24px' }}>
-                    Based on {unitInfo?.code} and your learner profile, we recommend these sections.
+                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
+                    Based on {unitInfo.code}, we recommend the following structure:
                 </p>
 
                 {/* Required sections */}
-                {required.length > 0 && (
-                    <div style={{ marginBottom: '24px' }}>
-                        <p style={{ color: '#0d2444', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>
-                            Required sections
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            {required.map(section => (
-                                <div key={section.id} style={{
-                                    border: '1px solid #22c55e',
-                                    borderRadius: '10px',
-                                    padding: '14px 16px',
-                                    backgroundColor: '#f0fdf4',
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                                        <CheckCircle style={{ color: '#22c55e', width: '18px', height: '18px', flexShrink: 0, marginTop: '1px' }} />
-                                        <div style={{ flex: 1 }}>
-                                            <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, marginBottom: '2px' }}>
-                                                {section.name}
-                                            </p>
-                                            <p style={{ color: '#6b7280', fontSize: '12px', marginBottom: section.uocRequirement ? '6px' : 0 }}>
-                                                {section.description}
-                                            </p>
-                                            {section.uocRequirement && (
-                                                <p style={{ color: '#166534', fontSize: '11px', fontStyle: 'italic' }}>
-                                                    {section.uocRequirement}
-                                                </p>
-                                            )}
-                                            {/* Format selector */}
-                                            {section.formatOptions && !section.formatLocked && (
-                                                <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
-                                                    {section.formatOptions.map(fmt => (
-                                                        <button
-                                                            key={fmt}
-                                                            onClick={() => setFormat(section.id, fmt)}
-                                                            style={{
-                                                                padding: '3px 10px',
-                                                                borderRadius: '4px',
-                                                                fontSize: '12px',
-                                                                border: `1px solid ${(formats[section.id] || section.format) === fmt ? '#0d2444' : '#d1d5db'}`,
-                                                                backgroundColor: (formats[section.id] || section.format) === fmt ? '#0d2444' : 'transparent',
-                                                                color: (formats[section.id] || section.format) === fmt ? '#ffffff' : '#6b7280',
-                                                                cursor: 'pointer',
-                                                            }}
-                                                        >
-                                                            {fmt}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                            {section.formatNote && (
-                                                <p style={{ color: '#6b7280', fontSize: '11px', fontStyle: 'italic', marginTop: '4px' }}>
-                                                    {section.formatNote}
-                                                </p>
-                                            )}
-                                        </div>
+                <div style={{ marginBottom: '24px' }}>
+                    <h3 style={{ color: '#0d2444', fontSize: '16px', fontWeight: 500, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <CheckCircle style={{ color: '#22c55e', width: '18px', height: '18px' }} />
+                        Required sections
+                        <HelpIcon
+                            url="https://training.gov.au/Training/Details/help"
+                            heading="Required sections"
+                            description="These sections are mandatory based on your UoC requirements. They cover all Knowledge Evidence, Performance Evidence, and Performance Criteria."
+                        />
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {requiredSections.map(section => (
+                            <label key={section.id} style={{
+                                display: 'flex', alignItems: 'flex-start', gap: '12px',
+                                padding: '14px 16px', border: '1px solid #e5e7eb',
+                                borderRadius: '8px', cursor: 'pointer',
+                                backgroundColor: selectedSections.includes(section.id) ? '#f0f7ff' : '#ffffff',
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    checked={selectedSections.includes(section.id)}
+                                    onChange={() => toggleSection(section.id)}
+                                    style={{ marginTop: '2px', accentColor: '#c9a84c' }}
+                                />
+                                <div style={{ flex: 1 }}>
+                                    <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>{section.name}</p>
+                                    <p style={{ color: '#6b7280', fontSize: '12px', marginBottom: '6px' }}>{section.description}</p>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <p style={{ color: '#0d2444', fontSize: '11px', fontWeight: 500 }}>Why required:</p>
+                                        <p style={{ color: '#6b7280', fontSize: '11px', fontStyle: 'italic' }}>{section.justification}</p>
+                                        <p style={{ color: '#0d2444', fontSize: '11px', fontWeight: 500 }}>UoC requirement:</p>
+                                        <p style={{ color: '#6b7280', fontSize: '11px', fontStyle: 'italic' }}>{section.uocRequirement}</p>
                                     </div>
                                 </div>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Optional sections */}
+                {optionalSections.length > 0 && (
+                    <div style={{ marginBottom: '24px' }}>
+                        <h3 style={{ color: '#0d2444', fontSize: '16px', fontWeight: 500, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <AlertCircle style={{ color: '#c9a84c', width: '18px', height: '18px' }} />
+                            Optional sections
+                            <HelpIcon
+                                url="https://training.gov.au/Training/Details/help"
+                                heading="Optional sections"
+                                description="These sections are not mandatory but may be useful for your specific cohort or delivery mode. Select any that apply to your learners."
+                            />
+                        </h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {optionalSections.map(section => (
+                                <label key={section.id} style={{
+                                    display: 'flex', alignItems: 'flex-start', gap: '12px',
+                                    padding: '14px 16px', border: '1px solid #e5e7eb',
+                                    borderRadius: '8px', cursor: 'pointer',
+                                    backgroundColor: selectedSections.includes(section.id) ? '#f0f7ff' : '#ffffff',
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedSections.includes(section.id)}
+                                        onChange={() => toggleSection(section.id)}
+                                        style={{ marginTop: '2px', accentColor: '#c9a84c' }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                        <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>{section.name}</p>
+                                        <p style={{ color: '#6b7280', fontSize: '12px' }}>{section.description}</p>
+                                        <p style={{ color: '#6b7280', fontSize: '11px', fontStyle: 'italic', marginTop: '6px' }}>Reason: {section.reason}</p>
+                                    </div>
+                                </label>
                             ))}
                         </div>
                     </div>
                 )}
 
-                {/* Optional sections */}
-                {optional.length > 0 && (
-                    <div style={{ marginBottom: '24px' }}>
-                        <p style={{ color: '#0d2444', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>
-                            Optional sections
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            {optional.map(section => {
-                                const enabled = !!enabledOptional[section.id];
-                                return (
-                                    <div key={section.id} style={{
-                                        border: `1px solid ${enabled ? '#c9a84c' : '#e5e7eb'}`,
-                                        borderRadius: '10px',
-                                        padding: '14px 16px',
-                                        backgroundColor: enabled ? '#fffbeb' : '#f9fafb',
-                                        cursor: 'pointer',
-                                    }} onClick={() => toggleOptional(section.id)}>
-                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                                            <div style={{
-                                                width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0, marginTop: '1px',
-                                                border: `2px solid ${enabled ? '#c9a84c' : '#d1d5db'}`,
-                                                backgroundColor: enabled ? '#c9a84c' : 'transparent',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            }}>
-                                                {enabled && <span style={{ color: '#0d2444', fontSize: '10px', fontWeight: 700 }}>✓</span>}
-                                            </div>
-                                            <div>
-                                                <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, marginBottom: '2px' }}>
-                                                    {section.name}
-                                                </p>
-                                                <p style={{ color: '#6b7280', fontSize: '12px' }}>
-                                                    {section.reason || section.description}
-                                                </p>
-                                                {section.addedNote && enabled && (
-                                                    <div style={{ marginTop: '6px' }}>
-                                                        {section.addedNote.map((note, i) => (
-                                                            <p key={i} style={{ color: '#6b7280', fontSize: '11px', fontStyle: i === 0 ? 'normal' : 'italic' }}>{note}</p>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-
                 {/* Buttons */}
-                <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                     <button
                         onClick={onBack}
                         style={{ flex: 1, height: '44px', border: '1px solid #0d2444', borderRadius: '8px', backgroundColor: 'transparent', color: '#0d2444', fontSize: '14px', cursor: 'pointer' }}
@@ -196,13 +185,28 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                     <button
                         onClick={handleBuild}
                         style={{
-                            flex: 2, height: '44px', borderRadius: '8px',
+                            flex: 1, height: '44px', borderRadius: '8px',
                             backgroundColor: '#c9a84c', color: '#0d2444',
-                            fontSize: '14px', fontWeight: 500, border: 'none', cursor: 'pointer',
+                            fontSize: '14px', fontWeight: 500,
+                            border: 'none', cursor: 'pointer',
+                            transition: 'all 0.15s',
                         }}
                     >
                         Build assessment →
                     </button>
+                </div>
+
+                {/* Info note */}
+                <div style={{
+                    backgroundColor: '#f9fafb',
+                    borderLeft: '3px solid #c9a84c',
+                    borderRadius: '4px',
+                    padding: '10px 14px',
+                    marginTop: '16px',
+                }}>
+                    <p style={{ color: '#6b7280', fontSize: '12px', lineHeight: 1.6 }}>
+                        You can adjust the reading level after downloading if needed. All content is AI-generated and should be reviewed with a qualified assessor.
+                    </p>
                 </div>
             </div>
         </div>
