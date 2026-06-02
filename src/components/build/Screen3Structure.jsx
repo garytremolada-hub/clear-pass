@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CheckCircle, AlertCircle } from 'lucide-react';
 
 const BP_STEPS = ['Upload UoC', 'Learners', 'Review', 'Done'];
+
 function BuildProgress({ step, contextNote }) {
     return (
         <div style={{ marginBottom: '28px' }}>

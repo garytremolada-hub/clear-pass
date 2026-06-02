@@ -212,6 +212,44 @@ function qNumsForFS(fsRef, taskType, mappingIndex) {
     return '';
 }
 
+// ── getCellContent: look up task item refs for a given PC ref and task slot ───
+function getCellContent(pcRef, taskType, mappingIndex) {
+    if (!mappingIndex) return '';
+    const results = [];
+    if (taskType === 'task1' && mappingIndex.knowledgeQuestions) {
+        mappingIndex.knowledgeQuestions
+            .filter(q => q.pc && q.pc.includes(pcRef))
+            .forEach(q => results.push(String(q.num)));
+    }
+    if (taskType === 'task2' && mappingIndex.observationItems) {
+        mappingIndex.observationItems
+            .filter(item => item.pc && item.pc.includes(pcRef))
+            .forEach(item => results.push(String(item.num)));
+    }
+    if (taskType === 'task3' && mappingIndex.projectSteps) {
+        mappingIndex.projectSteps
+            .filter(s => s.pc && s.pc.includes(pcRef))
+            .forEach(s => results.push(String(s.num)));
+    }
+    if (taskType === 'task4' && mappingIndex.verbalQuestions) {
+        mappingIndex.verbalQuestions
+            .filter(v => v.pc && v.pc.includes(pcRef))
+            .forEach(v => results.push(String(v.num)));
+    }
+    return results.join(', ');
+}
+
+// ── Group PCs by element number (works for any UoC) ───────────────────────────
+function groupPCsByElement(allPCs) {
+    const groups = {};
+    allPCs.forEach(pc => {
+        const elementNum = String(pc.ref || '').split('.')[0] || '1';
+        if (!groups[elementNum]) groups[elementNum] = [];
+        groups[elementNum].push(pc);
+    });
+    return groups;
+}
+
 // Determine task type from section id
 function taskTypeFromId(id) {
     if (id === 'knowledge_questions') return 'knowledge';
@@ -349,56 +387,38 @@ async function buildCompetencyMappingDoc(md) {
         ];
         const pcRows = [new TableRow({ children: pcHeaderCells })];
 
-        // BUG 2 FIX: group PCs by element prefix if elements array has no pcs
-        // BUG 3 FIX: show only pc.ref (e.g. "1.1"), never prepend row counter
-        const hasElementPcs = elements.some(el => (el.pcs || []).length > 0);
-        if (hasElementPcs) {
-            elements.forEach(el => {
-                // BUG 2 FIX: use el.title directly, not hardcoded "Element 1"
-                pcRows.push(elementRow(`${el.number}. ${el.title}`, totalCols));
-                (el.pcs || []).forEach((pc, pcI) => {
-                    const alt = pcI % 2 !== 0;
-                    pcRows.push(new TableRow({
-                        children: [
-                            dataCell('', elemW, alt),
-                            // BUG 3 FIX: pc.ref only, no row index prefix
-                            dataCell(`${pc.ref}  ${pc.text}`, pcTextW, alt),
-                            ...sections.map(s => {
-                                const tt = taskTypeFromId(s.id);
-                                const val = qNumsForPC(pc.ref, tt, mappingIndex || {});
-                                return dataCell(val, taskColW, alt);
-                            }),
-                        ],
-                    }));
-                });
+        // Flatten all PCs from elements, then group by element number from PC ref
+        const allPCs = elements.flatMap(el =>
+            (el.pcs || []).map(pc => ({ ...pc, elTitle: el.title }))
+        );
+
+        // BUG 2 FIX: group by first digit of pc.ref so each element gets its own header
+        const groups = groupPCsByElement(allPCs);
+        Object.keys(groups).sort((a, b) => Number(a) - Number(b)).forEach(elementNum => {
+            const pcsInGroup = groups[elementNum];
+            // Use the elTitle from the first PC in the group, or fall back to generic
+            const elTitle = pcsInGroup[0]?.elTitle || `Element ${elementNum}`;
+            pcRows.push(elementRow(`${elementNum}. ${elTitle}`, totalCols));
+
+            pcsInGroup.forEach((pc, pcI) => {
+                const alt = pcI % 2 !== 0;
+                // BUG 1 FIX: use getCellContent with task slot keys
+                // BUG 3 FIX: show pc.ref only — no row index prefix
+                const task1 = getCellContent(pc.ref, 'task1', mappingIndex || {});
+                const task2 = getCellContent(pc.ref, 'task2', mappingIndex || {});
+                const task3 = getCellContent(pc.ref, 'task3', mappingIndex || {});
+                const task4 = getCellContent(pc.ref, 'task4', mappingIndex || {});
+                const taskVals = [task1, task2, task3, task4];
+
+                pcRows.push(new TableRow({
+                    children: [
+                        dataCell('', elemW, alt),
+                        dataCell(`${pc.ref}  ${pc.text}`, pcTextW, alt),
+                        ...sections.map((s, si) => dataCell(taskVals[si] || '', taskColW, alt)),
+                    ],
+                }));
             });
-        } else {
-            // Fallback: group by numeric prefix from pc_items flat list
-            const allPCs = elements.flatMap(el => (el.pcs || []).map(pc => ({ ...pc, elNum: el.number, elTitle: el.title })));
-            const byElement = {};
-            allPCs.forEach(pc => {
-                const prefix = String(pc.ref || '').split('.')[0] || '1';
-                if (!byElement[prefix]) byElement[prefix] = { number: prefix, title: `Element ${prefix}`, pcs: [] };
-                byElement[prefix].pcs.push(pc);
-            });
-            Object.values(byElement).forEach(el => {
-                pcRows.push(elementRow(`${el.number}. ${el.title}`, totalCols));
-                el.pcs.forEach((pc, pcI) => {
-                    const alt = pcI % 2 !== 0;
-                    pcRows.push(new TableRow({
-                        children: [
-                            dataCell('', elemW, alt),
-                            dataCell(`${pc.ref}  ${pc.text}`, pcTextW, alt),
-                            ...sections.map(s => {
-                                const tt = taskTypeFromId(s.id);
-                                const val = qNumsForPC(pc.ref, tt, mappingIndex || {});
-                                return dataCell(val, taskColW, alt);
-                            }),
-                        ],
-                    }));
-                });
-            });
-        }
+        });
 
         children.push(new Table({
             width: { size: TABLE_WIDTH, type: WidthType.DXA },

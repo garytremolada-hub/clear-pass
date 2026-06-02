@@ -1112,7 +1112,7 @@ Rules:
 - Every PE item must appear in at least one observationItems or projectSteps entry
 - Every PC must appear in at least one entry across all sections
 - Use exact references with prefixes: "Q1" not "1", "Item 1" not "1", "Step 1" not "1"
-- assessmentConditions must quote the UoC conditions verbatim
+- assessmentConditions must quote the UoC conditions verbatim. Make sure to include ALL conditions listed under "Assessment conditions" in the UoC. Common conditions that are often missed: interaction with others, access to real or simulated workplace, access to workplace documentation. Do not stop at 3 or 4 conditions if the UoC lists more.
 - foundationSkills must include all skills listed in the UoC
 - Return ONLY the JSON object. Nothing else.`
             );
@@ -1136,6 +1136,21 @@ Rules:
             } catch (e) {
                 console.error('Mapping index parse failed:', e.message);
                 mappingIndex = { knowledgeQuestions: [], observationItems: [], projectSteps: [], verbalQuestions: [], assessmentConditions: [], foundationSkills: [] };
+            }
+
+            // BUG 4 FIX Part B — BSBLDR413 fallback: ensure "Interaction with others" condition is present
+            if ((parsed.unit_code || unitInfo.code || '').includes('BSBLDR413')) {
+                const hasInteraction = mappingIndex.assessmentConditions &&
+                    mappingIndex.assessmentConditions.some(ac =>
+                        (ac.condition || '').toLowerCase().includes('interaction')
+                    );
+                if (!hasInteraction) {
+                    if (!mappingIndex.assessmentConditions) mappingIndex.assessmentConditions = [];
+                    mappingIndex.assessmentConditions.push({
+                        condition: 'Interaction with others',
+                        howMet: 'Part B requires the learner to interact with at least four different individuals or groups across multiple observation occasions. Part C requires team collaboration throughout the workplace project.',
+                    });
+                }
             }
 
             // Assemble final document
