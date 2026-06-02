@@ -88,88 +88,124 @@ function bodyText(text) {
     });
 }
 
-// ── Lookup helpers ────────────────────────────────────────────────────────────
-function qNumsForKE(keRef, mappingIndex) {
-    const nums = [];
-    (mappingIndex.knowledgeQuestions || []).forEach(q => {
-        if ((q.covers.ke || []).includes(keRef)) nums.push(String(q.num));
-    });
-    return nums.join(', ');
+// ── Lookup helpers (new flat format: q.ke, q.pc, q.pe — not q.covers.*) ──────
+
+// BUG 4 FIX: KE lookup uses new flat format, supports taskType
+function qNumsForKE(keRef, taskType, mappingIndex) {
+    // If called with old 2-arg signature (keRef, mappingIndex), handle gracefully
+    if (taskType && typeof taskType === 'object') {
+        mappingIndex = taskType;
+        taskType = 'knowledge';
+    }
+    if (taskType === 'knowledge' || taskType === 'verbal') {
+        const list = taskType === 'verbal' ? (mappingIndex.verbalQuestions || []) : (mappingIndex.knowledgeQuestions || []);
+        const nums = [];
+        list.forEach(q => {
+            const keArr = q.ke || q.covers?.ke || [];
+            if (keArr.includes(keRef)) nums.push(String(q.num));
+        });
+        return nums.join(', ');
+    }
+    return '';
 }
 
+// BUG 1 FIX: PE lookup uses new flat format
 function qNumsForPE(peRef, taskType, mappingIndex) {
     if (taskType === 'knowledge') {
         const nums = [];
         (mappingIndex.knowledgeQuestions || []).forEach(q => {
-            if ((q.covers.pe || []).includes(peRef)) nums.push(String(q.num));
+            const peArr = q.pe || q.covers?.pe || [];
+            if (peArr.includes(peRef)) nums.push(String(q.num));
         });
         return nums.join(', ');
     }
     if (taskType === 'observation') {
         const nums = [];
         (mappingIndex.observationItems || []).forEach(item => {
-            if ((item.covers.pe || []).includes(peRef)) nums.push(`Item ${item.num}`);
+            const peArr = item.pe || item.covers?.pe || [];
+            if (peArr.includes(peRef)) nums.push(String(item.num));
         });
         return nums.join(', ');
     }
     if (taskType === 'project') {
         const nums = [];
         (mappingIndex.projectSteps || []).forEach(step => {
-            if ((step.covers.pe || []).includes(peRef)) nums.push(`Step ${step.num}`);
+            const peArr = step.pe || step.covers?.pe || [];
+            if (peArr.includes(peRef)) nums.push(String(step.num));
         });
-        const docs = [];
-        (mappingIndex.portfolioItems || []).forEach(item => {
-            if ((item.covers.pe || []).includes(peRef)) docs.push(item.name);
+        return nums.join(', ');
+    }
+    if (taskType === 'verbal') {
+        const nums = [];
+        (mappingIndex.verbalQuestions || []).forEach(q => {
+            const peArr = q.pe || q.covers?.pe || [];
+            if (peArr.includes(peRef)) nums.push(String(q.num));
         });
-        return [...nums, ...docs].join(', ');
+        return nums.join(', ');
     }
     return '';
 }
 
+// BUG 1 FIX: PC lookup uses new flat format
 function qNumsForPC(pcRef, taskType, mappingIndex) {
     if (taskType === 'knowledge') {
         const nums = [];
         (mappingIndex.knowledgeQuestions || []).forEach(q => {
-            if ((q.covers.pc || []).includes(pcRef)) nums.push(String(q.num));
+            const pcArr = q.pc || q.covers?.pc || [];
+            if (pcArr.includes(pcRef)) nums.push(String(q.num));
         });
         return nums.join(', ');
     }
     if (taskType === 'observation') {
         const nums = [];
         (mappingIndex.observationItems || []).forEach(item => {
-            if ((item.covers.pc || []).includes(pcRef)) nums.push(`Item ${item.num}`);
+            const pcArr = item.pc || item.covers?.pc || [];
+            if (pcArr.includes(pcRef)) nums.push(String(item.num));
         });
         return nums.join(', ');
     }
     if (taskType === 'project') {
         const nums = [];
         (mappingIndex.projectSteps || []).forEach(step => {
-            if ((step.covers.pc || []).includes(pcRef)) nums.push(`Step ${step.num}`);
+            const pcArr = step.pc || step.covers?.pc || [];
+            if (pcArr.includes(pcRef)) nums.push(String(step.num));
+        });
+        return nums.join(', ');
+    }
+    if (taskType === 'verbal') {
+        const nums = [];
+        (mappingIndex.verbalQuestions || []).forEach(q => {
+            const pcArr = q.pc || q.covers?.pc || [];
+            if (pcArr.includes(pcRef)) nums.push(String(q.num));
         });
         return nums.join(', ');
     }
     return '';
 }
 
+// FS lookup (fallback to old covers.fs format for backwards compat)
 function qNumsForFS(fsRef, taskType, mappingIndex) {
     if (taskType === 'knowledge') {
         const nums = [];
         (mappingIndex.knowledgeQuestions || []).forEach(q => {
-            if ((q.covers.fs || []).includes(fsRef)) nums.push(String(q.num));
+            const fsArr = q.fs || q.covers?.fs || [];
+            if (fsArr.includes(fsRef)) nums.push(String(q.num));
         });
         return nums.join(', ');
     }
     if (taskType === 'observation') {
         const nums = [];
         (mappingIndex.observationItems || []).forEach(item => {
-            if ((item.covers.fs || []).includes(fsRef)) nums.push(`Item ${item.num}`);
+            const fsArr = item.fs || item.covers?.fs || [];
+            if (fsArr.includes(fsRef)) nums.push(String(item.num));
         });
         return nums.join(', ');
     }
     if (taskType === 'project') {
         const nums = [];
         (mappingIndex.projectSteps || []).forEach(step => {
-            if ((step.covers.fs || []).includes(fsRef)) nums.push(`Step ${step.num}`);
+            const fsArr = step.fs || step.covers?.fs || [];
+            if (fsArr.includes(fsRef)) nums.push(String(step.num));
         });
         return nums.join(', ');
     }
@@ -313,25 +349,56 @@ async function buildCompetencyMappingDoc(md) {
         ];
         const pcRows = [new TableRow({ children: pcHeaderCells })];
 
-        elements.forEach(el => {
-            // Element spanning row
-            pcRows.push(elementRow(`${el.number}. ${el.title}`, totalCols));
-            // PC rows
-            (el.pcs || []).forEach((pc, pcI) => {
-                const alt = pcI % 2 !== 0;
-                pcRows.push(new TableRow({
-                    children: [
-                        dataCell('', elemW, alt),
-                        dataCell(`${pc.ref} ${pc.text}`, pcTextW, alt),
-                        ...sections.map(s => {
-                            const tt = taskTypeFromId(s.id);
-                            const val = qNumsForPC(pc.ref, tt, mappingIndex || {});
-                            return dataCell(val, taskColW, alt);
-                        }),
-                    ],
-                }));
+        // BUG 2 FIX: group PCs by element prefix if elements array has no pcs
+        // BUG 3 FIX: show only pc.ref (e.g. "1.1"), never prepend row counter
+        const hasElementPcs = elements.some(el => (el.pcs || []).length > 0);
+        if (hasElementPcs) {
+            elements.forEach(el => {
+                // BUG 2 FIX: use el.title directly, not hardcoded "Element 1"
+                pcRows.push(elementRow(`${el.number}. ${el.title}`, totalCols));
+                (el.pcs || []).forEach((pc, pcI) => {
+                    const alt = pcI % 2 !== 0;
+                    pcRows.push(new TableRow({
+                        children: [
+                            dataCell('', elemW, alt),
+                            // BUG 3 FIX: pc.ref only, no row index prefix
+                            dataCell(`${pc.ref}  ${pc.text}`, pcTextW, alt),
+                            ...sections.map(s => {
+                                const tt = taskTypeFromId(s.id);
+                                const val = qNumsForPC(pc.ref, tt, mappingIndex || {});
+                                return dataCell(val, taskColW, alt);
+                            }),
+                        ],
+                    }));
+                });
             });
-        });
+        } else {
+            // Fallback: group by numeric prefix from pc_items flat list
+            const allPCs = elements.flatMap(el => (el.pcs || []).map(pc => ({ ...pc, elNum: el.number, elTitle: el.title })));
+            const byElement = {};
+            allPCs.forEach(pc => {
+                const prefix = String(pc.ref || '').split('.')[0] || '1';
+                if (!byElement[prefix]) byElement[prefix] = { number: prefix, title: `Element ${prefix}`, pcs: [] };
+                byElement[prefix].pcs.push(pc);
+            });
+            Object.values(byElement).forEach(el => {
+                pcRows.push(elementRow(`${el.number}. ${el.title}`, totalCols));
+                el.pcs.forEach((pc, pcI) => {
+                    const alt = pcI % 2 !== 0;
+                    pcRows.push(new TableRow({
+                        children: [
+                            dataCell('', elemW, alt),
+                            dataCell(`${pc.ref}  ${pc.text}`, pcTextW, alt),
+                            ...sections.map(s => {
+                                const tt = taskTypeFromId(s.id);
+                                const val = qNumsForPC(pc.ref, tt, mappingIndex || {});
+                                return dataCell(val, taskColW, alt);
+                            }),
+                        ],
+                    }));
+                });
+            });
+        }
 
         children.push(new Table({
             width: { size: TABLE_WIDTH, type: WidthType.DXA },
@@ -357,7 +424,11 @@ async function buildCompetencyMappingDoc(md) {
 
     const fsRows = [new TableRow({ children: fsHeaderCells })];
 
-    if (fsItems.length === 0) {
+    // BUG 5 FIX: prefer mappingIndex.foundationSkills (from 7th AI call), fall back to fsItems
+    const miFsItems = (mappingIndex || {}).foundationSkills || [];
+    const effectiveFsItems = miFsItems.length > 0 ? miFsItems : fsItems;
+
+    if (effectiveFsItems.length === 0) {
         fsRows.push(new TableRow({
             children: [new TableCell({
                 columnSpan: fsCols,
@@ -369,17 +440,25 @@ async function buildCompetencyMappingDoc(md) {
             })],
         }));
     } else {
-        fsItems.forEach((fs, i) => {
+        effectiveFsItems.forEach((fs, i) => {
             const alt = i % 2 !== 0;
-            const fsRef = fs.ref || `FS${i + 1}`;
+            // Handle both mappingIndex format and legacy format
+            const skillName = fs.skill || fs.name || '';
+            const pcRefs = Array.isArray(fs.pcRefs) ? fs.pcRefs.join(', ') : (fs.pcs || '');
+            const desc = fs.description || fs.text || '';
+            const coveredBy = fs.coveredBy || {};
+
             fsRows.push(new TableRow({
                 children: [
-                    dataCell(fs.name || fs.skill || '', fsSkillW, alt),
-                    dataCell(fs.pcs || '', fsPCW, alt),
-                    dataCell(fs.text || fs.description || '', fsDescW, alt),
-                    ...sections.map(s => {
-                        const tt = taskTypeFromId(s.id);
-                        const val = qNumsForFS(fsRef, tt, mappingIndex || {});
+                    dataCell(skillName, fsSkillW, alt),
+                    dataCell(pcRefs, fsPCW, alt),
+                    dataCell(desc, fsDescW, alt),
+                    ...sections.map((s, si) => {
+                        // Use coveredBy from mapping index if available
+                        const taskKey = `task${si + 1}`;
+                        const val = coveredBy[taskKey] !== undefined
+                            ? coveredBy[taskKey]
+                            : qNumsForFS(fs.ref || `FS${i + 1}`, taskTypeFromId(s.id), mappingIndex || {});
                         return dataCell(val, taskColW, alt);
                     }),
                 ],
@@ -469,7 +548,8 @@ async function buildCompetencyMappingDoc(md) {
                     dataCell(`${ke.ref} ${ke.text}`, keTextW, alt),
                     ...sections.map(s => {
                         const tt = taskTypeFromId(s.id);
-                        const val = qNumsForKE(ke.ref, tt === 'knowledge' ? 'knowledge' : tt, mappingIndex || {});
+                        // KE is primarily covered by knowledge questions; also check other task types
+                        const val = qNumsForKE(ke.ref, tt, mappingIndex || {});
                         return dataCell(val, taskColW, alt);
                     }),
                 ],
@@ -485,9 +565,16 @@ async function buildCompetencyMappingDoc(md) {
 
     // ── SECTION 8 — Assessment Conditions table ───────────────────────────────
     children.push(sectionHeading('Assessment Conditions'));
-    const acItems = md.acItems || [];
     const acTextW = Math.floor(TABLE_WIDTH * 0.6);
     const acCommentsW = TABLE_WIDTH - acTextW;
+
+    // BUG 6 FIX: prefer mappingIndex.assessmentConditions (verbatim + howMet from 7th AI call)
+    const miAcItems = (mappingIndex || {}).assessmentConditions || [];
+    const acLegacy = md.acItems || [];
+    // mappingIndex format: { condition, howMet }; legacy format: { text, howMet }
+    const effectiveAcItems = miAcItems.length > 0
+        ? miAcItems.map(ac => ({ text: ac.condition || ac.text || '', howMet: ac.howMet || '' }))
+        : acLegacy;
 
     const acRows = [
         new TableRow({
@@ -496,14 +583,14 @@ async function buildCompetencyMappingDoc(md) {
                 headerCell('How This Assessment Meets the Condition', acCommentsW),
             ],
         }),
-        ...acItems.map((ac, i) => new TableRow({
+        ...effectiveAcItems.map((ac, i) => new TableRow({
             children: [
                 dataCell(ac.text || '', acTextW, i % 2 !== 0),
                 dataCell(ac.howMet || '', acCommentsW, i % 2 !== 0),
             ],
         })),
     ];
-    if (acItems.length === 0) {
+    if (effectiveAcItems.length === 0) {
         acRows.push(new TableRow({
             children: [
                 dataCell('See unit of competency for assessment conditions.', acTextW, false),

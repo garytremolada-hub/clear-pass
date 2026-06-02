@@ -1,32 +1,6 @@
 import { useState } from 'react';
 import { CheckCircle, AlertCircle } from 'lucide-react';
 
-// ── Inlined: HelpIcon ─────────────────────────────────────────────────────────
-function HelpIcon({ url, heading, description }) {
-    const [helpOpen, setHelpOpen] = useState(false);
-    return (
-        <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: '6px' }}>
-            <button type="button" onClick={() => setHelpOpen(o => !o)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                </svg>
-            </button>
-            {helpOpen && (
-                <div style={{ position: 'absolute', top: '24px', left: '0', zIndex: 50, backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', width: '260px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-                        <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 500 }}>{heading}</p>
-                        <button type="button" onClick={() => setHelpOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '16px', color: '#9ca3af', lineHeight: 1 }}>×</button>
-                    </div>
-                    <p style={{ color: '#6b7280', fontSize: '12px', lineHeight: 1.5, marginBottom: '8px' }}>{description}</p>
-                    {url && <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#c9a84c', fontSize: '12px', textDecoration: 'underline' }}>Open {heading} →</a>}
-                </div>
-            )}
-        </span>
-    );
-}
-
-// ── Progress component ────────────────────────────────────────────────────────
 const BP_STEPS = ['Upload UoC', 'Learners', 'Review', 'Done'];
 function BuildProgress({ step, contextNote }) {
     return (
@@ -77,9 +51,9 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
     };
 
     const handleBuild = () => {
-        const sections = (structureProposal?.required || []).filter(s => selectedSections.includes(s.id))
-            .concat((structureProposal?.optional || []).filter(s => selectedSections.includes(s.id)));
-        onBuild(sections);
+        const required = (structureProposal?.required || []).filter(s => selectedSections.includes(s.id));
+        const optional = (structureProposal?.optional || []).filter(s => selectedSections.includes(s.id));
+        onBuild([...required, ...optional]);
     };
 
     const requiredSections = structureProposal?.required || [];
@@ -94,7 +68,7 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                     Your assessment structure
                 </h2>
                 <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
-                    Based on {unitInfo.code}, we recommend the following structure:
+                    Based on {unitInfo?.code}, we recommend the following structure:
                 </p>
 
                 {/* Required sections */}
@@ -102,11 +76,6 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                     <h3 style={{ color: '#0d2444', fontSize: '16px', fontWeight: 500, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <CheckCircle style={{ color: '#22c55e', width: '18px', height: '18px' }} />
                         Required sections
-                        <HelpIcon
-                            url="https://training.gov.au/Training/Details/help"
-                            heading="Required sections"
-                            description="These sections are mandatory based on your UoC requirements. They cover all Knowledge Evidence, Performance Evidence, and Performance Criteria."
-                        />
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {requiredSections.map(section => (
@@ -125,12 +94,12 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                                 <div style={{ flex: 1 }}>
                                     <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>{section.name}</p>
                                     <p style={{ color: '#6b7280', fontSize: '12px', marginBottom: '6px' }}>{section.description}</p>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        <p style={{ color: '#0d2444', fontSize: '11px', fontWeight: 500 }}>Why required:</p>
-                                        <p style={{ color: '#6b7280', fontSize: '11px', fontStyle: 'italic' }}>{section.justification}</p>
-                                        <p style={{ color: '#0d2444', fontSize: '11px', fontWeight: 500 }}>UoC requirement:</p>
-                                        <p style={{ color: '#6b7280', fontSize: '11px', fontStyle: 'italic' }}>{section.uocRequirement}</p>
-                                    </div>
+                                    {section.justification && (
+                                        <p style={{ color: '#6b7280', fontSize: '11px', fontStyle: 'italic' }}>Why required: {section.justification}</p>
+                                    )}
+                                    {section.uocRequirement && (
+                                        <p style={{ color: '#6b7280', fontSize: '11px', fontStyle: 'italic', marginTop: '4px' }}>{section.uocRequirement}</p>
+                                    )}
                                 </div>
                             </label>
                         ))}
@@ -143,11 +112,6 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                         <h3 style={{ color: '#0d2444', fontSize: '16px', fontWeight: 500, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <AlertCircle style={{ color: '#c9a84c', width: '18px', height: '18px' }} />
                             Optional sections
-                            <HelpIcon
-                                url="https://training.gov.au/Training/Details/help"
-                                heading="Optional sections"
-                                description="These sections are not mandatory but may be useful for your specific cohort or delivery mode. Select any that apply to your learners."
-                            />
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {optionalSections.map(section => (
@@ -166,7 +130,9 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                                     <div style={{ flex: 1 }}>
                                         <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>{section.name}</p>
                                         <p style={{ color: '#6b7280', fontSize: '12px' }}>{section.description}</p>
-                                        <p style={{ color: '#6b7280', fontSize: '11px', fontStyle: 'italic', marginTop: '6px' }}>Reason: {section.reason}</p>
+                                        {section.reason && (
+                                            <p style={{ color: '#6b7280', fontSize: '11px', fontStyle: 'italic', marginTop: '4px' }}>Reason: {section.reason}</p>
+                                        )}
                                     </div>
                                 </label>
                             ))}
@@ -180,7 +146,7 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                         onClick={onBack}
                         style={{ flex: 1, height: '44px', border: '1px solid #0d2444', borderRadius: '8px', backgroundColor: 'transparent', color: '#0d2444', fontSize: '14px', cursor: 'pointer' }}
                     >
-                        ← Back
+                        Back
                     </button>
                     <button
                         onClick={handleBuild}
@@ -189,23 +155,18 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                             backgroundColor: '#c9a84c', color: '#0d2444',
                             fontSize: '14px', fontWeight: 500,
                             border: 'none', cursor: 'pointer',
-                            transition: 'all 0.15s',
                         }}
                     >
-                        Build assessment →
+                        Build assessment
                     </button>
                 </div>
 
-                {/* Info note */}
                 <div style={{
-                    backgroundColor: '#f9fafb',
-                    borderLeft: '3px solid #c9a84c',
-                    borderRadius: '4px',
-                    padding: '10px 14px',
-                    marginTop: '16px',
+                    backgroundColor: '#f9fafb', borderLeft: '3px solid #c9a84c',
+                    borderRadius: '4px', padding: '10px 14px', marginTop: '16px',
                 }}>
                     <p style={{ color: '#6b7280', fontSize: '12px', lineHeight: 1.6 }}>
-                        You can adjust the reading level after downloading if needed. All content is AI-generated and should be reviewed with a qualified assessor.
+                        All content is AI-generated and should be reviewed with a qualified assessor.
                     </p>
                 </div>
             </div>

@@ -112,7 +112,7 @@ const BUILD_STAGES = [
     { pct: 50,  label: 'Building observation checklist...' },
     { pct: 65,  label: 'Writing project tasks...' },
     { pct: 80,  label: 'Creating marking guides...' },
-    { pct: 95,  label: 'Building mapping document...' },
+    { pct: 97,  label: 'Mapping requirements to questions...' },
     { pct: 100, label: 'Done ✓' },
 ];
 
@@ -1013,63 +1013,132 @@ Instructions:
 Output format: Markdown. Start with: # Assessor Marking Guide — ${unitInfo.code}`
             );
 
-            // CALL 6 — Mapping Index (question numbers per requirement)
-            setBuildProgress(95);
-            const mappingIndexRaw = await llmCall(
-                `You are an Australian VET compliance specialist. You have just seen the following assessment sections built for ${unitInfo.code}:
-
-KNOWLEDGE QUESTIONS (Part A): numbered Q1, Q2, Q3... as written above
-OBSERVATION CHECKLIST (Part B): items numbered Item 1, Item 2... as written above
-WORKPLACE PROJECT (Part C): steps numbered Step 1, Step 2... as written above
-
-KNOWLEDGE EVIDENCE ITEMS:
-${keList || '(see UoC)'}
-
-PERFORMANCE EVIDENCE ITEMS:
-${peList || '(see UoC)'}
-
-PERFORMANCE CRITERIA:
-${parsed.pc_items?.join('\n') || '(see UoC)'}
-
-Your task: produce a mapping index as JSON ONLY (no other text).
-For each knowledge question, observation item, and project step, record which KE items, PE items, and PC references it covers.
-Use the exact reference codes: KE1, KE2, PE1, PE2, 1.1, 1.2, 2.1 etc.
-
-Return this JSON structure:
-{
-  "knowledgeQuestions": [
-    { "num": 1, "covers": { "ke": ["KE1"], "pe": [], "pc": ["1.1", "1.2"] } },
-    { "num": 2, "covers": { "ke": ["KE2"], "pe": [], "pc": ["1.3"] } }
-  ],
-  "observationItems": [
-    { "num": 1, "covers": { "pe": ["PE1", "PE2"], "pc": ["1.1", "2.1"], "fs": [] } }
-  ],
-  "projectSteps": [
-    { "num": 1, "name": "step name", "covers": { "pe": ["PE1"], "pc": ["1.1"], "fs": [] } }
-  ],
-  "portfolioItems": [
-    { "name": "document name", "covers": { "pe": ["PE4"], "pc": [] } }
-  ]
-}
-
-Be thorough — every KE, PE, and PC must appear in at least one item's covers array.`
-            );
-
-            // Parse mapping index
-            let mappingIndex = {};
-            try {
-                const jsonStr = typeof mappingIndexRaw === 'string'
-                    ? mappingIndexRaw.replace(/```json|```/g, '').trim()
-                    : JSON.stringify(mappingIndexRaw);
-                mappingIndex = JSON.parse(jsonStr);
-            } catch {
-                mappingIndex = { knowledgeQuestions: [], observationItems: [], projectSteps: [], portfolioItems: [] };
-            }
-
-            // Assemble final document
+            // CALL 6 — Assemble final text refs for mapping index
             const kText = typeof knowledgeSection === 'string' ? knowledgeSection : JSON.stringify(knowledgeSection);
             const oText = typeof observationSection === 'string' ? observationSection : JSON.stringify(observationSection);
             const pText = typeof projectSection === 'string' ? projectSection : JSON.stringify(projectSection);
+
+            // CALL 7 — Dedicated mapping index (runs after all content is built)
+            setBuildProgress(97);
+            // Build a summary of what was produced in each part for the AI
+            const kSummary = kText.slice(0, 3000);
+            const oSummary = oText.slice(0, 2000);
+            const pSummary = pText.slice(0, 2000);
+
+            const mappingIndexRaw = await llmCall(
+                `You have just built an assessment for ${unitInfo.code} — ${unitInfo.title}.
+
+The assessment contains the following sections:
+
+PART A — KNOWLEDGE QUESTIONS (actual content):
+${kSummary}
+
+PART B — OBSERVATION CHECKLIST (actual content):
+${oSummary}
+
+PART C — WORKPLACE PROJECT (actual content):
+${pSummary}
+
+KNOWLEDGE EVIDENCE ITEMS FROM UoC:
+${keList || '(see UoC)'}
+
+PERFORMANCE EVIDENCE ITEMS FROM UoC:
+${peList || '(see UoC)'}
+
+PERFORMANCE CRITERIA FROM UoC:
+${parsed.pc_items?.join('\n') || '(see UoC)'}
+
+FULL UoC TEXT (for foundation skills and assessment conditions):
+${uoc.slice(0, 4000)}
+
+Now produce a mapping index as a JSON object.
+Return ONLY the JSON. No explanation. No markdown fences.
+Start your response with { and end with }
+
+The JSON must use this exact format with double quotes:
+
+{
+  "mappingIndex": {
+    "knowledgeQuestions": [
+      {
+        "num": "Q1",
+        "ke": ["KE1"],
+        "pc": ["1.1"],
+        "text": "brief question topic"
+      }
+    ],
+    "observationItems": [
+      {
+        "num": "Item 1",
+        "pe": ["PE1", "PE2"],
+        "pc": ["1.1", "1.2"],
+        "text": "brief behaviour description"
+      }
+    ],
+    "projectSteps": [
+      {
+        "num": "Step 1",
+        "name": "exact step name from assessment",
+        "pe": ["PE2"],
+        "pc": ["1.1"],
+        "text": "brief step description"
+      }
+    ],
+    "verbalQuestions": [],
+    "assessmentConditions": [
+      {
+        "condition": "verbatim condition text from UoC",
+        "howMet": "plain English explanation of how this assessment meets it"
+      }
+    ],
+    "foundationSkills": [
+      {
+        "skill": "skill name",
+        "pcRefs": ["1.1", "2.3"],
+        "description": "verbatim description from UoC",
+        "coveredBy": {
+          "task1": "Q1, Q3",
+          "task2": "Item 2, Item 4",
+          "task3": "Step 2",
+          "task4": ""
+        }
+      }
+    ]
+  }
+}
+
+Rules:
+- Every KE item must appear in at least one knowledgeQuestions entry
+- Every PE item must appear in at least one observationItems or projectSteps entry
+- Every PC must appear in at least one entry across all sections
+- Use exact references with prefixes: "Q1" not "1", "Item 1" not "1", "Step 1" not "1"
+- assessmentConditions must quote the UoC conditions verbatim
+- foundationSkills must include all skills listed in the UoC
+- Return ONLY the JSON object. Nothing else.`
+            );
+
+            // Parse mapping index
+            function parseMappingIndex(aiResponse) {
+                let clean = typeof aiResponse === 'string' ? aiResponse.trim() : JSON.stringify(aiResponse);
+                clean = clean.replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+                const start = clean.indexOf('{');
+                const end = clean.lastIndexOf('}');
+                if (start === -1 || end === -1) throw new Error('No valid JSON found');
+                clean = clean.substring(start, end + 1);
+                return JSON.parse(clean);
+            }
+
+            let mappingIndex = {};
+            try {
+                const parsed7 = parseMappingIndex(mappingIndexRaw);
+                // Support both { mappingIndex: {...} } and flat { knowledgeQuestions: [...] }
+                mappingIndex = parsed7.mappingIndex || parsed7;
+            } catch (e) {
+                console.error('Mapping index parse failed:', e.message);
+                mappingIndex = { knowledgeQuestions: [], observationItems: [], projectSteps: [], verbalQuestions: [], assessmentConditions: [], foundationSkills: [] };
+            }
+
+            // Assemble final document
             const mText = typeof markingGuide === 'string' ? markingGuide : JSON.stringify(markingGuide);
 
             const fullAssessment = `# Assessment Instrument
