@@ -263,6 +263,7 @@ function taskTypeFromId(id) {
 
 // ── Build document ────────────────────────────────────────────────────────────
 async function buildCompetencyMappingDoc(md) {
+    console.log('mappingIndex:', JSON.stringify(md.mappingIndex));
     const {
         unitCode, unitTitle, releaseNumber, prerequisites, corequisites,
         targetGroup, assessmentConditions, legislativeRequirements,
