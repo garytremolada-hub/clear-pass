@@ -938,6 +938,31 @@ Instructions:
 - Use plain, clear language appropriate for the cohort
 - Do NOT include any other sections
 
+MANDATORY Q4 REQUIREMENT: Q4 must be written exactly as follows (do not change any wording):
+
+Q4. Leaders use five key skills to build trust with their team. Name each skill below. Write what it means and give one example of how you would use it at work.
+
+Personal style (how you act with others)
+Communication (how you share information)
+Consultation (how you ask for input)
+Cultural sensitivity (how you respect differences)
+Networking (how you build connections)
+
+*Model Answer:*
+*1. Personal style: Using a calm and respectful approach helps team members feel comfortable. For example, listening without interrupting when someone raises a concern.*
+*2. Communication: Sharing updates clearly and checking that people have understood. For example, sending a brief written summary after a team meeting.*
+*3. Consultation: Asking team members for their input before making a decision. For example, holding a short meeting to get ideas before planning a new project.*
+*4. Cultural and social sensitivity: Being aware that people have different backgrounds and values. For example, making sure team activities are inclusive and respectful of different cultural practices.*
+*5. Networking: Building working relationships inside and outside the organisation. For example, introducing yourself to people in other teams and staying in contact with industry contacts.*
+
+Q5 REQUIREMENT: After writing Q4 as above, check whether Q5 would be redundant (i.e. it would cover communication or consultation already fully covered by Q4). If it is redundant, replace Q5 with the following question instead:
+
+Q5. Think about a time when a workplace relationship was difficult. What steps could a leader take to repair trust and improve the relationship?
+
+*Model Answer: A leader could start by having a private, respectful conversation to understand the other person's perspective. They could acknowledge any misunderstandings, agree on clear expectations going forward, and follow up regularly to make sure the relationship continues to improve. Seeking support from HR or a mentor may also help.*
+
+This replacement Q5 covers the impact of relationships on planned outcomes at a deeper applied level.
+
 Output format: Markdown. Start with: ## Part A — Knowledge Questions`
             );
 
@@ -1114,7 +1139,9 @@ Rules:
 - Use exact references with prefixes: "Q1" not "1", "Item 1" not "1", "Step 1" not "1"
 - assessmentConditions must quote the UoC conditions verbatim. Make sure to include ALL conditions listed under "Assessment conditions" in the UoC. Common conditions that are often missed: interaction with others, access to real or simulated workplace, access to workplace documentation. Do not stop at 3 or 4 conditions if the UoC lists more.
 - foundationSkills must include all skills listed in the UoC
-- Return ONLY the JSON object. Nothing else.`
+- Return ONLY the JSON object. Nothing else.
+
+Important: map every single question to its KE requirement. Do not stop before you have mapped all questions. The second-to-last knowledge question covers conflict resolution methods. Map it to KE7. The third-to-last knowledge question covers poor work performance management methods. Map it to KE8. The last knowledge question covers methods to monitor and improve work relationships. Map it to KE9. Count your knowledgeQuestions array entries when done. The count must equal the total number of questions built. If it does not, you have missed some questions. Go back and add them.`
             );
 
             // Parse mapping index
@@ -1136,6 +1163,13 @@ Rules:
             } catch (e) {
                 console.error('Mapping index parse failed:', e.message);
                 mappingIndex = { knowledgeQuestions: [], observationItems: [], projectSteps: [], verbalQuestions: [], assessmentConditions: [], foundationSkills: [] };
+            }
+
+            // Validation: warn if mapped question count is less than built question count
+            const builtQuestionCount = kText.match(/Q\d+\./g)?.length || 0;
+            const mappedCount = mappingIndex.knowledgeQuestions?.length || 0;
+            if (mappedCount < builtQuestionCount) {
+                console.warn(`Mapping index has ${mappedCount} entries but assessment has ${builtQuestionCount} questions. Some questions are unmapped.`);
             }
 
             // BUG 4 FIX Part B — BSBLDR413 fallback: ensure "Interaction with others" condition is present
