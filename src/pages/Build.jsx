@@ -575,13 +575,22 @@ function Screen4Loading({ onReset, progress, buildError }) {
     );
 }
 
-function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, validationResult, mappingError, validationError, onBack, onReset, onSave }) {
+function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, validationResult, mappingError, validationError, studentBookletBase64, studentBookletError, onBack, onReset, onSave }) {
     const navigate = useNavigate();
     const hasGaps = assessmentText?.includes('⚠') || assessmentText?.includes('NOT COVERED');
     const gapCount = hasGaps ? (assessmentText.match(/GAP \d+:/g) || []).length : 0;
 
-    const handleDownloadAssessment = () => {
-        downloadDocx(assessmentText, `${unitInfo.code}-assessment`);
+    const handleDownloadStudentBooklet = () => {
+        const bytes = atob(studentBookletBase64);
+        const buffer = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) buffer[i] = bytes.charCodeAt(i);
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${unitInfo.code}-student-booklet.docx`;
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     const handleDownloadBase64 = (result) => {
@@ -644,12 +653,22 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, val
                 {/* Action buttons */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
 
-                    {/* Button 1 — Assessment (always works) */}
+                    {/* Button 1 — Student booklet */}
                     <button
-                        onClick={handleDownloadAssessment}
-                        style={{ width: '100%', height: '48px', backgroundColor: '#c9a84c', color: '#0d2444', borderRadius: '8px', border: 'none', fontSize: '15px', fontWeight: 500, cursor: 'pointer' }}
+                        onClick={studentBookletError ? undefined : handleDownloadStudentBooklet}
+                        disabled={studentBookletError}
+                        style={{
+                            width: '100%', height: '48px',
+                            backgroundColor: studentBookletError ? '#e5e7eb' : '#c9a84c',
+                            color: studentBookletError ? '#9ca3af' : '#0d2444',
+                            borderRadius: '8px', border: 'none',
+                            fontSize: '15px', fontWeight: 500,
+                            cursor: studentBookletError ? 'not-allowed' : 'pointer',
+                        }}
                     >
-                        Download assessment as Word document →
+                        {studentBookletError
+                            ? 'Student booklet unavailable — try rebuilding'
+                            : 'Download student booklet (.docx) →'}
                     </button>
 
                     {/* Button 2 — Competency mapping */}
@@ -753,6 +772,8 @@ export default function Build() {
     const [validationResult, setValidationResult] = useState(null); // { file_base64, filename }
     const [mappingError, setMappingError] = useState(null);
     const [validationError, setValidationError] = useState(null);
+    const [studentBookletBase64, setStudentBookletBase64] = useState(null);
+    const [studentBookletError, setStudentBookletError] = useState(false);
 
     const buildCohortProfile = (ci) => {
         const learnerLabel = LEARNER_OPTIONS.find(o => o.value === ci.learner)?.label || ci.learner;
@@ -1216,10 +1237,44 @@ ${mText}`;
             // ── Generate compliance documents ──────────────────────────────
             const mappingData = extractMappingData(parsed, unitInfo, cohortInfo, sections, mappingIndex);
 
-            // Run both in parallel, don't block on errors
-            const [cmRes, vrRes] = await Promise.allSettled([
+            // Extract question strings from knowledgeSection (strip model answers, keep Qn. lines)
+            const builtQuestions = (typeof kText === 'string' ? kText : '')
+                .split('\n')
+                .filter(l => /^Q\d+\./.test(l.trim()))
+                .map(l => l.replace(/^Q\d+\.\s*/, '').trim())
+                .filter(Boolean);
+
+            // Extract observation items from observationSection (table rows, non-header text cells)
+            const builtObsItems = (typeof oText === 'string' ? oText : '')
+                .split('\n')
+                .filter(l => l.includes('|') && !/Item|Observable|---/.test(l))
+                .map(l => {
+                    const cells = l.split('|').map(c => c.trim()).filter(Boolean);
+                    return cells[1] || '';
+                })
+                .filter(Boolean);
+
+            // Extract project steps from projectSection
+            const builtProjectSteps = [];
+            if (typeof pText === 'string') {
+                const stepMatches = [...pText.matchAll(/###?\s*(Step \d+[^:\n]*:[^\n]*)\n([\s\S]*?)(?=###?\s*Step \d+|$)/g)];
+                stepMatches.forEach(m => {
+                    builtProjectSteps.push({ title: m[1].trim(), desc: m[2].trim().slice(0, 600) });
+                });
+            }
+
+            // Run all three in parallel, don't block on errors
+            const [cmRes, vrRes, sbRes] = await Promise.allSettled([
                 base44.functions.invoke('generateCompetencyMapping', { mappingData }),
                 base44.functions.invoke('generateValidationRecord', { mappingData }),
+                base44.functions.invoke('generateStudentBooklet', {
+                    unitCode: unitInfo.code,
+                    unitTitle: unitInfo.title,
+                    questions: builtQuestions.length > 0 ? builtQuestions : parsed.ke_items?.map((_, i) => `Question ${i + 1}`) || [],
+                    obsItems: builtObsItems.length > 0 ? builtObsItems : [],
+                    projectSteps: builtProjectSteps.length > 0 ? builtProjectSteps : [],
+                    occasionCount: 4,
+                }),
             ]);
 
             if (cmRes.status === 'fulfilled' && cmRes.value?.data?.file_base64) {
@@ -1234,6 +1289,13 @@ ${mText}`;
                 setValidationError(null);
             } else {
                 setValidationError('Validation record could not be generated. Try downloading the assessment first, then rebuild.');
+            }
+
+            if (sbRes.status === 'fulfilled' && sbRes.value?.data?.file_base64) {
+                setStudentBookletBase64(sbRes.value.data.file_base64);
+                setStudentBookletError(false);
+            } else {
+                setStudentBookletError(true);
             }
 
         } catch (e) {
@@ -1272,6 +1334,8 @@ ${mText}`;
         setValidationResult(null);
         setMappingError(null);
         setValidationError(null);
+        setStudentBookletBase64(null);
+        setStudentBookletError(false);
         setBuilding(false);
     };
 
@@ -1308,6 +1372,8 @@ ${mText}`;
                     validationResult={validationResult}
                     mappingError={mappingError}
                     validationError={validationError}
+                    studentBookletBase64={studentBookletBase64}
+                    studentBookletError={studentBookletError}
                     onBack={() => setScreen(2)}
                     onReset={handleReset}
                     onSave={handleSave}

@@ -197,39 +197,7 @@ function resultTable(partLabel) {
     });
 }
 
-// ── QUESTIONS ─────────────────────────────────────────────────────────────────
-const questions = [
-    "When you share information at work, you need to think about your audience. Name TWO things you should consider about your audience before communicating with them.",
-    "Consultation means asking others for their input before making a decision. Give ONE example of an internal source and ONE example of an external source you could consult at work.",
-    "Think about how relationships and the cultural and social environment at work can affect outcomes. Describe ONE way a positive work relationship can help a team reach its goals, and ONE way a poor relationship can get in the way.",
-    "There are several techniques for building positive work relationships and trust in a team. Choose TWO of the following and explain how each one helps: interpersonal style, cultural and social sensitivity, or networking.",
-    "Good communication and consultation are important techniques for building a positive team. Describe ONE way you can use communication to build trust, and ONE way consultation helps a team work better together.",
-    "Laws and workplace policies affect how people treat each other at work. Give ONE example of a law or policy and explain how it shapes workplace relationships.",
-    "You will sometimes need to share information or ideas with different types of stakeholders, such as your supervisor, your team, or a client. Describe TWO techniques you could use to communicate effectively with different stakeholders.",
-    "Workplace conflict can happen from time to time. Describe TWO common methods that can be used to resolve conflict between team members.",
-    "Sometimes an employee is not performing well in their role. Describe TWO common methods a leader can use to manage poor work performance.",
-    "A good leader keeps an eye on how work relationships are going and looks for ways to improve them. Describe TWO methods you could use to monitor and improve work relationships in your team."
-];
-
-// ── OBSERVATION ITEMS ─────────────────────────────────────────────────────────
-const obsItems = [
-    "The learner identifies the work team's goals and explains how these goals match the organisation's strategy.",
-    "The learner collects information needed to complete the work task and uses that information to plan next steps.",
-    "The learner shares relevant information and ideas with team members, managers, or other stakeholders in a clear and suitable way.",
-    "The learner works with the team to develop a clear plan or strategy for completing the work task.",
-    "The learner uses methods that encourage team members to work together and contribute to the task.",
-    "The learner supports a colleague who is having difficulty meeting work requirements.",
-    "The learner manages a conflict or disagreement in a calm, constructive way that follows the organisation's processes.",
-    "The learner applies a problem-solving technique to address a workplace issue or performance concern, following organisational and legal requirements.",
-    "The learner updates relevant internal and external stakeholders on work progress in a timely and appropriate way.",
-    "The learner asks for feedback from stakeholders about how they managed workplace relationships during the task.",
-    "The learner reviews the feedback received and identifies what it means for their leadership approach.",
-    "The learner reflects on their own performance in leading workplace relationships and identifies areas for improvement.",
-    "The learner identifies at least two specific areas they will improve when leading workplace relationships in future tasks.",
-    "The learner demonstrates the above behaviours across at least four occasions with different individuals or groups."
-];
-
-function buildObsTable() {
+function buildObsTable(obsItems) {
     const col1 = 500;
     const col2 = 4200;
     const col3 = 800;
@@ -267,7 +235,8 @@ function buildObsTable() {
 }
 
 // ── BUILD DOCUMENT ────────────────────────────────────────────────────────────
-async function buildStudentBooklet() {
+async function buildStudentBooklet({ unitCode, unitTitle, questions, obsItems, projectSteps, occasionCount }) {
+    occasionCount = occasionCount || 4;
     const children = [];
 
     // ── COVER PAGE ──────────────────────────────────────────────────────────
@@ -282,8 +251,8 @@ async function buildStudentBooklet() {
                 margins: { top: 300, bottom: 300, left: 200, right: 200 },
                 children: [
                     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 120 }, children: [new TextRun({ text: "STUDENT ASSESSMENT BOOKLET", bold: true, size: 36, color: WHITE, font: "Arial" })] }),
-                    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 80 }, children: [new TextRun({ text: "BSBLDR413", bold: true, size: 28, color: GOLD, font: "Arial" })] }),
-                    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Lead effective workplace relationships", size: 24, color: "C8D6E8", font: "Arial" })] }),
+                    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 80 }, children: [new TextRun({ text: unitCode, bold: true, size: 28, color: GOLD, font: "Arial" })] }),
+                    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: unitTitle, size: 24, color: "C8D6E8", font: "Arial" })] }),
                 ]
             })]
         })]
@@ -305,7 +274,7 @@ async function buildStudentBooklet() {
     }));
 
     children.push(new Paragraph({ spacing: { before: 240, after: 120 }, children: [new TextRun({ text: "About this booklet", bold: true, size: 24, font: "Arial", color: NAVY })] }));
-    children.push(bodyPara("This booklet contains all assessment tasks for BSBLDR413 Lead effective workplace relationships. Read all instructions carefully before you begin. Ask your assessor if you have any questions.", { after: 160 }));
+    children.push(bodyPara(`This booklet contains all assessment tasks for ${unitCode} ${unitTitle}. Read all instructions carefully before you begin. Ask your assessor if you have any questions.`, { after: 160 }));
 
     children.push(new Table({
         width: { size: PAGE_WIDTH, type: WidthType.DXA },
@@ -366,7 +335,7 @@ async function buildStudentBooklet() {
         width: { size: PAGE_WIDTH, type: WidthType.DXA },
         columnWidths: [Math.floor(PAGE_WIDTH * 0.35), Math.floor(PAGE_WIDTH * 0.65)],
         rows: [
-            infoRow("Unit", "BSBLDR413 Lead effective workplace relationships", false),
+            infoRow("Unit", `${unitCode} ${unitTitle}`, false),
             infoRow("Student Name", "", true),
             infoRow("Assessor Name", "", false),
             infoRow("Workplace / Location", "", true),
@@ -376,9 +345,9 @@ async function buildStudentBooklet() {
     }));
 
     children.push(new Paragraph({ spacing: { before: 160, after: 80 }, children: [new TextRun({ text: "Instructions for Assessor", bold: true, size: 22, font: "Arial", color: NAVY })] }));
-    children.push(bodyPara("Observe the learner across at least four separate occasions with different individuals or groups. Tick S (Satisfactory) or NYS (Not Yet Satisfactory) for each item. Record your observations in the Comments column.", { after: 160 }));
+    children.push(bodyPara(`Observe the learner across at least ${occasionCount} separate occasions with different individuals or groups. Tick S (Satisfactory) or NYS (Not Yet Satisfactory) for each item. Record your observations in the Comments column.`, { after: 160 }));
 
-    children.push(buildObsTable());
+    children.push(buildObsTable(obsItems));
     children.push(new Paragraph({ spacing: { before: 160 } }));
 
     children.push(new Table({
@@ -394,7 +363,7 @@ async function buildStudentBooklet() {
                 new TableCell({ borders, width: { size: Math.floor(PAGE_WIDTH * 0.25), type: WidthType.DXA }, shading: { fill: LIGHT_GREY, type: ShadingType.CLEAR }, margins: cellMargins, children: [new Paragraph({ children: [new TextRun({ text: "Location", bold: true, size: 18, font: "Arial" })] })] }),
                 new TableCell({ borders, width: { size: Math.floor(PAGE_WIDTH * 0.47), type: WidthType.DXA }, shading: { fill: LIGHT_GREY, type: ShadingType.CLEAR }, margins: cellMargins, children: [new Paragraph({ children: [new TextRun({ text: "Individual or Group Observed", bold: true, size: 18, font: "Arial" })] })] }),
             ]}),
-            ...[1,2,3,4].map(n => new TableRow({
+            ...Array.from({ length: occasionCount }, (_, i) => i + 1).map(n => new TableRow({
                 height: { value: 500, rule: "atLeast" },
                 children: [
                     new TableCell({ borders, width: { size: Math.floor(PAGE_WIDTH * 0.08), type: WidthType.DXA }, margins: cellMargins, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(n), bold: true, size: 20, font: "Arial" })] })] }),
@@ -427,15 +396,6 @@ async function buildStudentBooklet() {
 
     children.push(new Paragraph({ spacing: { before: 160, after: 80 }, children: [new TextRun({ text: "Scenario", bold: true, size: 24, font: "Arial", color: NAVY })] }));
     children.push(bodyPara("You are working as a team leader or leading hand in your workplace. Your supervisor has asked you to lead a small project with your work team. The project involves planning a new work task, working with your team to carry it out, and reporting on how it went. This project will take place over several weeks at your real workplace. You will work with at least four different people or groups during this time.", { after: 200 }));
-
-    const projectSteps = [
-        { title: "Step 1: Choose a Work Task to Lead", desc: "Pick a real task or small project at your workplace that you can lead with your team. Talk to your supervisor first to make sure it is suitable. Your task must involve at least four different people or groups. Write a short Task Overview (50 to 80 words) covering: what the task is, who is involved, why it matters, and when it will happen." },
-        { title: "Step 2: Gather and Review Information", desc: "Before you start, collect the information you need. This could include workplace policies, procedures, rosters, safety rules, or instructions from your supervisor. Complete an Information Checklist with at least three sources of information. For each source, write: what it is, where you found it, and how it helped you plan." },
-        { title: "Step 3: Plan the Task with Your Team", desc: "Hold a team meeting to plan how you will complete the task. Decide: what each person will do, when each step needs to be done, what resources you will need, and any risks you might need to handle. Complete a Team Task Plan (80 to 120 words). Include the names or roles of the people involved." },
-        { title: "Step 4: Lead the Team Through the Task", desc: "Carry out the plan with your team. Communicate with your team and relevant stakeholders at least twice. Handle at least one problem, conflict, or performance issue using a fair and respectful approach. Update your stakeholders on work progress at least once in writing." },
-        { title: "Step 5: Ask for Feedback", desc: "Ask at least two people for feedback on your leadership. After you receive the feedback, write a Feedback Review (80 to 120 words) covering: what feedback you received, what you did well, and what you would do differently next time." },
-        { title: "Step 6: Write a Final Summary", desc: "Write a Final Project Summary (120 to 150 words) covering: what the task was and how it went, how you worked with different people, how you handled problems, how you communicated with stakeholders, and what you learned about leading a team." },
-    ];
 
     projectSteps.forEach(step => {
         children.push(new Table({
@@ -470,7 +430,7 @@ async function buildStudentBooklet() {
                             rows: [new TableRow({
                                 children: [
                                     new TableCell({ borders: { bottom: thinBorder, top: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } }, width: { size: Math.floor(PAGE_WIDTH * 0.6), type: WidthType.DXA }, margins: { bottom: 80 }, children: [new Paragraph({ children: [new TextRun({ text: "Student Assessment Booklet", size: 16, font: "Arial", color: "6B7280" })] })] }),
-                                    new TableCell({ borders: { bottom: thinBorder, top: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } }, width: { size: Math.floor(PAGE_WIDTH * 0.4), type: WidthType.DXA }, margins: { bottom: 80 }, children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "BSBLDR413", size: 16, font: "Arial", color: "6B7280", bold: true })] })] }),
+                                    new TableCell({ borders: { bottom: thinBorder, top: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } }, width: { size: Math.floor(PAGE_WIDTH * 0.4), type: WidthType.DXA }, margins: { bottom: 80 }, children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: unitCode, size: 16, font: "Arial", color: "6B7280", bold: true })] })] }),
                                 ]
                             })]
                         })
@@ -485,7 +445,7 @@ async function buildStudentBooklet() {
                             columnWidths: [Math.floor(PAGE_WIDTH * 0.5), Math.floor(PAGE_WIDTH * 0.25), Math.floor(PAGE_WIDTH * 0.25)],
                             rows: [new TableRow({
                                 children: [
-                                    new TableCell({ borders: { top: thinBorder, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } }, width: { size: Math.floor(PAGE_WIDTH * 0.5), type: WidthType.DXA }, margins: { top: 80 }, children: [new Paragraph({ children: [new TextRun({ text: "Lead effective workplace relationships", size: 16, font: "Arial", color: "6B7280" })] })] }),
+                                    new TableCell({ borders: { top: thinBorder, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } }, width: { size: Math.floor(PAGE_WIDTH * 0.5), type: WidthType.DXA }, margins: { top: 80 }, children: [new Paragraph({ children: [new TextRun({ text: unitTitle, size: 16, font: "Arial", color: "6B7280" })] })] }),
                                     new TableCell({ borders: { top: thinBorder, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } }, width: { size: Math.floor(PAGE_WIDTH * 0.25), type: WidthType.DXA }, margins: { top: 80 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Version 1.0", size: 16, font: "Arial", color: "6B7280" })] })] }),
                                     new TableCell({ borders: { top: thinBorder, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } }, width: { size: Math.floor(PAGE_WIDTH * 0.25), type: WidthType.DXA }, margins: { top: 80 }, children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: "Page ", size: 16, font: "Arial", color: "6B7280" }), new TextRun({ children: [PageNumber.CURRENT], size: 16, font: "Arial", color: "6B7280" })] })] }),
                                 ]
@@ -505,7 +465,7 @@ async function buildStudentBooklet() {
     for (let i = 0; i < bytes.byteLength; i += CHUNK) {
         binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
     }
-    return { file_base64: btoa(binary), filename: 'BSBLDR413-student-booklet.docx' };
+    return { file_base64: btoa(binary) };
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -515,7 +475,15 @@ Deno.serve(async (req) => {
         const user = await base44.auth.me();
         if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-        const result = await buildStudentBooklet();
+        const body = await req.json().catch(() => ({}));
+        const result = await buildStudentBooklet({
+            unitCode: body.unitCode || 'UNKNOWN',
+            unitTitle: body.unitTitle || '',
+            questions: body.questions || [],
+            obsItems: body.obsItems || [],
+            projectSteps: body.projectSteps || [],
+            occasionCount: body.occasionCount || 4,
+        });
         return Response.json(result);
     } catch (error) {
         console.error('generateStudentBooklet error:', error);

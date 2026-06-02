@@ -72,7 +72,6 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                     Based on {unitInfo?.code}, we recommend the following structure:
                 </p>
 
-                {/* Required sections */}
                 <div style={{ marginBottom: '24px' }}>
                     <h3 style={{ color: '#0d2444', fontSize: '16px', fontWeight: 500, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <CheckCircle style={{ color: '#22c55e', width: '18px', height: '18px' }} />
@@ -107,7 +106,6 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                     </div>
                 </div>
 
-                {/* Optional sections */}
                 {optionalSections.length > 0 && (
                     <div style={{ marginBottom: '24px' }}>
                         <h3 style={{ color: '#0d2444', fontSize: '16px', fontWeight: 500, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -141,7 +139,6 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                     </div>
                 )}
 
-                {/* Buttons */}
                 <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                     <button
                         onClick={onBack}
@@ -151,21 +148,13 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                     </button>
                     <button
                         onClick={handleBuild}
-                        style={{
-                            flex: 1, height: '44px', borderRadius: '8px',
-                            backgroundColor: '#c9a84c', color: '#0d2444',
-                            fontSize: '14px', fontWeight: 500,
-                            border: 'none', cursor: 'pointer',
-                        }}
+                        style={{ flex: 1, height: '44px', borderRadius: '8px', backgroundColor: '#c9a84c', color: '#0d2444', fontSize: '14px', fontWeight: 500, border: 'none', cursor: 'pointer' }}
                     >
                         Build assessment
                     </button>
                 </div>
 
-                <div style={{
-                    backgroundColor: '#f9fafb', borderLeft: '3px solid #c9a84c',
-                    borderRadius: '4px', padding: '10px 14px', marginTop: '16px',
-                }}>
+                <div style={{ backgroundColor: '#f9fafb', borderLeft: '3px solid #c9a84c', borderRadius: '4px', padding: '10px 14px', marginTop: '16px' }}>
                     <p style={{ color: '#6b7280', fontSize: '12px', lineHeight: 1.6 }}>
                         All content is AI-generated and should be reviewed with a qualified assessor.
                     </p>
