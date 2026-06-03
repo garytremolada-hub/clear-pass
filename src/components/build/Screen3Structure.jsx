@@ -144,13 +144,13 @@ export default function Screen3Structure({ unitInfo, cohortInfo, structurePropos
                         onClick={onBack}
                         style={{ flex: 1, height: '44px', border: '1px solid #0d2444', borderRadius: '8px', backgroundColor: 'transparent', color: '#0d2444', fontSize: '14px', cursor: 'pointer' }}
                     >
-                        Back
+                        ← Back
                     </button>
                     <button
                         onClick={handleBuild}
                         style={{ flex: 1, height: '44px', borderRadius: '8px', backgroundColor: '#c9a84c', color: '#0d2444', fontSize: '14px', fontWeight: 500, border: 'none', cursor: 'pointer' }}
                     >
-                        Build assessment
+                        Build assessment →
                     </button>
                 </div>
 
