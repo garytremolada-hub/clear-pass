@@ -86,11 +86,7 @@ export default function Sidebar() {
                 </nav>
 
                 {/* Footer */}
-                <div className="p-4 border-t" style={{ borderColor: '#162d50' }}>
-                    <p className="text-[10px] text-center" style={{ color: '#8ba4c4' }}>
-                        Scores are AI-estimated. Use for guidance only.
-                    </p>
-                </div>
+                <div className="p-4 border-t" style={{ borderColor: '#162d50' }} />
             </aside>
         </>
     );

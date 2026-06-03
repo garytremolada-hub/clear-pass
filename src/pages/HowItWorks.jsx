@@ -234,7 +234,7 @@ export default function HowItWorks() {
                         </table>
                     </div>
                     <p style={{ color: '#9ca3af', fontSize: '12px', fontStyle: 'italic', marginTop: '10px' }}>
-                        Scores are calculated using the Flesch-Kincaid formula applied to extracted text. Scanned PDFs and documents with heavy formatting may produce less accurate scores.
+                        Scores are calculated using the Flesch-Kincaid formula applied to extracted text. Scanned PDFs and documents with heavy formatting may produce less accurate scores. Results are for guidance only — always review with a qualified assessor.
                     </p>
                 </Section>
 
