@@ -272,11 +272,13 @@ async function buildCompetencyMappingDoc(md) {
         assessmentSections, mappingIndex, rtoName,
     } = md;
 
-    // BUG 4 DIAGNOSTICS
+    // DIAGNOSTICS
     const allPCsDebug = (elements || []).flatMap(el => (el.pcs || []).map(pc => ({ ...pc, elTitle: el.title })));
     console.log('uocData.elements:', JSON.stringify(elements));
     console.log('mappingIndex:', JSON.stringify(mappingIndex));
     console.log('allPCs:', JSON.stringify(allPCsDebug));
+    console.log('mappingIndex at PC table:', JSON.stringify(mappingIndex?.knowledgeQuestions?.slice(0, 3)));
+    console.log('First PC ref format:', JSON.stringify(mappingIndex?.knowledgeQuestions?.[0]?.pc));
 
     const sections = assessmentSections || [];
     const numTaskCols = sections.length;

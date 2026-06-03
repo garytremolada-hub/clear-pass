@@ -90,29 +90,56 @@ export function extractMappingData(parsed, unitInfo, cohortInfo, activeSections,
     });
     const keItems = flattenKE(keStructured);
 
+    // BSBLDR413 element title fallback
+    const BSBLDR413_ELEMENT_TITLES = {
+        '1': 'Prepare to lead workplace relationships',
+        '2': 'Lead workplace relationships',
+        '3': 'Review leadership',
+    };
+    const unitCodeForFallback = (parsed.unit_code || unitInfo?.code || '').toUpperCase();
+    const isBSBLDR413 = unitCodeForFallback.includes('BSBLDR413');
+
+    function resolveElementTitle(elNum) {
+        if (isBSBLDR413 && BSBLDR413_ELEMENT_TITLES[elNum]) {
+            return BSBLDR413_ELEMENT_TITLES[elNum];
+        }
+        return parsed.element_titles?.[elNum] || `Element ${elNum}`;
+    }
+
     // Build elements from PC items
-    // pc_items may be "1.1 — Description" or { element, ref, text }
+    // pc_items may be "1.1 — Description", "1.1 – Description", "1.1: Description" or object { ref, text }
     const elementMap = {};
     pcRaw.forEach((pc, i) => {
         let ref, text, elNum, elTitle;
         if (typeof pc === 'string') {
-            const match = pc.match(/^(\d+)\.(\d+)\s*[—\-–:]\s*(.+)$/);
+            // Match any separator: em dash, en dash, hyphen, colon (with optional spaces)
+            const match = pc.match(/^(\d+)\.(\d+)\s*[\u2014\u2013\-:]\s*(.+)$/);
             if (match) {
                 ref = `${match[1]}.${match[2]}`;
                 elNum = match[1];
                 text = match[3].trim();
-                elTitle = parsed.element_titles?.[elNum] || `Element ${elNum}`;
+                elTitle = resolveElementTitle(elNum);
             } else {
-                ref = `${i + 1}`;
-                elNum = '1';
-                text = pc;
-                elTitle = 'Element 1';
+                // Fallback: try to at least get a number prefix like "1.1"
+                const numMatch = pc.match(/^(\d+)\.(\d+)/);
+                if (numMatch) {
+                    ref = `${numMatch[1]}.${numMatch[2]}`;
+                    elNum = numMatch[1];
+                    text = pc.replace(/^\d+\.\d+\s*/, '').trim();
+                    elTitle = resolveElementTitle(elNum);
+                } else {
+                    // Cannot parse — skip with sequential ref
+                    ref = `1.${i + 1}`;
+                    elNum = '1';
+                    text = pc;
+                    elTitle = resolveElementTitle('1');
+                }
             }
         } else {
-            ref = pc.ref || `${i + 1}`;
-            elNum = String(ref).split('.')[0];
+            ref = pc.ref || `1.${i + 1}`;
+            elNum = String(ref).split('.')[0] || '1';
             text = pc.text || '';
-            elTitle = pc.elementTitle || parsed.element_titles?.[elNum] || `Element ${elNum}`;
+            elTitle = pc.elementTitle || resolveElementTitle(elNum);
         }
 
         if (!elementMap[elNum]) {
