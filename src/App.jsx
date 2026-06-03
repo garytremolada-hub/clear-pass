@@ -14,6 +14,7 @@ import SubscriptionSuccess from './pages/SubscriptionSuccess';
 import Settings from './pages/Settings';
 import LevelCheck from './pages/LevelCheck';
 import Build from './pages/Build';
+import HowItWorks from './pages/HowItWorks';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -45,6 +46,7 @@ const AuthenticatedApp = () => {
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/build" element={<Build />} />
+      <Route path="/how-it-works" element={<HowItWorks />} />
       </Route>
       <Route path="/subscription-success" element={<SubscriptionSuccess />} />
       <Route path="*" element={<PageNotFound />} />
