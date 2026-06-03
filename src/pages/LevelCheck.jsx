@@ -301,18 +301,31 @@ ${batchText}`;
         }
     };
 
-    // Download: build new .docx from scratch using docx package
+    // Download: formatted student-booklet-style .docx
     const handleDownloadRewrite = async () => {
-        if (!numberedParagraphs || !aiRewriteJson || !fileName) return;
+        if (!rewrittenText || !fileName) return;
         try {
             setRewritingProgress('Preparing download…');
-            const res = await base44.functions.invoke('rewriteDocumentFormatted', {
-                original_paragraphs: numberedParagraphs,
-                rewrite_json: aiRewriteJson,
-                filename: fileName,
+
+            // Extract unit code from filename (e.g. MSMSUP204 from MSMSUP204_Assessment.docx)
+            const unitCodeMatch = fileName.match(/^([A-Z]{2,}[A-Z0-9]*\d{3,}[A-Z0-9]*)/i);
+            const unitCode = unitCodeMatch ? unitCodeMatch[1].toUpperCase() : '';
+
+            // Extract unit title from first line of extracted text
+            const firstLine = (extractedText || '').split('\n').find(l => l.trim().length > 10) || '';
+            const unitTitle = firstLine.replace(/\*\*/g, '').trim().slice(0, 120);
+
+            // Document title from filename (strip extension)
+            const documentTitle = fileName.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
+
+            const res = await base44.functions.invoke('generateFormattedRewrite', {
+                unitCode,
+                unitTitle,
+                documentTitle,
+                rewrittenText,
             });
             if (res?.data?.error) throw new Error(res.data.error);
-            const { file_base64: outB64, filename: outFilename } = res.data;
+            const outB64 = res.data.file_base64;
             const bytes = atob(outB64);
             const buf = new Uint8Array(bytes.length);
             for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
@@ -320,7 +333,8 @@ ${batchText}`;
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = outFilename;
+            const baseName = fileName.replace(/\.[^.]+$/, '');
+            a.download = `${baseName}-rewritten.docx`;
             a.click();
             URL.revokeObjectURL(url);
         } catch (err) {
@@ -531,11 +545,11 @@ ${batchText}`;
                         <div className="space-y-2">
                             <button
                                 onClick={handleDownloadRewrite}
-                                disabled={!numberedParagraphs || !aiRewriteJson}
+                                disabled={!rewrittenText}
                                 className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                                 style={{ backgroundColor: '#c9a84c', color: '#0d2444' }}
                             >
-                                Download rewritten document (changes highlighted in yellow) →
+                                Download rewritten document (.docx) →
                             </button>
                             <p style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic', lineHeight: 1.5, textAlign: 'center', margin: '4px 0 0' }}>
                                 Downloaded document contains all assessment content with simplified language.
