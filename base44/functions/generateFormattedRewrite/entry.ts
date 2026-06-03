@@ -292,8 +292,216 @@ function extractQuestions(sectionText) {
     return [];
 }
 
+// ── PROJECT EXTRACTOR ─────────────────────────────────────────────────────────
+function extractProjectContent(rewrittenText) {
+    const projectMarkers = [
+        'ASSESSMENT 2: PROJECT',
+        'ASSESSMENT 2 - PROJECT',
+        'Assessment 2: Project',
+        'Assessment 2 - Project',
+        'ASSESSMENT TASK 2',
+        'PART B: WORKPLACE PROJECT',
+        'PART C: WORKPLACE PROJECT',
+    ];
+
+    let projectStart = -1;
+    let projectMarker = '';
+    for (const marker of projectMarkers) {
+        const idx = rewrittenText.indexOf(marker);
+        if (idx !== -1) { projectStart = idx; projectMarker = marker; break; }
+    }
+    if (projectStart === -1) return null;
+
+    const projectSection = rewrittenText.substring(projectStart);
+
+    const assessorMarkers = [
+        'TO BE COMPLETED BY THE ASSESSOR',
+        'ASSESSMENT 2: ASSESSOR',
+        'ASSESSMENT 2: OUTCOME',
+        'Did the student demonstrate',
+    ];
+    let projectEnd = projectSection.length;
+    for (const marker of assessorMarkers) {
+        const idx = projectSection.indexOf(marker);
+        if (idx !== -1 && idx < projectEnd) projectEnd = idx;
+    }
+
+    const studentContent = projectSection.substring(0, projectEnd).trim();
+
+    const parts = [];
+    const partPattern = /Part [A-C]:|PART [A-C]:|Assessment 2 - Part [A-C]/g;
+    const partMatches = [...studentContent.matchAll(partPattern)];
+
+    if (partMatches.length > 1) {
+        partMatches.forEach((match, i) => {
+            const start = match.index;
+            const end = i + 1 < partMatches.length ? partMatches[i + 1].index : studentContent.length;
+            parts.push({ title: match[0], content: studentContent.substring(start, end).trim() });
+        });
+    } else {
+        parts.push({ title: projectMarker, content: studentContent });
+    }
+
+    return parts;
+}
+
+// ── PROJECT TABLE BUILDERS ────────────────────────────────────────────────────
+function buildSwotTable() {
+    const colW = Math.floor(PAGE_WIDTH / 5);
+    const headers = ['Limitation', 'Strengths', 'Weaknesses', 'Opportunities', 'Threats'];
+    const headerRow = new TableRow({ children: headers.map(h => new TableCell({
+        borders, width: { size: colW, type: WidthType.DXA },
+        shading: { fill: NAVY, type: ShadingType.CLEAR }, margins: cellMargins,
+        children: [new Paragraph({ children: [new TextRun({ text: h, bold: true, size: 18, color: WHITE, font: 'Arial' })] })]
+    }))});
+    const dataRows = ['Limitation 1', '', 'Limitation 2', ''].map((label, i) => new TableRow({
+        height: { value: 700, rule: 'atLeast' },
+        children: [
+            new TableCell({ borders, width: { size: colW, type: WidthType.DXA },
+                shading: { fill: i % 2 === 0 ? LIGHT_GREY : WHITE, type: ShadingType.CLEAR },
+                margins: cellMargins, children: [new Paragraph({ children: [new TextRun({ text: label, bold: !!label, size: 19, font: 'Arial' })] })] }),
+            ...[0,1,2,3].map(() => new TableCell({ borders, width: { size: colW, type: WidthType.DXA }, margins: cellMargins,
+                children: [new Paragraph({ children: [new TextRun({ text: '', size: 19 })] })] }))
+        ]
+    }));
+    return new Table({ width: { size: PAGE_WIDTH, type: WidthType.DXA }, columnWidths: [colW,colW,colW,colW,colW], rows: [headerRow, ...dataRows] });
+}
+
+function buildProposalTable() {
+    const col1 = Math.floor(PAGE_WIDTH * 0.3);
+    const col2 = PAGE_WIDTH - col1;
+    const sections = ['Title', 'Background', 'Proposed Solutions', 'Benefits', 'Implementation Plan', 'Challenges and Mitigation'];
+    return new Table({
+        width: { size: PAGE_WIDTH, type: WidthType.DXA },
+        columnWidths: [col1, col2],
+        rows: [
+            new TableRow({ children: [new TableCell({ borders: navyBorders, columnSpan: 2, width: { size: PAGE_WIDTH, type: WidthType.DXA },
+                shading: { fill: NAVY, type: ShadingType.CLEAR }, margins: cellMargins,
+                children: [new Paragraph({ children: [new TextRun({ text: 'Proposal Document', bold: true, size: 20, color: WHITE, font: 'Arial' })] })] })]}),
+            ...sections.map((s, i) => new TableRow({
+                height: { value: 700, rule: 'atLeast' },
+                children: [
+                    new TableCell({ borders, width: { size: col1, type: WidthType.DXA },
+                        shading: { fill: i % 2 === 0 ? LIGHT_GREY : WHITE, type: ShadingType.CLEAR }, margins: cellMargins,
+                        children: [new Paragraph({ children: [new TextRun({ text: s, bold: true, size: 19, font: 'Arial', color: NAVY })] })] }),
+                    new TableCell({ borders, width: { size: col2, type: WidthType.DXA }, margins: cellMargins,
+                        children: [new Paragraph({ children: [new TextRun({ text: '', size: 19 })] })] })
+                ]
+            }))
+        ]
+    });
+}
+
+function buildRevisedSolutionsTable() {
+    const colW = Math.floor(PAGE_WIDTH / 4);
+    const headers = ['Limitation', 'Original Solution', 'Feedback Received', 'Revised Solution'];
+    const rows = ['Communication Breakdown', 'Resistance to Technology'];
+    return new Table({
+        width: { size: PAGE_WIDTH, type: WidthType.DXA },
+        columnWidths: [colW,colW,colW,colW],
+        rows: [
+            new TableRow({ children: headers.map(h => new TableCell({ borders, width: { size: colW, type: WidthType.DXA },
+                shading: { fill: NAVY, type: ShadingType.CLEAR }, margins: cellMargins,
+                children: [new Paragraph({ children: [new TextRun({ text: h, bold: true, size: 18, color: WHITE, font: 'Arial' })] })] }))}),
+            ...rows.map((r, i) => new TableRow({
+                height: { value: 800, rule: 'atLeast' },
+                children: [
+                    new TableCell({ borders, width: { size: colW, type: WidthType.DXA },
+                        shading: { fill: i % 2 === 0 ? LIGHT_GREY : WHITE, type: ShadingType.CLEAR }, margins: cellMargins,
+                        children: [new Paragraph({ children: [new TextRun({ text: r, bold: true, size: 19, font: 'Arial' })] })] }),
+                    ...[0,1,2].map(() => new TableCell({ borders, width: { size: colW, type: WidthType.DXA }, margins: cellMargins,
+                        children: [new Paragraph({ children: [new TextRun({ text: '', size: 19 })] })] }))
+                ]
+            }))
+        ]
+    });
+}
+
+function buildGenericAnswerTable() {
+    return new Table({
+        width: { size: PAGE_WIDTH, type: WidthType.DXA },
+        columnWidths: [PAGE_WIDTH],
+        rows: [
+            new TableRow({ children: [new TableCell({
+                borders: { top: thinBorder, bottom: { style: BorderStyle.NONE }, left: navyBorder, right: navyBorder },
+                width: { size: PAGE_WIDTH, type: WidthType.DXA },
+                margins: { top: 80, bottom: 40, left: 140, right: 140 },
+                children: [new Paragraph({ children: [new TextRun({ text: 'Your response:', bold: true, size: 18, font: 'Arial', color: '6B7280', italics: true })] })]
+            })] }),
+            new TableRow({
+                height: { value: 2400, rule: 'exact' },
+                children: [new TableCell({
+                    borders: { top: { style: BorderStyle.NONE }, bottom: navyBorder, left: navyBorder, right: navyBorder },
+                    width: { size: PAGE_WIDTH, type: WidthType.DXA },
+                    margins: { top: 40, bottom: 80, left: 140, right: 140 },
+                    children: [new Paragraph({ children: [new TextRun({ text: '', size: 20 })] })]
+                })]
+            })
+        ]
+    });
+}
+
+function buildProjectPart(partTitle, partContent) {
+    const elements = [];
+
+    // Part header
+    elements.push(new Table({
+        width: { size: PAGE_WIDTH, type: WidthType.DXA },
+        columnWidths: [PAGE_WIDTH],
+        rows: [new TableRow({ children: [new TableCell({
+            borders: navyBorders,
+            width: { size: PAGE_WIDTH, type: WidthType.DXA },
+            shading: { fill: NAVY, type: ShadingType.CLEAR },
+            margins: { top: 100, bottom: 100, left: 200, right: 200 },
+            children: [new Paragraph({ children: [new TextRun({ text: partTitle.replace(/:/g, '').trim(), bold: true, size: 24, color: WHITE, font: 'Arial' })] })]
+        })] })]
+    }));
+    elements.push(new Paragraph({ spacing: { before: 120 } }));
+
+    // Instructions box
+    const instructionText = partContent
+        .replace(/\|[^|]*\|/g, '')
+        .replace(/\*\*/g, '')
+        .replace(/\*/g, '')
+        .substring(0, 2000)
+        .trim();
+
+    elements.push(new Table({
+        width: { size: PAGE_WIDTH, type: WidthType.DXA },
+        columnWidths: [PAGE_WIDTH],
+        rows: [
+            new TableRow({ children: [new TableCell({
+                borders: navyBorders,
+                width: { size: PAGE_WIDTH, type: WidthType.DXA },
+                shading: { fill: "F0F4FF", type: ShadingType.CLEAR },
+                margins: cellMargins,
+                children: [new Paragraph({ children: [new TextRun({ text: 'Instructions', bold: true, size: 20, font: 'Arial', color: NAVY })] })]
+            })] }),
+            new TableRow({ children: [new TableCell({
+                borders: navyBorders,
+                width: { size: PAGE_WIDTH, type: WidthType.DXA },
+                margins: { top: 100, bottom: 100, left: 140, right: 140 },
+                children: [new Paragraph({ children: [new TextRun({ text: instructionText, size: 19, font: 'Arial' })] })]
+            })] })
+        ]
+    }));
+    elements.push(new Paragraph({ spacing: { before: 160 } }));
+
+    // Appropriate response table
+    const hasSwot = /SWOT|Strengths.*Weaknesses/i.test(partContent);
+    const hasProposal = /Proposal.*Section|Title.*Background/i.test(partContent);
+    const hasRevised = /Revised Solution|Original Solution.*Feedback/i.test(partContent);
+
+    if (hasSwot) elements.push(buildSwotTable());
+    else if (hasProposal) elements.push(buildProposalTable());
+    else if (hasRevised) elements.push(buildRevisedSolutionsTable());
+    else elements.push(buildGenericAnswerTable());
+
+    return elements;
+}
+
 // ── DOCUMENT BUILDER ──────────────────────────────────────────────────────────
-async function buildFormattedRewrite({ unitCode, unitTitle, documentTitle, questions }) {
+async function buildFormattedRewrite({ unitCode, unitTitle, documentTitle, questions, rewrittenText }) {
     const children = [];
 
     // 1. Cover page
@@ -384,7 +592,20 @@ async function buildFormattedRewrite({ unitCode, unitTitle, documentTitle, quest
         children.push(new Paragraph({ spacing: { before: 80 }, children: [new TextRun({ text: "No questions could be extracted from the rewritten text.", size: 20, font: "Arial", color: "9CA3AF", italics: true })] }));
     }
 
-    // 7. Assessment result table
+    // 7. Project assessment (Assessment 2) if present
+    const projectParts = rewrittenText ? extractProjectContent(rewrittenText) : null;
+    if (projectParts && projectParts.length > 0) {
+        children.push(new Paragraph({ children: [new PageBreak()] }));
+        children.push(partHeader("WORKPLACE PROJECT"));
+        children.push(new Paragraph({ spacing: { before: 160 } }));
+        projectParts.forEach((part, i) => {
+            if (i > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
+            buildProjectPart(part.title, part.content).forEach(el => children.push(el));
+        });
+        children.push(new Paragraph({ spacing: { before: 160 } }));
+    }
+
+    // 8. Assessment result table
     children.push(resultTable());
 
     // 8. Assemble document with header + footer on every page
@@ -467,6 +688,7 @@ Deno.serve(async (req) => {
             unitTitle: body.unitTitle || '',
             documentTitle: body.documentTitle || '',
             questions,
+            rewrittenText,
         });
 
         return Response.json(result);
