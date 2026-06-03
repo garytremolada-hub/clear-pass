@@ -96,77 +96,111 @@ function partHeader(text) {
 }
 
 function questionTable(num, questionText) {
-    const qWidth = PAGE_WIDTH;
-    const labelWidth = Math.floor(qWidth * 0.55);
-    const snsWidth = Math.floor(qWidth * 0.45);
+  const qWidth = PAGE_WIDTH;
+  const labelWidth = Math.floor(qWidth * 0.55);
+  const snsWidth = Math.floor(qWidth * 0.45);
 
-    return new Table({
-        width: { size: qWidth, type: WidthType.DXA },
-        columnWidths: [qWidth],
-        rows: [
-            new TableRow({
-                children: [new TableCell({
-                    borders: navyBorders,
-                    width: { size: qWidth, type: WidthType.DXA },
-                    shading: { fill: "F0F4FF", type: ShadingType.CLEAR },
-                    margins: { top: 100, bottom: 100, left: 140, right: 140 },
-                    children: [new Paragraph({
-                        children: [
-                            new TextRun({ text: `Q${num}.  `, bold: true, size: 22, font: "Arial", color: NAVY }),
-                            new TextRun({ text: questionText, size: 22, font: "Arial", color: "1A1A1A" })
-                        ]
-                    })]
-                })]
-            }),
-            new TableRow({
-                children: [new TableCell({
-                    borders: { top: thinBorder, bottom: { style: BorderStyle.NONE }, left: navyBorder, right: navyBorder },
-                    width: { size: qWidth, type: WidthType.DXA },
-                    margins: { top: 80, bottom: 40, left: 140, right: 140 },
-                    children: [new Paragraph({
-                        children: [new TextRun({ text: "Your answer:", bold: true, size: 18, font: "Arial", color: "6B7280", italics: true })]
-                    })]
-                })]
-            }),
-            new TableRow({
-                height: { value: 1600, rule: "exact" },
-                children: [new TableCell({
-                    borders: { top: { style: BorderStyle.NONE }, bottom: thinBorder, left: navyBorder, right: navyBorder },
-                    width: { size: qWidth, type: WidthType.DXA },
-                    margins: { top: 40, bottom: 80, left: 140, right: 140 },
-                    children: [new Paragraph({ children: [new TextRun({ text: "", size: 20 })] })]
-                })]
-            }),
-            new TableRow({
-                children: [
-                    new TableCell({
-                        borders: { top: { style: BorderStyle.DASHED, size: 1, color: BORDER_GREY }, bottom: navyBorder, left: navyBorder, right: thinBorder },
-                        width: { size: labelWidth, type: WidthType.DXA },
-                        shading: { fill: LIGHT_GREY, type: ShadingType.CLEAR },
-                        margins: { top: 60, bottom: 60, left: 140, right: 140 },
-                        children: [new Paragraph({
-                            children: [new TextRun({ text: "Assessor use only", size: 16, font: "Arial", italics: true, color: "9CA3AF" })]
-                        })]
-                    }),
-                    new TableCell({
-                        borders: { top: { style: BorderStyle.DASHED, size: 1, color: BORDER_GREY }, bottom: navyBorder, left: thinBorder, right: navyBorder },
-                        width: { size: snsWidth, type: WidthType.DXA },
-                        shading: { fill: LIGHT_GREY, type: ShadingType.CLEAR },
-                        margins: { top: 60, bottom: 60, left: 140, right: 140 },
-                        verticalAlign: VerticalAlign.CENTER,
-                        children: [new Paragraph({
-                            alignment: AlignmentType.CENTER,
-                            children: [
-                                new TextRun({ text: "S  ", bold: true, size: 20, font: "Arial", color: "14532D" }),
-                                new TextRun({ text: "          ", size: 20 }),
-                                new TextRun({ text: "NYS", bold: true, size: 20, font: "Arial", color: "991B1B" })
-                            ]
-                        })]
-                    })
-                ]
-            })
+  return new Table({
+    width: { size: qWidth, type: WidthType.DXA },
+    columnWidths: [qWidth],
+    rows: [
+      new TableRow({
+        children: [new TableCell({
+          borders: navyBorders,
+          width: { size: qWidth, type: WidthType.DXA },
+          shading: { fill: "F0F4FF", type: ShadingType.CLEAR },
+          margins: { top: 100, bottom: 100, left: 140, right: 140 },
+          children: [new Paragraph({
+            children: [
+              new TextRun({ text: `Q${num}.  `, bold: true,
+                size: 22, font: "Arial", color: "0D2444" }),
+              new TextRun({ text: questionText, size: 22,
+                font: "Arial", color: "1A1A1A" })
+            ]
+          })]
+        })]
+      }),
+      new TableRow({
+        children: [new TableCell({
+          borders: {
+            top: thinBorder,
+            bottom: { style: BorderStyle.NONE },
+            left: navyBorder,
+            right: navyBorder
+          },
+          width: { size: qWidth, type: WidthType.DXA },
+          margins: { top: 80, bottom: 40, left: 140, right: 140 },
+          children: [new Paragraph({
+            children: [new TextRun({
+              text: "Your answer:", bold: true, size: 18,
+              font: "Arial", color: "6B7280", italics: true
+            })]
+          })]
+        })]
+      }),
+      new TableRow({
+        height: { value: 1600, rule: "exact" },
+        children: [new TableCell({
+          borders: {
+            top: { style: BorderStyle.NONE },
+            bottom: thinBorder,
+            left: navyBorder,
+            right: navyBorder
+          },
+          width: { size: qWidth, type: WidthType.DXA },
+          margins: { top: 40, bottom: 80, left: 140, right: 140 },
+          children: [new Paragraph({
+            children: [new TextRun({ text: "", size: 20 })]
+          })]
+        })]
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: {
+              top: { style: BorderStyle.DASHED, size: 1,
+                color: "D1D5DB" },
+              bottom: navyBorder,
+              left: navyBorder,
+              right: thinBorder
+            },
+            width: { size: labelWidth, type: WidthType.DXA },
+            shading: { fill: "F9FAFB", type: ShadingType.CLEAR },
+            margins: { top: 60, bottom: 60, left: 140, right: 140 },
+            children: [new Paragraph({
+              children: [new TextRun({
+                text: "Assessor use only", size: 16,
+                font: "Arial", italics: true, color: "9CA3AF"
+              })]
+            })]
+          }),
+          new TableCell({
+            borders: {
+              top: { style: BorderStyle.DASHED, size: 1,
+                color: "D1D5DB" },
+              bottom: navyBorder,
+              left: thinBorder,
+              right: navyBorder
+            },
+            width: { size: snsWidth, type: WidthType.DXA },
+            shading: { fill: "F9FAFB", type: ShadingType.CLEAR },
+            margins: { top: 60, bottom: 60, left: 140, right: 140 },
+            verticalAlign: VerticalAlign.CENTER,
+            children: [new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ text: "S  ", bold: true, size: 20,
+                  font: "Arial", color: "14532D" }),
+                new TextRun({ text: "          ", size: 20 }),
+                new TextRun({ text: "NYS", bold: true, size: 20,
+                  font: "Arial", color: "991B1B" })
+              ]
+            })]
+          })
         ]
-    });
+      })
+    ]
+  });
 }
 
 function resultTable(partLabel) {
