@@ -1237,12 +1237,21 @@ ${mText}`;
             // ── Generate compliance documents ──────────────────────────────
             const mappingData = extractMappingData(parsed, unitInfo, cohortInfo, sections, mappingIndex);
 
-            // Extract question strings from knowledgeSection (strip model answers, keep Qn. lines)
-            const builtQuestions = (typeof kText === 'string' ? kText : '')
-                .split('\n')
-                .filter(l => /^Q\d+\./.test(l.trim()))
-                .map(l => l.replace(/^Q\d+\.\s*/, '').trim())
-                .filter(Boolean);
+            // Extract question strings from knowledgeSection
+            // Matches lines like: "Q1. text", "**Q1. text**", "**Q1.** text", "Q1. **text**"
+            // Strips markdown bold markers, model answer lines, and blank lines
+            const builtQuestions = [];
+            if (typeof kText === 'string') {
+                const lines = kText.split('\n');
+                for (const line of lines) {
+                    const stripped = line.replace(/\*\*/g, '').trim();
+                    const match = stripped.match(/^Q(\d+)\.\s*(.+)/);
+                    if (match) {
+                        builtQuestions.push(match[2].trim());
+                    }
+                }
+            }
+            console.log('Question count:', builtQuestions.length, builtQuestions);
 
             // Extract observation items from observationSection (table rows, non-header text cells)
             const builtObsItems = (typeof oText === 'string' ? oText : '')
@@ -1254,14 +1263,29 @@ ${mText}`;
                 })
                 .filter(Boolean);
 
-            // Extract project steps from projectSection
+            // Extract project steps from projectSection — handle multiple heading formats
             const builtProjectSteps = [];
             if (typeof pText === 'string') {
-                const stepMatches = [...pText.matchAll(/###?\s*(Step \d+[^:\n]*:[^\n]*)\n([\s\S]*?)(?=###?\s*Step \d+|$)/g)];
+                // Match: "### Step 1: Title", "### Step 1 — Title", "**Step 1: Title**", "**Step 1 — Title**"
+                const stepMatches = [...pText.matchAll(/(?:#{1,3}\s*|\*\*)(Step\s+\d+[^*\n]*?)(?:\*\*|)\n([\s\S]*?)(?=(?:#{1,3}\s*|\*\*)Step\s+\d+|$)/gi)];
                 stepMatches.forEach(m => {
-                    builtProjectSteps.push({ title: m[1].trim(), desc: m[2].trim().slice(0, 600) });
+                    const title = m[1].replace(/[*#]/g, '').trim();
+                    const desc = m[2].replace(/\*\*/g, '').trim().slice(0, 600);
+                    if (title) builtProjectSteps.push({ title, desc });
                 });
+                // Fallback: numbered list steps if no heading-style steps found
+                if (builtProjectSteps.length === 0) {
+                    const listMatches = [...pText.matchAll(/^\d+\.\s+\*\*([^*]+)\*\*[:.]?\s*\n?([\s\S]*?)(?=^\d+\.|$)/gm)];
+                    listMatches.forEach(m => {
+                        builtProjectSteps.push({ title: m[1].trim(), desc: m[2].trim().slice(0, 600) });
+                    });
+                }
             }
+            console.log('Passing to booklet:', {
+                questions: builtQuestions,
+                obsItems: builtObsItems,
+                projectSteps: builtProjectSteps,
+            });
 
             // Run all three in parallel, don't block on errors
             const [cmRes, vrRes, sbRes] = await Promise.allSettled([
@@ -1270,7 +1294,7 @@ ${mText}`;
                 base44.functions.invoke('generateStudentBooklet', {
                     unitCode: unitInfo.code,
                     unitTitle: unitInfo.title,
-                    questions: builtQuestions.length > 0 ? builtQuestions : parsed.ke_items?.map((_, i) => `Question ${i + 1}`) || [],
+                    questions: builtQuestions,
                     obsItems: builtObsItems.length > 0 ? builtObsItems : [],
                     projectSteps: builtProjectSteps.length > 0 ? builtProjectSteps : [],
                     occasionCount: 4,
