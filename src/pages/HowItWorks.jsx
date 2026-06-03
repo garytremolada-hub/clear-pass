@@ -314,6 +314,32 @@ export default function HowItWorks() {
                     </div>
                 </Section>
 
+                {/* Section 5 — Accessibility callout */}
+                <Section>
+                    <div style={{
+                        borderLeft: '4px solid #F59E0B',
+                        backgroundColor: '#FEF3C7',
+                        borderRadius: '8px',
+                        padding: '24px',
+                    }}>
+                        <p style={{ fontWeight: 700, color: NAVY, fontSize: '16px', marginBottom: '16px' }}>
+                            Readability is an accessibility issue, not a rigour issue
+                        </p>
+                        <p style={{ color: GREY_TEXT, fontSize: '14px', lineHeight: 1.7, marginBottom: '12px' }}>
+                            A common misunderstanding in the RTO sector is that writing assessments at a higher reading level makes them more rigorous. It does not.
+                        </p>
+                        <p style={{ color: GREY_TEXT, fontSize: '14px', lineHeight: 1.7, marginBottom: '12px' }}>
+                            Rigour comes from the Unit of Competency. The performance criteria, knowledge evidence, and performance evidence requirements set the standard. Language is just how the question is asked.
+                        </p>
+                        <p style={{ color: GREY_TEXT, fontSize: '14px', lineHeight: 1.7, marginBottom: '12px' }}>
+                            If a learner cannot understand the question, you are assessing their reading ability, not their competency. That is not a fair assessment under Clause 1.8 of the Standards for RTOs, which requires assessments to be fair and to consider the needs of the individual learner.
+                        </p>
+                        <p style={{ color: GREY_TEXT, fontSize: '14px', lineHeight: 1.7, margin: 0 }}>
+                            Clearpass matches the language to your learners. The UoC requirements stay fully covered. Only the words change.
+                        </p>
+                    </div>
+                </Section>
+
                 {/* Section 6 — FAQ */}
                 <Section>
                     <SectionHeading text="Common questions" />
@@ -336,6 +362,14 @@ export default function HowItWorks() {
                     <FAQ
                         q="What is the competency mapping document?"
                         a="A Word document that shows which question or task covers which performance criterion, knowledge evidence, and performance evidence requirement from the UoC. It gives auditors a direct line of sight from the assessment to the unit requirements."
+                    />
+                    <FAQ
+                        q="Does making an assessment easier to read reduce its rigour?"
+                        a="No. Making an assessment harder to read does not make it more rigorous — it just makes it harder to read. If a learner fails because they could not understand the question, you have not assessed their competency; you have assessed their reading ability. That is not a fair assessment. The rigour of an assessment comes from the Unit of Competency. The performance criteria, knowledge evidence, and performance evidence requirements set the standard. Clearpass keeps all of those requirements fully covered — it only changes the language used to ask the questions."
+                    />
+                    <FAQ
+                        q="How does readability relate to the Standards for RTOs?"
+                        a="Clause 1.8 of the Standards for RTOs requires assessments to be fair and flexible. Fairness means the individual learner's needs are considered in the assessment process. An assessment written at a reading level your learners cannot comfortably manage creates a language barrier that has nothing to do with competency. Clearpass helps you meet the fairness principle by matching assessment language to your learner cohort. The competency mapping document gives you documented evidence of this for your validation record. The Standards do not set a specific readability threshold — Clearpass provides a measurable, documented score that your assessor can use as evidence. The compliance decision still rests with your assessor and your RTO."
                     />
                     <FAQ
                         q="Can I use Clearpass for multiple RTOs or qualifications?"
