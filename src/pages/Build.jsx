@@ -1,13 +1,179 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useCohort } from '@/lib/CohortContext';
 import { downloadDocx } from '@/lib/downloadDocx';
 import { buildBSBLDR413Mapping } from '@/lib/buildBSBLDR413Mapping';
-import { CheckCircle, Upload, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { CheckCircle, Upload, AlertCircle, CheckCircle2, Loader2, Search } from 'lucide-react';
 import { extractMappingData } from '@/lib/extractMappingData';
+
+// ── TGA API helpers (browser-side, no credentials needed) ─────────────────────
+
+async function fetchUnitMetadata(unitCode) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    const url = `https://training.gov.au/api/training/${unitCode}?api-version=1.0&include=all`;
+    try {
+        const response = await fetch(url, { signal: controller.signal, headers: { 'Accept': 'application/json' } });
+        clearTimeout(timeout);
+        if (!response.ok) {
+            if (response.status === 404) throw new Error(`Unit code "${unitCode}" was not found on training.gov.au. Check the code and try again.`);
+            throw new Error(`Could not reach training.gov.au. Status: ${response.status}`);
+        }
+        const data = await response.json();
+        const unitTitle = data.title || '';
+        const code = data.code || unitCode;
+        const currentRelease = data.releases?.find(r => r.currency === 'current') || data.releases?.[0];
+        const releaseId = currentRelease?.id;
+        const releaseNumber = currentRelease?.releaseNumber || '1';
+        return { unitCode: code, unitTitle, releaseId, releaseNumber, rawData: data };
+    } catch (error) {
+        clearTimeout(timeout);
+        if (error.name === 'AbortError') throw new Error('training.gov.au took too long to respond. Check your internet connection and try again.');
+        throw error;
+    }
+}
+
+async function fetchReleaseAssets(releaseId) {
+    const url = `https://training.gov.au/api/training/${releaseId}?include=All&api-version=1.0`;
+    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!response.ok) throw new Error(`Could not fetch unit assets. Status: ${response.status}`);
+    const data = await response.json();
+    const xmlAsset = data.assets?.find(a => a.type === 'unitPackage' && a.name?.endsWith('.xml') && a.name?.includes('Complete'));
+    const fallbackXml = data.assets?.find(a => a.name?.endsWith('.xml'));
+    const xmlUrl = xmlAsset?.url || fallbackXml?.url;
+    if (!xmlUrl) throw new Error('No XML file found for this unit. The unit may use an older format.');
+    return { xmlUrl, assets: data.assets };
+}
+
+function parseAuthorITXml(xmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'text/xml');
+
+    function getTopicText(topicElement) {
+        const paragraphs = topicElement.querySelectorAll('p');
+        return Array.from(paragraphs).map(p => p.textContent.trim()).filter(t => t.length > 0);
+    }
+
+    function findTopic(descriptionText) {
+        const topics = doc.querySelectorAll('Topic');
+        for (const topic of topics) {
+            const desc = topic.querySelector('Description');
+            if (desc && desc.textContent.trim() === descriptionText) return topic;
+        }
+        return null;
+    }
+
+    // Elements and Performance Criteria
+    const elementsAndPCTopic = findTopic('Elements and Performance Criteria');
+    const elements = [];
+    if (elementsAndPCTopic) {
+        const skipTexts = new Set(['ELEMENT', 'PERFORMANCE CRITERIA', 'Elements describe the essential outcomes.', 'Performance criteria describe the performance needed to demonstrate achievement of the element.']);
+        let currentElement = null;
+        getTopicText(elementsAndPCTopic).forEach(text => {
+            if (skipTexts.has(text)) return;
+            const elementMatch = text.match(/^(\d+)\.\s+(.+)$/);
+            if (elementMatch && !text.match(/^\d+\.\d+/)) {
+                currentElement = { number: parseInt(elementMatch[1]), title: elementMatch[2].trim(), performanceCriteria: [] };
+                elements.push(currentElement);
+                return;
+            }
+            const pcMatch = text.match(/^(\d+\.\d+)\s+(.+)$/);
+            if (pcMatch && currentElement) currentElement.performanceCriteria.push({ ref: pcMatch[1], text: pcMatch[2].trim() });
+        });
+    }
+
+    // Performance Evidence
+    const peTopic = findTopic('Performance Evidence');
+    const performanceEvidence = [];
+    if (peTopic) {
+        const skipPrefixes = ['The candidate must demonstrate', 'In the course of the above'];
+        getTopicText(peTopic).forEach(text => {
+            if (!skipPrefixes.some(p => text.startsWith(p)) && text.length > 10) performanceEvidence.push(text);
+        });
+    }
+
+    // Knowledge Evidence
+    const keTopic = findTopic('Knowledge Evidence');
+    const knowledgeEvidence = [];
+    let currentKEParent = null;
+    if (keTopic) {
+        getTopicText(keTopic).forEach(text => {
+            if (text.startsWith('The candidate must be able to demonstrate knowledge') || text.length < 5) return;
+            const isSubItem = currentKEParent && text.length < 40 && text[0] === text[0].toLowerCase() && !text.match(/^\d/);
+            if (isSubItem) {
+                currentKEParent.subItems = currentKEParent.subItems || [];
+                currentKEParent.subItems.push(text);
+            } else {
+                const keItem = { text };
+                currentKEParent = (text.endsWith(':') || text.includes(', including')) ? keItem : null;
+                knowledgeEvidence.push(keItem);
+            }
+        });
+    }
+
+    // Assessment Conditions
+    const acTopic = findTopic('Assessment Conditions');
+    const assessmentConditions = [];
+    if (acTopic) getTopicText(acTopic).forEach(text => { if (text.length > 10) assessmentConditions.push(text); });
+
+    // Foundation Skills
+    const fsTopic = findTopic('Foundation Skills');
+    const foundationSkills = [];
+    if (fsTopic) {
+        const skipTexts = new Set(['SKILL', 'DESCRIPTION', 'This section describes language, literacy, numeracy and employment skills incorporated in the performance criteria that are required for competent performance.']);
+        let currentSkill = null;
+        getTopicText(fsTopic).forEach(text => {
+            if (skipTexts.has(text)) return;
+            if (text.length < 30 && !text.includes('.') && !text.includes(',')) {
+                currentSkill = { skill: text, descriptions: [] };
+                foundationSkills.push(currentSkill);
+            } else if (currentSkill) {
+                currentSkill.descriptions.push(text);
+            }
+        });
+    }
+
+    // Application
+    const appTopic = findTopic('Application');
+    const application = appTopic ? getTopicText(appTopic).join(' ') : '';
+
+    return {
+        elements, performanceEvidence, knowledgeEvidence, assessmentConditions, foundationSkills, application,
+        summary: {
+            elementCount: elements.length,
+            pcCount: elements.reduce((sum, el) => sum + el.performanceCriteria.length, 0),
+            peCount: performanceEvidence.length,
+            keCount: knowledgeEvidence.length,
+            acCount: assessmentConditions.length,
+            fsCount: foundationSkills.length,
+        }
+    };
+}
+
+async function fetchAndParseUnitXml(xmlUrl) {
+    const response = await fetch(xmlUrl);
+    if (!response.ok) throw new Error(`Could not download unit XML. Status: ${response.status}`);
+    const xmlText = await response.text();
+    return parseAuthorITXml(xmlText);
+}
+
+async function fetchUnitFromTGA(unitCode) {
+    const code = unitCode.trim().toUpperCase();
+    if (!code.match(/^[A-Z]{2,8}\d{2,6}[A-Z]?$/)) {
+        throw new Error('That does not look like a valid unit code. Unit codes look like BSBLDR413 or MSMSUP204.');
+    }
+    const metadata = await fetchUnitMetadata(code);
+    const assets = await fetchReleaseAssets(metadata.releaseId);
+    const uocData = await fetchAndParseUnitXml(assets.xmlUrl);
+    return { unitCode: metadata.unitCode, unitTitle: metadata.unitTitle, releaseNumber: metadata.releaseNumber, ...uocData };
+}
+
+function isNewUocStructure(uocData) {
+    return Array.isArray(uocData?.elements) && uocData.elements.length > 0;
+}
 // ── Inlined: BuildProgress ────────────────────────────────────────────────────
-const BP_STEPS = ['Upload UoC', 'Learners', 'Review', 'Done'];
+const BP_STEPS = ['Find Unit', 'Learners', 'Review', 'Done'];
 function BuildProgress({ step, contextNote }) {
     return (
         <div style={{ marginBottom: '28px' }}>
@@ -127,18 +293,53 @@ function BuildHeader() {
     );
 }
 
-// ── Screen 1 — Upload UoC ─────────────────────────────────────────────────────
+// ── Screen 1 — Unit code search (primary) + file upload fallback ──────────────
 
 function Screen1({ onConfirm }) {
+    // TGA search state
+    const [searchMode, setSearchMode] = useState('tga'); // 'tga' | 'upload'
+    const [unitCodeInput, setUnitCodeInput] = useState('');
+    const [tgaLoading, setTgaLoading] = useState(false);
+    const [tgaResult, setTgaResult] = useState(null);   // structured uocData from TGA
+    const [tgaError, setTgaError] = useState(null);
+
+    // Legacy upload state
     const [file, setFile] = useState(null);
     const [pasteText, setPasteText] = useState('');
     const [extracting, setExtracting] = useState(false);
-    const [unitInfo, setUnitInfo] = useState(null); // { code, title, text }
-    const [error, setError] = useState(null);
+    const [uploadResult, setUploadResult] = useState(null); // { code, title, text }
+    const [uploadError, setUploadError] = useState(null);
     const inputRef = useRef();
 
-    const MAX_SIZE = 5 * 1024 * 1024;
+    // ── TGA search ──
+    const handleTgaSearch = async (e) => {
+        e.preventDefault();
+        if (!unitCodeInput.trim()) return;
+        setTgaLoading(true);
+        setTgaError(null);
+        setTgaResult(null);
+        try {
+            const data = await fetchUnitFromTGA(unitCodeInput);
+            setTgaResult(data);
+        } catch (err) {
+            setTgaError(err.message);
+        } finally {
+            setTgaLoading(false);
+        }
+    };
 
+    const handleTgaConfirm = () => {
+        onConfirm({
+            code: tgaResult.unitCode,
+            title: tgaResult.unitTitle,
+            releaseNumber: tgaResult.releaseNumber,
+            uocData: tgaResult,   // structured — new path
+            text: null,           // not needed for new path
+        });
+    };
+
+    // ── Legacy upload ──
+    const MAX_SIZE = 5 * 1024 * 1024;
     const validateFile = (f) => {
         if (!f.name.match(/\.(pdf|docx)$/i)) return 'wrong_format';
         if (f.size > MAX_SIZE) return 'too_large';
@@ -147,37 +348,22 @@ function Screen1({ onConfirm }) {
 
     const extractUnit = async (f, text) => {
         setExtracting(true);
-        setError(null);
+        setUploadError(null);
         try {
             let extractedText = text;
             if (f) {
-                const uploadResult = await base44.integrations.Core.UploadFile({ file: f });
-                const res = await base44.functions.invoke('extractDocumentText', {
-                    file_url: uploadResult.file_url,
-                    file_name: f.name,
-                    label: 'Unit of Competency',
-                });
+                const up = await base44.integrations.Core.UploadFile({ file: f });
+                const res = await base44.functions.invoke('extractDocumentText', { file_url: up.file_url, file_name: f.name, label: 'Unit of Competency' });
                 extractedText = res?.data?.text || '';
             }
             if (!extractedText) throw new Error('empty');
-
-            // Extract unit code and title using LLM
             const parseResult = await base44.integrations.Core.InvokeLLM({
                 prompt: `Extract the unit code and unit title from this Unit of Competency text. Return JSON only: {"code": "...", "title": "..."}\n\n${extractedText.slice(0, 2000)}`,
-                response_json_schema: {
-                    type: 'object',
-                    properties: { code: { type: 'string' }, title: { type: 'string' } }
-                }
+                response_json_schema: { type: 'object', properties: { code: { type: 'string' }, title: { type: 'string' } } }
             });
-            const code = parseResult?.code || 'Unknown';
-            const title = parseResult?.title || 'Unit of Competency';
-            setUnitInfo({ code, title, text: extractedText });
+            setUploadResult({ code: parseResult?.code || 'Unknown', title: parseResult?.title || 'Unit of Competency', text: extractedText });
         } catch (err) {
-            if (err.message === 'empty') {
-                setError('scanned');
-            } else {
-                setError('parse');
-            }
+            setUploadError(err.message === 'empty' ? 'scanned' : 'parse');
         } finally {
             setExtracting(false);
         }
@@ -185,184 +371,228 @@ function Screen1({ onConfirm }) {
 
     const handleFile = (f) => {
         const err = validateFile(f);
-        if (err) { setError(err); return; }
-        setFile(f);
-        setError(null);
-        setUnitInfo(null);
+        if (err) { setUploadError(err); return; }
+        setFile(f); setUploadError(null); setUploadResult(null);
         extractUnit(f, null);
     };
 
     const handlePaste = (val) => {
         setPasteText(val);
-        if (val.length >= 100) {
-            setError(null);
-            setUnitInfo(null);
-            extractUnit(null, val);
-        }
+        if (val.length >= 100) { setUploadError(null); setUploadResult(null); extractUnit(null, val); }
     };
 
-    const handleDrop = (e) => {
-        e.preventDefault();
-        const f = e.dataTransfer.files?.[0];
-        if (f) handleFile(f);
+    const handleDrop = (e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f); };
+
+    const uploadErrorMessages = {
+        scanned: "This looks like a scanned image. Try a text-based PDF or paste the text below.",
+        too_large: "This file is too large. Try a smaller file or paste the text below.",
+        wrong_format: "This file format isn't supported. Try .pdf or .docx.",
+        parse: "We couldn't read this file. Try a different file or paste the text below.",
     };
 
-    const errorMessages = {
-        scanned: { icon: '⚠', text: "This looks like a scanned image. Try a text-based PDF or paste the text below." },
-        too_large: { icon: '⚠', text: "This file is too large. Try a smaller file or paste the text below." },
-        wrong_format: { icon: '⚠', text: "This file format isn't supported. Try .pdf or .docx." },
-        parse: { icon: '⚠', text: "We couldn't read this file. Try a different file or paste the text below." },
-    };
+    const infoRow = (label, value) => (
+        <tr key={label}>
+            <td style={{ padding: '7px 12px', color: '#6b7280', fontSize: '13px', fontWeight: 500, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f4f6' }}>{label}</td>
+            <td style={{ padding: '7px 12px', color: '#0d2444', fontSize: '13px', borderBottom: '1px solid #f3f4f6' }}>{value}</td>
+        </tr>
+    );
 
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
             <div style={{ maxWidth: '540px', margin: '0 auto', padding: '32px 24px' }}>
-                <BuildProgress step={1} contextNote="Upload your Unit of Competency — we'll read it and design your assessment automatically." />
+                <BuildProgress step={1} contextNote="Enter a unit code to load it directly from training.gov.au — no file upload needed." />
 
-                <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    Upload your Unit of Competency
-                    <HelpIcon
-                        url="https://training.gov.au/Search/Units"
-                        heading="Find your Unit of Competency"
-                        description="Training.gov.au is the official Australian register of all vocational education and training units. Search by unit code (e.g. BSBLDR413) to find the complete unit details."
-                    />
+                <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
+                    What unit are you building for?
                 </h2>
+                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
+                    Enter the unit code to load it directly from training.gov.au
+                </p>
 
-                {/* Upload area */}
-                {!unitInfo && !extracting && (
-                    <div
-                        onDrop={handleDrop}
-                        onDragOver={(e) => e.preventDefault()}
-                        onClick={() => inputRef.current?.click()}
-                        style={{
-                            border: '2px dashed #e5e7eb',
-                            borderRadius: '12px',
-                            padding: '40px',
-                            textAlign: 'center',
-                            backgroundColor: '#f9fafb',
-                            cursor: 'pointer',
-                            marginBottom: '16px',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.borderColor = '#c9a84c'}
-                        onMouseLeave={e => e.currentTarget.style.borderColor = '#e5e7eb'}
-                    >
-                        <input ref={inputRef} type="file" accept=".pdf,.docx" className="hidden" onChange={e => handleFile(e.target.files?.[0])} />
-                        <Upload style={{ color: '#c9a84c', width: '32px', height: '32px', margin: '0 auto 12px' }} />
-                        <p style={{ color: '#0d2444', fontSize: '14px', marginBottom: '6px' }}>Drop your UoC here or click to browse</p>
-                        <p style={{ color: '#9ca3af', fontSize: '12px' }}>.pdf or .docx files accepted</p>
-                    </div>
+                {/* ── TGA search panel ── */}
+                {searchMode === 'tga' && (
+                    <>
+                        {/* Search input */}
+                        {!tgaResult && (
+                            <form onSubmit={handleTgaSearch} style={{ marginBottom: '16px' }}>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <input
+                                        type="text"
+                                        value={unitCodeInput}
+                                        onChange={e => { setUnitCodeInput(e.target.value.toUpperCase()); setTgaError(null); }}
+                                        placeholder="e.g. BSBLDR413 or MSMSUP204"
+                                        style={{
+                                            flex: 1, height: '48px',
+                                            border: '1px solid #e5e7eb', borderRadius: '8px',
+                                            padding: '0 14px', fontSize: '16px',
+                                            outline: 'none', boxSizing: 'border-box',
+                                            letterSpacing: '0.5px',
+                                        }}
+                                        onFocus={e => e.target.style.borderColor = '#c9a84c'}
+                                        onBlur={e => e.target.style.borderColor = '#e5e7eb'}
+                                        disabled={tgaLoading}
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={tgaLoading || !unitCodeInput.trim()}
+                                        style={{
+                                            height: '48px', padding: '0 20px',
+                                            backgroundColor: tgaLoading || !unitCodeInput.trim() ? '#e5e7eb' : '#c9a84c',
+                                            color: tgaLoading || !unitCodeInput.trim() ? '#9ca3af' : '#0d2444',
+                                            border: 'none', borderRadius: '8px',
+                                            fontSize: '14px', fontWeight: 600,
+                                            cursor: tgaLoading || !unitCodeInput.trim() ? 'not-allowed' : 'pointer',
+                                            display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
+                                        }}
+                                    >
+                                        {tgaLoading
+                                            ? <><Loader2 style={{ width: '16px', height: '16px', animation: 'spin 1s linear infinite' }} /> Loading...</>
+                                            : <><Search style={{ width: '16px', height: '16px' }} /> Find unit</>
+                                        }
+                                    </button>
+                                </div>
+                                <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+                                {tgaLoading && (
+                                    <p style={{ color: '#6b7280', fontSize: '12px', marginTop: '8px' }}>Loading from training.gov.au...</p>
+                                )}
+                            </form>
+                        )}
+
+                        {/* Error state */}
+                        {tgaError && (
+                            <div style={{ border: '1px solid #ef4444', borderRadius: '8px', padding: '14px 16px', backgroundColor: '#fef2f2', marginBottom: '16px' }}>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '12px' }}>
+                                    <AlertCircle style={{ color: '#ef4444', width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
+                                    <p style={{ color: '#dc2626', fontSize: '13px', margin: 0 }}>{tgaError}</p>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button onClick={() => { setTgaError(null); }} style={{ padding: '5px 12px', border: '1px solid #ef4444', borderRadius: '6px', backgroundColor: 'transparent', color: '#dc2626', fontSize: '12px', cursor: 'pointer' }}>
+                                        Try again
+                                    </button>
+                                    <button onClick={() => setSearchMode('upload')} style={{ padding: '5px 12px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: 'transparent', color: '#6b7280', fontSize: '12px', cursor: 'pointer' }}>
+                                        Upload a document instead
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Confirmation card */}
+                        {tgaResult && (
+                            <div style={{ border: '1px solid #22c55e', borderRadius: '10px', backgroundColor: '#f0fdf4', overflow: 'hidden', marginBottom: '16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 16px', borderBottom: '1px solid #dcfce7' }}>
+                                    <CheckCircle style={{ color: '#22c55e', width: '20px', height: '20px', flexShrink: 0 }} />
+                                    <span style={{ color: '#166534', fontSize: '14px', fontWeight: 600 }}>Unit found on training.gov.au</span>
+                                </div>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
+                                    <tbody>
+                                        {infoRow('Unit Code', tgaResult.unitCode)}
+                                        {infoRow('Unit Title', tgaResult.unitTitle)}
+                                        {infoRow('Release', tgaResult.releaseNumber)}
+                                        {infoRow('Elements', tgaResult.summary?.elementCount ?? '—')}
+                                        {infoRow('Performance Criteria', tgaResult.summary?.pcCount ?? '—')}
+                                        {infoRow('Performance Evidence', tgaResult.summary?.peCount ?? '—')}
+                                        {infoRow('Knowledge Evidence', tgaResult.summary?.keCount ?? '—')}
+                                    </tbody>
+                                </table>
+                                <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <button
+                                        onClick={handleTgaConfirm}
+                                        style={{ width: '100%', height: '44px', backgroundColor: '#c9a84c', color: '#0d2444', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                                    >
+                                        Build assessment for this unit →
+                                    </button>
+                                    <button
+                                        onClick={() => { setTgaResult(null); setUnitCodeInput(''); }}
+                                        style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer' }}
+                                    >
+                                        Not the right unit? Search again
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Fallback link */}
+                        {!tgaResult && !tgaLoading && (
+                            <p style={{ color: '#9ca3af', fontSize: '12px', marginTop: '4px' }}>
+                                Can't find your unit code?{' '}
+                                <button onClick={() => setSearchMode('upload')} style={{ background: 'none', border: 'none', color: '#c9a84c', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>
+                                    Upload a document instead
+                                </button>
+                            </p>
+                        )}
+                    </>
                 )}
 
-                {/* Extracting spinner */}
-                {extracting && (
-                    <div style={{ textAlign: 'center', padding: '40px', border: '2px dashed #e5e7eb', borderRadius: '12px', marginBottom: '16px' }}>
-                        <Loader2 style={{ color: '#c9a84c', width: '28px', height: '28px', margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
-                        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-                        <p style={{ color: '#6b7280', fontSize: '14px' }}>Reading your UoC...</p>
-                    </div>
-                )}
-
-                {/* Confirmation card */}
-                {unitInfo && (
-                    <div style={{
-                        border: '1px solid #22c55e',
-                        borderRadius: '8px',
-                        padding: '16px',
-                        backgroundColor: '#f0fdf4',
-                        marginBottom: '16px',
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                            <CheckCircle style={{ color: '#22c55e', width: '20px', height: '20px', flexShrink: 0 }} />
-                            <span style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500 }}>
-                                Got it — {unitInfo.code} {unitInfo.title}
-                            </span>
-                        </div>
-                        <p style={{ color: '#6b7280', fontSize: '12px', marginBottom: '12px', marginLeft: '30px' }}>Is this the right unit?</p>
-                        <div style={{ display: 'flex', gap: '8px', marginLeft: '30px' }}>
-                            <button
-                                onClick={() => onConfirm(unitInfo)}
-                                style={{ padding: '6px 14px', border: '1px solid #22c55e', borderRadius: '6px', backgroundColor: 'transparent', color: '#166534', fontSize: '13px', cursor: 'pointer' }}
-                            >
-                                Yes, continue →
+                {/* ── Legacy upload fallback ── */}
+                {searchMode === 'upload' && (
+                    <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+                            <button onClick={() => { setSearchMode('tga'); setUploadResult(null); setUploadError(null); }} style={{ background: 'none', border: 'none', color: '#c9a84c', fontSize: '13px', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>
+                                ← Search by unit code instead
                             </button>
-                            <button
-                                onClick={() => { setUnitInfo(null); setFile(null); setPasteText(''); }}
-                                style={{ padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: 'transparent', color: '#6b7280', fontSize: '13px', cursor: 'pointer' }}
-                            >
-                                No, upload a different file
-                            </button>
                         </div>
-                    </div>
+
+                        {!uploadResult && !extracting && (
+                            <div
+                                onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => inputRef.current?.click()}
+                                style={{ border: '2px dashed #e5e7eb', borderRadius: '12px', padding: '40px', textAlign: 'center', backgroundColor: '#f9fafb', cursor: 'pointer', marginBottom: '16px' }}
+                                onMouseEnter={e => e.currentTarget.style.borderColor = '#c9a84c'}
+                                onMouseLeave={e => e.currentTarget.style.borderColor = '#e5e7eb'}
+                            >
+                                <input ref={inputRef} type="file" accept=".pdf,.docx" className="hidden" onChange={e => handleFile(e.target.files?.[0])} />
+                                <Upload style={{ color: '#c9a84c', width: '32px', height: '32px', margin: '0 auto 12px' }} />
+                                <p style={{ color: '#0d2444', fontSize: '14px', marginBottom: '6px' }}>Drop your UoC here or click to browse</p>
+                                <p style={{ color: '#9ca3af', fontSize: '12px' }}>.pdf or .docx files accepted</p>
+                            </div>
+                        )}
+
+                        {extracting && (
+                            <div style={{ textAlign: 'center', padding: '40px', border: '2px dashed #e5e7eb', borderRadius: '12px', marginBottom: '16px' }}>
+                                <Loader2 style={{ color: '#c9a84c', width: '28px', height: '28px', margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
+                                <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+                                <p style={{ color: '#6b7280', fontSize: '14px' }}>Reading your UoC...</p>
+                            </div>
+                        )}
+
+                        {uploadResult && (
+                            <div style={{ border: '1px solid #22c55e', borderRadius: '8px', padding: '16px', backgroundColor: '#f0fdf4', marginBottom: '16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                                    <CheckCircle style={{ color: '#22c55e', width: '20px', height: '20px', flexShrink: 0 }} />
+                                    <span style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500 }}>Got it — {uploadResult.code} {uploadResult.title}</span>
+                                </div>
+                                <p style={{ color: '#6b7280', fontSize: '12px', marginBottom: '12px', marginLeft: '30px' }}>Is this the right unit?</p>
+                                <div style={{ display: 'flex', gap: '8px', marginLeft: '30px' }}>
+                                    <button onClick={() => onConfirm({ code: uploadResult.code, title: uploadResult.title, text: uploadResult.text, uocData: null })} style={{ padding: '6px 14px', border: '1px solid #22c55e', borderRadius: '6px', backgroundColor: 'transparent', color: '#166534', fontSize: '13px', cursor: 'pointer' }}>
+                                        Yes, continue →
+                                    </button>
+                                    <button onClick={() => { setUploadResult(null); setFile(null); setPasteText(''); }} style={{ padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: 'transparent', color: '#6b7280', fontSize: '13px', cursor: 'pointer' }}>
+                                        No, try a different file
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {uploadError && (
+                            <div style={{ border: '1px solid #ef4444', borderRadius: '8px', padding: '12px 16px', backgroundColor: '#fef2f2', marginBottom: '16px', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                                <AlertCircle style={{ color: '#ef4444', width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
+                                <p style={{ color: '#dc2626', fontSize: '13px' }}>{uploadErrorMessages[uploadError]}</p>
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '16px 0' }}>
+                            <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }} />
+                            <span style={{ color: '#9ca3af', fontSize: '13px' }}>or paste below</span>
+                            <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }} />
+                        </div>
+
+                        <textarea
+                            value={pasteText}
+                            onChange={e => handlePaste(e.target.value)}
+                            placeholder="Paste your Unit of Competency text here..."
+                            style={{ width: '100%', height: '180px', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', fontFamily: 'Arial', fontSize: '11px', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+                        />
+                    </>
                 )}
-
-                {/* Error card */}
-                {error && errorMessages[error] && (
-                    <div style={{
-                        border: '1px solid #ef4444',
-                        borderRadius: '8px',
-                        padding: '12px 16px',
-                        backgroundColor: '#fef2f2',
-                        marginBottom: '16px',
-                        display: 'flex',
-                        gap: '8px',
-                        alignItems: 'flex-start',
-                    }}>
-                        <AlertCircle style={{ color: '#ef4444', width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
-                        <p style={{ color: '#dc2626', fontSize: '13px' }}>
-                            We couldn't read this file. {errorMessages[error].text}
-                        </p>
-                    </div>
-                )}
-
-                {/* Info note */}
-                <div style={{
-                    backgroundColor: '#f0f7ff',
-                    borderLeft: '3px solid #c9a84c',
-                    borderRadius: '4px',
-                    padding: '10px 14px',
-                    marginTop: '12px',
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
-                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                        </svg>
-                        <p style={{ color: '#6b7280', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
-                            For best results, download your UoC from{' '}
-                            <a href="https://training.gov.au" target="_blank" rel="noopener noreferrer" style={{ color: '#c9a84c', textDecoration: 'underline' }}>training.gov.au</a>
-                            {' '}— this gives you the most current version in a readable format.
-                            <br />
-                            Accepted: .docx and text-based .pdf only. Scanned PDFs cannot be read — use the paste box below instead.
-                            <br />
-                            You can upload up to 4 UoCs at once if they share common outcomes.
-                        </p>
-                    </div>
-                </div>
-
-                {/* OR divider */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '16px 0' }}>
-                    <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }} />
-                    <span style={{ color: '#9ca3af', fontSize: '13px' }}>or paste below</span>
-                    <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }} />
-                </div>
-
-                {/* Paste area */}
-                <textarea
-                    value={pasteText}
-                    onChange={e => handlePaste(e.target.value)}
-                    placeholder="Paste your Unit of Competency text here..."
-                    style={{
-                        width: '100%',
-                        height: '180px',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px',
-                        padding: '12px',
-                        fontFamily: 'Arial',
-                        fontSize: '11px',
-                        resize: 'vertical',
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                    }}
-                />
             </div>
         </div>
     );
@@ -917,12 +1147,25 @@ export default function Build() {
         const isLiteracy = ci.support === 'literacy' || ci.support === 'both';
         const isWorkplace = true; // default delivery
 
+        // Build a text summary for the structure LLM call — works for both new and old paths
+        const uocTextForStructure = isNewUocStructure(unitInfo.uocData)
+            ? [
+                `Unit: ${unitInfo.code} — ${unitInfo.title}`,
+                `\nKnowledge Evidence (${unitInfo.uocData.knowledgeEvidence.length} items):`,
+                unitInfo.uocData.knowledgeEvidence.map(k => k.text).join('\n'),
+                `\nPerformance Evidence (${unitInfo.uocData.performanceEvidence.length} items):`,
+                unitInfo.uocData.performanceEvidence.join('\n'),
+                `\nAssessment Conditions:`,
+                unitInfo.uocData.assessmentConditions.join('\n'),
+              ].join('\n')
+            : (unitInfo.text || '').slice(0, 6000);
+
         try {
             const result = await llmCall(
                 `You are an Australian VET assessment designer. Analyse this Unit of Competency and return a JSON object ONLY (no other text).
 
 UoC TEXT (first 6000 chars):
-${unitInfo.text.slice(0, 6000)}
+${uocTextForStructure}
 
 COHORT: ${ci.learnerDesc}, reading level: ${ci.band}
 ESL learners: ${isESL}, Literacy support: ${isLiteracy}, Workplace delivery: ${isWorkplace}
@@ -1026,15 +1269,31 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
         setScreen(4);
 
         const cohortBlock = buildCohortProfile(cohortInfo);
-        const uoc = unitInfo.text;
         const band = cohortInfo.band;
         const levelNote = `Target reading level: ${band}\nCohort: ${cohortBlock}`;
 
+        // Determine if we have structured TGA data or legacy text
+        const hasStructured = isNewUocStructure(unitInfo.uocData);
+
         try {
-            // CALL 1 — Parse UoC structure
+            // CALL 1 — Parse UoC structure (skip for new structured path)
             setBuildProgress(10);
-            const structure = await llmCall(
-                `You are an Australian VET assessment designer. Parse this Unit of Competency and return a JSON object only (no other text) with these fields:
+
+            let parsed;
+            if (hasStructured) {
+                // Build parsed object directly from structured TGA data — no AI needed
+                const ud = unitInfo.uocData;
+                parsed = {
+                    unit_code: unitInfo.code,
+                    unit_title: unitInfo.title,
+                    ke_items: ud.knowledgeEvidence.map(k => k.subItems ? `${k.text} (including: ${k.subItems.join(', ')})` : k.text),
+                    pe_items: ud.performanceEvidence,
+                    pc_items: ud.elements.flatMap(el => el.performanceCriteria.map(pc => `${pc.ref} — ${pc.text}`)),
+                };
+            } else {
+                const uoc = unitInfo.text || '';
+                const structure = await llmCall(
+                    `You are an Australian VET assessment designer. Parse this Unit of Competency and return a JSON object only (no other text) with these fields:
 - unit_code: string
 - unit_title: string  
 - ke_items: array of strings (each Knowledge Evidence item, verbatim)
@@ -1043,16 +1302,13 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
 
 UoC TEXT:
 ${uoc.slice(0, 8000)}`
-            );
-
-            let parsed;
-            try {
-                const jsonStr = typeof structure === 'string'
-                    ? structure.replace(/```json|```/g, '').trim()
-                    : JSON.stringify(structure);
-                parsed = JSON.parse(jsonStr);
-            } catch {
-                parsed = { ke_items: [], pe_items: [], pc_items: [] };
+                );
+                try {
+                    const jsonStr = typeof structure === 'string' ? structure.replace(/```json|```/g, '').trim() : JSON.stringify(structure);
+                    parsed = JSON.parse(jsonStr);
+                } catch {
+                    parsed = { ke_items: [], pe_items: [], pc_items: [] };
+                }
             }
 
             const keList = (parsed.ke_items || []).join('\n');
@@ -1067,7 +1323,7 @@ ${levelNote}
 Unit: ${unitInfo.code} — ${unitInfo.title}
 
 KNOWLEDGE EVIDENCE ITEMS TO COVER:
-${keList || uoc.slice(0, 3000)}
+${keList || (unitInfo.text || '').slice(0, 3000)}
 
 Instructions:
 - Write 8–12 questions that cover all knowledge evidence items
@@ -1138,7 +1394,7 @@ ${levelNote}
 Unit: ${unitInfo.code} — ${unitInfo.title}
 
 PERFORMANCE EVIDENCE TO COVER:
-${peList || uoc.slice(0, 2000)}
+${peList || (unitInfo.text || '').slice(0, 2000)}
 
 Instructions:
 - Write one practical workplace project task that covers all performance evidence
@@ -1214,7 +1470,13 @@ PERFORMANCE CRITERIA FROM UoC:
 ${parsed.pc_items?.join('\n') || '(see UoC)'}
 
 FULL UoC TEXT (for foundation skills and assessment conditions):
-${uoc.slice(0, 4000)}
+${hasStructured
+    ? [
+        ...(unitInfo.uocData.assessmentConditions || []).map(c => `Assessment condition: ${c}`),
+        ...(unitInfo.uocData.foundationSkills || []).map(fs => `Foundation skill: ${fs.skill} — ${(fs.descriptions || []).join(' ')}`),
+      ].join('\n')
+    : (unitInfo.text || '').slice(0, 4000)
+}
 
 Now produce a mapping index as a JSON object.
 Return ONLY the JSON. No explanation. No markdown fences.
