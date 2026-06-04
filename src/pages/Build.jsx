@@ -7,170 +7,8 @@ import { buildBSBLDR413Mapping } from '@/lib/buildBSBLDR413Mapping';
 import { CheckCircle, Upload, AlertCircle, CheckCircle2, Loader2, Search } from 'lucide-react';
 import { extractMappingData } from '@/lib/extractMappingData';
 
-// ── TGA API helpers (browser-side, no credentials needed) ─────────────────────
-
-async function fetchUnitMetadata(unitCode) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
-    const url = `https://training.gov.au/api/training/${unitCode}?api-version=1.0&include=all`;
-    try {
-        const response = await fetch(url, { signal: controller.signal, headers: { 'Accept': 'application/json' } });
-        clearTimeout(timeout);
-        if (!response.ok) {
-            if (response.status === 404) throw new Error(`Unit code "${unitCode}" was not found on training.gov.au. Check the code and try again.`);
-            throw new Error(`Could not reach training.gov.au. Status: ${response.status}`);
-        }
-        const data = await response.json();
-        const unitTitle = data.title || '';
-        const code = data.code || unitCode;
-        const currentRelease = data.releases?.find(r => r.currency === 'current') || data.releases?.[0];
-        const releaseId = currentRelease?.id;
-        const releaseNumber = currentRelease?.releaseNumber || '1';
-        return { unitCode: code, unitTitle, releaseId, releaseNumber, rawData: data };
-    } catch (error) {
-        clearTimeout(timeout);
-        if (error.name === 'AbortError') throw new Error('training.gov.au took too long to respond. Check your internet connection and try again.');
-        throw error;
-    }
-}
-
-async function fetchReleaseAssets(releaseId) {
-    const url = `https://training.gov.au/api/training/${releaseId}?include=All&api-version=1.0`;
-    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!response.ok) throw new Error(`Could not fetch unit assets. Status: ${response.status}`);
-    const data = await response.json();
-    const xmlAsset = data.assets?.find(a => a.type === 'unitPackage' && a.name?.endsWith('.xml') && a.name?.includes('Complete'));
-    const fallbackXml = data.assets?.find(a => a.name?.endsWith('.xml'));
-    const xmlUrl = xmlAsset?.url || fallbackXml?.url;
-    if (!xmlUrl) throw new Error('No XML file found for this unit. The unit may use an older format.');
-    return { xmlUrl, assets: data.assets };
-}
-
-function parseAuthorITXml(xmlText) {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, 'text/xml');
-
-    function getTopicText(topicElement) {
-        const paragraphs = topicElement.querySelectorAll('p');
-        return Array.from(paragraphs).map(p => p.textContent.trim()).filter(t => t.length > 0);
-    }
-
-    function findTopic(descriptionText) {
-        const topics = doc.querySelectorAll('Topic');
-        for (const topic of topics) {
-            const desc = topic.querySelector('Description');
-            if (desc && desc.textContent.trim() === descriptionText) return topic;
-        }
-        return null;
-    }
-
-    // Elements and Performance Criteria
-    const elementsAndPCTopic = findTopic('Elements and Performance Criteria');
-    const elements = [];
-    if (elementsAndPCTopic) {
-        const skipTexts = new Set(['ELEMENT', 'PERFORMANCE CRITERIA', 'Elements describe the essential outcomes.', 'Performance criteria describe the performance needed to demonstrate achievement of the element.']);
-        let currentElement = null;
-        getTopicText(elementsAndPCTopic).forEach(text => {
-            if (skipTexts.has(text)) return;
-            const elementMatch = text.match(/^(\d+)\.\s+(.+)$/);
-            if (elementMatch && !text.match(/^\d+\.\d+/)) {
-                currentElement = { number: parseInt(elementMatch[1]), title: elementMatch[2].trim(), performanceCriteria: [] };
-                elements.push(currentElement);
-                return;
-            }
-            const pcMatch = text.match(/^(\d+\.\d+)\s+(.+)$/);
-            if (pcMatch && currentElement) currentElement.performanceCriteria.push({ ref: pcMatch[1], text: pcMatch[2].trim() });
-        });
-    }
-
-    // Performance Evidence
-    const peTopic = findTopic('Performance Evidence');
-    const performanceEvidence = [];
-    if (peTopic) {
-        const skipPrefixes = ['The candidate must demonstrate', 'In the course of the above'];
-        getTopicText(peTopic).forEach(text => {
-            if (!skipPrefixes.some(p => text.startsWith(p)) && text.length > 10) performanceEvidence.push(text);
-        });
-    }
-
-    // Knowledge Evidence
-    const keTopic = findTopic('Knowledge Evidence');
-    const knowledgeEvidence = [];
-    let currentKEParent = null;
-    if (keTopic) {
-        getTopicText(keTopic).forEach(text => {
-            if (text.startsWith('The candidate must be able to demonstrate knowledge') || text.length < 5) return;
-            const isSubItem = currentKEParent && text.length < 40 && text[0] === text[0].toLowerCase() && !text.match(/^\d/);
-            if (isSubItem) {
-                currentKEParent.subItems = currentKEParent.subItems || [];
-                currentKEParent.subItems.push(text);
-            } else {
-                const keItem = { text };
-                currentKEParent = (text.endsWith(':') || text.includes(', including')) ? keItem : null;
-                knowledgeEvidence.push(keItem);
-            }
-        });
-    }
-
-    // Assessment Conditions
-    const acTopic = findTopic('Assessment Conditions');
-    const assessmentConditions = [];
-    if (acTopic) getTopicText(acTopic).forEach(text => { if (text.length > 10) assessmentConditions.push(text); });
-
-    // Foundation Skills
-    const fsTopic = findTopic('Foundation Skills');
-    const foundationSkills = [];
-    if (fsTopic) {
-        const skipTexts = new Set(['SKILL', 'DESCRIPTION', 'This section describes language, literacy, numeracy and employment skills incorporated in the performance criteria that are required for competent performance.']);
-        let currentSkill = null;
-        getTopicText(fsTopic).forEach(text => {
-            if (skipTexts.has(text)) return;
-            if (text.length < 30 && !text.includes('.') && !text.includes(',')) {
-                currentSkill = { skill: text, descriptions: [] };
-                foundationSkills.push(currentSkill);
-            } else if (currentSkill) {
-                currentSkill.descriptions.push(text);
-            }
-        });
-    }
-
-    // Application
-    const appTopic = findTopic('Application');
-    const application = appTopic ? getTopicText(appTopic).join(' ') : '';
-
-    return {
-        elements, performanceEvidence, knowledgeEvidence, assessmentConditions, foundationSkills, application,
-        summary: {
-            elementCount: elements.length,
-            pcCount: elements.reduce((sum, el) => sum + el.performanceCriteria.length, 0),
-            peCount: performanceEvidence.length,
-            keCount: knowledgeEvidence.length,
-            acCount: assessmentConditions.length,
-            fsCount: foundationSkills.length,
-        }
-    };
-}
-
-async function fetchAndParseUnitXml(xmlUrl) {
-    const response = await fetch(xmlUrl);
-    if (!response.ok) throw new Error(`Could not download unit XML. Status: ${response.status}`);
-    const xmlText = await response.text();
-    return parseAuthorITXml(xmlText);
-}
-
-async function fetchUnitFromTGA(unitCode) {
-    const code = unitCode.trim().toUpperCase();
-    if (!code.match(/^[A-Z]{2,8}\d{2,6}[A-Z]?$/)) {
-        throw new Error('That does not look like a valid unit code. Unit codes look like BSBLDR413 or MSMSUP204.');
-    }
-    const metadata = await fetchUnitMetadata(code);
-    const assets = await fetchReleaseAssets(metadata.releaseId);
-    const uocData = await fetchAndParseUnitXml(assets.xmlUrl);
-    return { unitCode: metadata.unitCode, unitTitle: metadata.unitTitle, releaseNumber: metadata.releaseNumber, ...uocData };
-}
-
-function isNewUocStructure(uocData) {
-    return Array.isArray(uocData?.elements) && uocData.elements.length > 0;
+function isNewUocStructure(data) {
+    return Array.isArray(data?.elements) && data.elements.length > 0;
 }
 // ── Inlined: BuildProgress ────────────────────────────────────────────────────
 const BP_STEPS = ['Find Unit', 'Learners', 'Review', 'Done'];
@@ -293,48 +131,46 @@ function BuildHeader() {
     );
 }
 
-// ── Screen 1 — Unit code search (primary) + file upload fallback ──────────────
+// ── Screen 1 — Unit code search (Deno backend) + file upload fallback ────────
 
 function Screen1({ onConfirm }) {
-    // TGA search state
     const [searchMode, setSearchMode] = useState('tga'); // 'tga' | 'upload'
-    const [unitCodeInput, setUnitCodeInput] = useState('');
-    const [tgaLoading, setTgaLoading] = useState(false);
-    const [tgaResult, setTgaResult] = useState(null);   // structured uocData from TGA
-    const [tgaError, setTgaError] = useState(null);
+    const [unitCode, setUnitCode] = useState('');
+    const [searchState, setSearchState] = useState('idle'); // 'idle'|'loading'|'confirmed'|'error'
+    const [searchError, setSearchError] = useState('');
+    const [uocData, setUocData] = useState(null);
 
     // Legacy upload state
-    const [file, setFile] = useState(null);
     const [pasteText, setPasteText] = useState('');
     const [extracting, setExtracting] = useState(false);
-    const [uploadResult, setUploadResult] = useState(null); // { code, title, text }
+    const [uploadResult, setUploadResult] = useState(null);
     const [uploadError, setUploadError] = useState(null);
     const inputRef = useRef();
 
-    // ── TGA search ──
-    const handleTgaSearch = async (e) => {
+    // ── TGA search via Deno backend ──
+    const handleFindUnit = async (e) => {
         e.preventDefault();
-        if (!unitCodeInput.trim()) return;
-        setTgaLoading(true);
-        setTgaError(null);
-        setTgaResult(null);
+        if (!unitCode.trim()) return;
+        setSearchState('loading');
+        setSearchError('');
+        setUocData(null);
         try {
-            const data = await fetchUnitFromTGA(unitCodeInput);
-            setTgaResult(data);
+            const result = await base44.functions.invoke('fetchUnitFromTGA', { unitCode: unitCode.trim() });
+            setUocData(result.data);
+            setSearchState('confirmed');
         } catch (err) {
-            setTgaError(err.message);
-        } finally {
-            setTgaLoading(false);
+            setSearchError(err?.response?.data?.error || err.message || 'Could not load unit. Try again.');
+            setSearchState('error');
         }
     };
 
     const handleTgaConfirm = () => {
         onConfirm({
-            code: tgaResult.unitCode,
-            title: tgaResult.unitTitle,
-            releaseNumber: tgaResult.releaseNumber,
-            uocData: tgaResult,   // structured — new path
-            text: null,           // not needed for new path
+            code: uocData.unitCode,
+            title: uocData.unitTitle,
+            releaseNumber: uocData.releaseNumber,
+            uocData,
+            text: null,
         });
     };
 
@@ -372,7 +208,7 @@ function Screen1({ onConfirm }) {
     const handleFile = (f) => {
         const err = validateFile(f);
         if (err) { setUploadError(err); return; }
-        setFile(f); setUploadError(null); setUploadResult(null);
+        setUploadError(null); setUploadResult(null);
         extractUnit(f, null);
     };
 
@@ -412,61 +248,60 @@ function Screen1({ onConfirm }) {
                 {/* ── TGA search panel ── */}
                 {searchMode === 'tga' && (
                     <>
-                        {/* Search input */}
-                        {!tgaResult && (
-                            <form onSubmit={handleTgaSearch} style={{ marginBottom: '16px' }}>
+                        {/* Search input — shown when not confirmed */}
+                        {searchState !== 'confirmed' && (
+                            <form onSubmit={handleFindUnit} style={{ marginBottom: '16px' }}>
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <input
                                         type="text"
-                                        value={unitCodeInput}
-                                        onChange={e => { setUnitCodeInput(e.target.value.toUpperCase()); setTgaError(null); }}
-                                        placeholder="e.g. BSBLDR413 or MSMSUP204"
+                                        value={unitCode}
+                                        onChange={e => { setUnitCode(e.target.value.toUpperCase()); setSearchState('idle'); }}
+                                        placeholder="e.g. BSBLDR413"
                                         style={{
                                             flex: 1, height: '48px',
                                             border: '1px solid #e5e7eb', borderRadius: '8px',
                                             padding: '0 14px', fontSize: '16px',
-                                            outline: 'none', boxSizing: 'border-box',
-                                            letterSpacing: '0.5px',
+                                            outline: 'none', boxSizing: 'border-box', letterSpacing: '0.5px',
                                         }}
                                         onFocus={e => e.target.style.borderColor = '#c9a84c'}
                                         onBlur={e => e.target.style.borderColor = '#e5e7eb'}
-                                        disabled={tgaLoading}
+                                        disabled={searchState === 'loading'}
                                     />
                                     <button
                                         type="submit"
-                                        disabled={tgaLoading || !unitCodeInput.trim()}
+                                        disabled={searchState === 'loading' || !unitCode.trim()}
                                         style={{
                                             height: '48px', padding: '0 20px',
-                                            backgroundColor: tgaLoading || !unitCodeInput.trim() ? '#e5e7eb' : '#c9a84c',
-                                            color: tgaLoading || !unitCodeInput.trim() ? '#9ca3af' : '#0d2444',
+                                            backgroundColor: (searchState === 'loading' || !unitCode.trim()) ? '#e5e7eb' : '#c9a84c',
+                                            color: (searchState === 'loading' || !unitCode.trim()) ? '#9ca3af' : '#0d2444',
                                             border: 'none', borderRadius: '8px',
-                                            fontSize: '14px', fontWeight: 600,
-                                            cursor: tgaLoading || !unitCodeInput.trim() ? 'not-allowed' : 'pointer',
-                                            display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
+                                            fontSize: '14px', fontWeight: 600, flexShrink: 0,
+                                            cursor: (searchState === 'loading' || !unitCode.trim()) ? 'not-allowed' : 'pointer',
+                                            display: 'flex', alignItems: 'center', gap: '8px',
                                         }}
                                     >
-                                        {tgaLoading
+                                        {searchState === 'loading'
                                             ? <><Loader2 style={{ width: '16px', height: '16px', animation: 'spin 1s linear infinite' }} /> Loading...</>
                                             : <><Search style={{ width: '16px', height: '16px' }} /> Find unit</>
                                         }
                                     </button>
                                 </div>
                                 <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-                                {tgaLoading && (
+                                {searchState === 'loading' && (
                                     <p style={{ color: '#6b7280', fontSize: '12px', marginTop: '8px' }}>Loading from training.gov.au...</p>
                                 )}
                             </form>
                         )}
 
                         {/* Error state */}
-                        {tgaError && (
+                        {searchState === 'error' && (
                             <div style={{ border: '1px solid #ef4444', borderRadius: '8px', padding: '14px 16px', backgroundColor: '#fef2f2', marginBottom: '16px' }}>
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '12px' }}>
                                     <AlertCircle style={{ color: '#ef4444', width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
-                                    <p style={{ color: '#dc2626', fontSize: '13px', margin: 0 }}>{tgaError}</p>
+                                    <p style={{ color: '#dc2626', fontSize: '13px', margin: 0 }}>{searchError}</p>
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button onClick={() => { setTgaError(null); }} style={{ padding: '5px 12px', border: '1px solid #ef4444', borderRadius: '6px', backgroundColor: 'transparent', color: '#dc2626', fontSize: '12px', cursor: 'pointer' }}>
+                                    <button onClick={() => setSearchState('idle')} style={{ padding: '5px 12px', border: '1px solid #ef4444', borderRadius: '6px', backgroundColor: 'transparent', color: '#dc2626', fontSize: '12px', cursor: 'pointer' }}>
                                         Try again
                                     </button>
                                     <button onClick={() => setSearchMode('upload')} style={{ padding: '5px 12px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: 'transparent', color: '#6b7280', fontSize: '12px', cursor: 'pointer' }}>
@@ -476,8 +311,8 @@ function Screen1({ onConfirm }) {
                             </div>
                         )}
 
-                        {/* Confirmation card */}
-                        {tgaResult && (
+                        {/* Confirmed state */}
+                        {searchState === 'confirmed' && uocData && (
                             <div style={{ border: '1px solid #22c55e', borderRadius: '10px', backgroundColor: '#f0fdf4', overflow: 'hidden', marginBottom: '16px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 16px', borderBottom: '1px solid #dcfce7' }}>
                                     <CheckCircle style={{ color: '#22c55e', width: '20px', height: '20px', flexShrink: 0 }} />
@@ -485,13 +320,13 @@ function Screen1({ onConfirm }) {
                                 </div>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
                                     <tbody>
-                                        {infoRow('Unit Code', tgaResult.unitCode)}
-                                        {infoRow('Unit Title', tgaResult.unitTitle)}
-                                        {infoRow('Release', tgaResult.releaseNumber)}
-                                        {infoRow('Elements', tgaResult.summary?.elementCount ?? '—')}
-                                        {infoRow('Performance Criteria', tgaResult.summary?.pcCount ?? '—')}
-                                        {infoRow('Performance Evidence', tgaResult.summary?.peCount ?? '—')}
-                                        {infoRow('Knowledge Evidence', tgaResult.summary?.keCount ?? '—')}
+                                        {infoRow('Unit Code', uocData.unitCode)}
+                                        {infoRow('Title', uocData.unitTitle)}
+                                        {infoRow('Release', uocData.releaseNumber)}
+                                        {infoRow('Elements', uocData.summary?.elementCount ?? '—')}
+                                        {infoRow('Performance Criteria', uocData.summary?.pcCount ?? '—')}
+                                        {infoRow('Knowledge Evidence', uocData.summary?.keCount ?? '—')}
+                                        {infoRow('Performance Evidence', uocData.summary?.peCount ?? '—')}
                                     </tbody>
                                 </table>
                                 <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -502,7 +337,7 @@ function Screen1({ onConfirm }) {
                                         Build assessment for this unit →
                                     </button>
                                     <button
-                                        onClick={() => { setTgaResult(null); setUnitCodeInput(''); }}
+                                        onClick={() => { setSearchState('idle'); setUocData(null); setUnitCode(''); }}
                                         style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer' }}
                                     >
                                         Not the right unit? Search again
@@ -511,8 +346,8 @@ function Screen1({ onConfirm }) {
                             </div>
                         )}
 
-                        {/* Fallback link */}
-                        {!tgaResult && !tgaLoading && (
+                        {/* Fallback link — idle only */}
+                        {searchState === 'idle' && (
                             <p style={{ color: '#9ca3af', fontSize: '12px', marginTop: '4px' }}>
                                 Can't find your unit code?{' '}
                                 <button onClick={() => setSearchMode('upload')} style={{ background: 'none', border: 'none', color: '#c9a84c', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>
@@ -565,7 +400,7 @@ function Screen1({ onConfirm }) {
                                     <button onClick={() => onConfirm({ code: uploadResult.code, title: uploadResult.title, text: uploadResult.text, uocData: null })} style={{ padding: '6px 14px', border: '1px solid #22c55e', borderRadius: '6px', backgroundColor: 'transparent', color: '#166534', fontSize: '13px', cursor: 'pointer' }}>
                                         Yes, continue →
                                     </button>
-                                    <button onClick={() => { setUploadResult(null); setFile(null); setPasteText(''); }} style={{ padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: 'transparent', color: '#6b7280', fontSize: '13px', cursor: 'pointer' }}>
+                                    <button onClick={() => { setUploadResult(null); setPasteText(''); }} style={{ padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: 'transparent', color: '#6b7280', fontSize: '13px', cursor: 'pointer' }}>
                                         No, try a different file
                                     </button>
                                 </div>
