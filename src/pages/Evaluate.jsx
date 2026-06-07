@@ -241,45 +241,64 @@ function Screen1({ onConfirm }) {
 // ── Strip admin text before AI calls ─────────────────────────────────────────
 
 function extractAssessableContent(fullText) {
-    const startMarkers = [
-        'ASSESSMENT 1:',
-        'ASSESSMENT TASK 1:',
-        'Assessment 1:',
-        'Assessment Task 1:',
-    ];
 
-    let startIdx = -1;
-    for (const marker of startMarkers) {
-        const idx = fullText.lastIndexOf(marker);
-        if (idx !== -1 && (startIdx === -1 || idx < startIdx)) {
-            startIdx = idx;
+    // PRIMARY: Find start using S / NS marker
+    // S / NS only appears in actual assessment questions, not admin text
+    let startIdx = fullText.indexOf('S / NS');
+
+    if (startIdx === -1) {
+        startIdx = fullText.indexOf('S/NS');
+    }
+
+    // If S/NS found, back up to find the start of that question
+    if (startIdx !== -1) {
+        const lookback = Math.max(0, startIdx - 500);
+        const before = fullText.substring(lookback, startIdx);
+        const lastBreak = before.lastIndexOf('\n\n');
+        if (lastBreak !== -1) {
+            startIdx = lookback + lastBreak;
         }
     }
 
+    // FALLBACK: more specific patterns to avoid the Evidence Guide mention
     if (startIdx === -1) {
-        const q1Match = fullText.match(/\bQ1\b\.|\bQuestion 1\b/);
-        if (q1Match) startIdx = q1Match.index;
+        const patterns = [
+            'ASSESSMENT 1: WRITTEN QUESTIONS',
+            'ASSESSMENT TASK 1: WRITTEN QUESTIONS',
+            'Assessment 1: Written Questions',
+        ];
+        for (const pattern of patterns) {
+            const idx = fullText.indexOf(pattern);
+            if (idx !== -1) {
+                startIdx = idx;
+                break;
+            }
+        }
     }
 
     if (startIdx === -1) return fullText;
 
-    let assessable = fullText.substring(startIdx);
+    const assessable = fullText.substring(startIdx);
 
+    // END MARKER: Use the LAST occurrence, not the first
     const endMarkers = [
         'TO BE COMPLETED BY THE ASSESSOR',
         'ASSESSOR DECLARATION',
         'RECORD OF ASSESSMENT OUTCOMES',
         'ASSESSOR USE ONLY',
         'ADMIN USE ONLY',
-        'Version control',
     ];
 
+    let endIdx = assessable.length;
+
     for (const marker of endMarkers) {
-        const endIdx = assessable.indexOf(marker);
-        if (endIdx !== -1) { assessable = assessable.substring(0, endIdx); break; }
+        const idx = assessable.lastIndexOf(marker);
+        if (idx !== -1 && idx < endIdx) {
+            endIdx = idx;
+        }
     }
 
-    return assessable.trim();
+    return assessable.substring(0, endIdx).trim();
 }
 
 // ── Screen 2: Upload the assessment ──────────────────────────────────────────
@@ -841,9 +860,13 @@ export default function Evaluate() {
         const uocData = unitInfo.uocData;
         const rawText = assessmentDoc.text;
         const assessableText = assessmentDoc.assessableText || rawText;
-        console.log('Raw text length:', rawText.length);
-        console.log('Assessable text length:', assessableText.length);
-        console.log('Assessable text starts with:', assessableText.substring(0, 100));
+        console.log('=== CONTENT CHECK ===');
+        console.log('First 200 chars:', assessableText.substring(0, 200));
+        console.log('Last 200 chars:', assessableText.substring(assessableText.length - 200));
+        console.log('Contains Q1:', assessableText.includes('Q1') || assessableText.includes('Question 1'));
+        console.log('Contains Part B:', assessableText.includes('Part B'));
+        console.log('Contains Part C:', assessableText.includes('Part C'));
+        console.log('Total length:', assessableText.length);
         const { targetFKGL, band } = cohort;
 
         const peList = (uocData?.performanceEvidence || []).join('\n');
