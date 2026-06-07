@@ -242,63 +242,97 @@ function Screen1({ onConfirm }) {
 
 function extractAssessableContent(fullText) {
 
-    // PRIMARY: Find start using S / NS marker
-    // S / NS only appears in actual assessment questions, not admin text
-    let startIdx = fullText.indexOf('S / NS');
+    // ── FIND START OF ASSESSABLE CONTENT ─────────────────────────────
+    let startIdx = -1;
 
-    if (startIdx === -1) {
-        startIdx = fullText.indexOf('S/NS');
+    // Strategy 1: Find S/NS or S/NYS marker (most reliable)
+    const snsRegex = /\bS\s*\/\s*N\s*Y?\s*S\b|\bNYS\b/;
+    const snsMatch = fullText.match(snsRegex);
+    if (snsMatch) {
+        const lookback = Math.max(0, snsMatch.index - 600);
+        const before = fullText.substring(lookback, snsMatch.index);
+        const lastBreak = Math.max(before.lastIndexOf('\n\n'), before.lastIndexOf('\r\n\r\n'));
+        startIdx = lastBreak > 0 ? lookback + lastBreak : lookback;
     }
 
-    // If S/NS found, back up to find the start of that question
-    if (startIdx !== -1) {
-        const lookback = Math.max(0, startIdx - 500);
-        const before = fullText.substring(lookback, startIdx);
-        const lastBreak = before.lastIndexOf('\n\n');
-        if (lastBreak !== -1) {
-            startIdx = lookback + lastBreak;
-        }
-    }
-
-    // FALLBACK: more specific patterns to avoid the Evidence Guide mention
+    // Strategy 2: Specific written questions headings
     if (startIdx === -1) {
-        const patterns = [
+        const headings = [
             'ASSESSMENT 1: WRITTEN QUESTIONS',
             'ASSESSMENT TASK 1: WRITTEN QUESTIONS',
             'Assessment 1: Written Questions',
+            'Assessment Task 1: Written Questions',
+            'WRITTEN QUESTIONS\n',
+            'Written Questions\n',
         ];
-        for (const pattern of patterns) {
-            const idx = fullText.indexOf(pattern);
-            if (idx !== -1) {
-                startIdx = idx;
-                break;
+        for (const heading of headings) {
+            const idx = fullText.indexOf(heading);
+            if (idx !== -1) { startIdx = idx; break; }
+        }
+    }
+
+    // Strategy 3: First Q1 pattern
+    if (startIdx === -1) {
+        const q1Match = fullText.match(/(?:^|\n)(?:Q1\b|Question 1\b|\b1\.\s+[A-Z])/m);
+        if (q1Match) startIdx = q1Match.index;
+    }
+
+    // Strategy 4: Last occurrence of ASSESSMENT 1: (any subtype)
+    if (startIdx === -1) {
+        const assessmentMarkers = [
+            'ASSESSMENT 1:', 'Assessment 1:',
+            'ASSESSMENT TASK 1:', 'Assessment Task 1:',
+        ];
+        for (const marker of assessmentMarkers) {
+            let searchFrom = 0, lastFound = -1;
+            while (true) {
+                const idx = fullText.indexOf(marker, searchFrom);
+                if (idx === -1) break;
+                lastFound = idx; searchFrom = idx + 1;
             }
+            if (lastFound !== -1) { startIdx = lastFound; break; }
         }
     }
 
     if (startIdx === -1) return fullText;
 
-    const assessable = fullText.substring(startIdx);
+    let assessable = fullText.substring(startIdx);
 
-    // END MARKER: Use the LAST occurrence, not the first
+    // ── FIND END OF ASSESSABLE CONTENT ───────────────────────────────
+    // Use lastIndexOf to preserve all student-facing sections
     const endMarkers = [
         'TO BE COMPLETED BY THE ASSESSOR',
         'ASSESSOR DECLARATION',
         'RECORD OF ASSESSMENT OUTCOMES',
         'ASSESSOR USE ONLY',
         'ADMIN USE ONLY',
+        'Version control',
     ];
 
-    let endIdx = assessable.length;
-
+    let endIdx = -1;
     for (const marker of endMarkers) {
-        const idx = assessable.lastIndexOf(marker);
-        if (idx !== -1 && idx < endIdx) {
-            endIdx = idx;
+        let searchFrom = 0, lastFound = -1;
+        while (true) {
+            const idx = assessable.indexOf(marker, searchFrom);
+            if (idx === -1) break;
+            lastFound = idx; searchFrom = idx + 1;
+        }
+        if (lastFound !== -1 && (endIdx === -1 || lastFound < endIdx)) {
+            endIdx = lastFound;
         }
     }
 
-    return assessable.substring(0, endIdx).trim();
+    if (endIdx !== -1) assessable = assessable.substring(0, endIdx);
+
+    const result = assessable.trim();
+
+    // Quality check: if too short, extraction probably failed
+    if (result.length < 200) {
+        console.warn('extractAssessableContent: result too short (' + result.length + ' chars). Returning full text.');
+        return fullText;
+    }
+
+    return result;
 }
 
 // ── Screen 2: Upload the assessment ──────────────────────────────────────────
@@ -860,13 +894,16 @@ export default function Evaluate() {
         const uocData = unitInfo.uocData;
         const rawText = assessmentDoc.text;
         const assessableText = assessmentDoc.assessableText || rawText;
-        console.log('=== CONTENT CHECK ===');
-        console.log('First 200 chars:', assessableText.substring(0, 200));
-        console.log('Last 200 chars:', assessableText.substring(assessableText.length - 200));
-        console.log('Contains Q1:', assessableText.includes('Q1') || assessableText.includes('Question 1'));
-        console.log('Contains Part B:', assessableText.includes('Part B'));
-        console.log('Contains Part C:', assessableText.includes('Part C'));
-        console.log('Total length:', assessableText.length);
+        console.log('=== CONTENT EXTRACTION CHECK ===');
+        console.log('Raw length:', rawText.length);
+        console.log('Assessable length:', assessableText.length);
+        console.log('Reduction:', Math.round((1 - assessableText.length / rawText.length) * 100) + '%');
+        console.log('First 150 chars:', assessableText.substring(0, 150));
+        console.log('Last 150 chars:', assessableText.substring(assessableText.length - 150));
+        console.log('Has Q1:', /\bQ1\b/.test(assessableText));
+        console.log('Has S/NS:', /S\s*\/\s*N/.test(assessableText));
+        console.log('Has Part B:', assessableText.includes('Part B'));
+        console.log('Has Part C:', assessableText.includes('Part C'));
         const { targetFKGL, band } = cohort;
 
         const peList = (uocData?.performanceEvidence || []).join('\n');
