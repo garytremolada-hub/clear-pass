@@ -715,8 +715,7 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
                 sections: [{ properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 } } }, children }]
             });
 
-            const buffer = await Packer.toBuffer(doc);
-            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+            const blob = await Packer.toBlob(doc);
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
