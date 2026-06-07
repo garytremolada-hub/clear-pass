@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { CheckCircle, Upload, AlertCircle, Loader2, Search, ClipboardCheck } from 'lucide-react';
+import { CheckCircle, Upload, AlertCircle, Loader2, Search, ClipboardCheck, Download, XCircle, TriangleAlert, Info } from 'lucide-react';
 import { calculateReadability } from '@/lib/calculateReadability';
 
 // ── Shared constants (mirrored from Build) ────────────────────────────────────
@@ -568,13 +568,56 @@ function Screen4Progress({ progress, evalError }) {
 
 // ── Screen 5: Report ready ────────────────────────────────────────────────────
 
-const DISCLAIMER = 'This evaluation identifies readability characteristics and potential evidence coverage gaps in the assessment tool. It is provided as a support tool for assessment design and validation. Final compliance determination, including whether this assessment tool meets the Standards for RTOs, rests with the assessor, the RTO, and where applicable, the relevant regulatory authority (ASQA or VRQA). This report does not constitute a compliance ruling.';
+const DISCLAIMER = 'This evaluation identifies potential coverage gaps and readability issues. Final compliance determination rests with the assessor, the RTO, and where applicable, the relevant regulatory authority (ASQA or VRQA). This report does not constitute a compliance ruling.';
 
-function statusColor(status) {
-    const s = (status || '').toUpperCase();
-    if (s === 'COVERED' || s === 'MAPPED') return '#16a34a';
-    if (s.includes('PARTIAL')) return '#d97706';
-    return '#dc2626';
+// Coverage stacked bar component
+function CoverageBar({ label, covered, partial, notCovered, total, coveredLabel, partialLabel, notLabel }) {
+    if (total === 0) return null;
+    const covPct = parseFloat((covered / total * 100).toFixed(1));
+    const parPct = parseFloat((partial / total * 100).toFixed(1));
+    const notPct = parseFloat((100 - covPct - parPct).toFixed(1));
+    const summaryParts = [];
+    if (covered > 0) summaryParts.push(`${covered} covered`);
+    if (partial > 0) summaryParts.push(`${partial} partial`);
+    if (notCovered > 0) summaryParts.push(`${notCovered} missing`);
+    return (
+        <div style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
+                <span style={{ color: '#0d2444', fontSize: '13px', fontWeight: 500 }}>{label}</span>
+                <span style={{ color: '#6b7280', fontSize: '12px' }}>{summaryParts.join(' · ')}</span>
+            </div>
+            <div style={{ display: 'flex', height: '20px', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#e5e7eb' }}>
+                {covPct > 0 && <div style={{ width: `${covPct}%`, background: '#639922' }} title={`Covered: ${covPct}%`} />}
+                {parPct > 0 && <div style={{ width: `${parPct}%`, background: '#BA7517' }} title={`Partial: ${parPct}%`} />}
+                {notPct > 0 && <div style={{ width: `${notPct}%`, background: '#A32D2D' }} title={`Not covered: ${notPct}%`} />}
+            </div>
+            <div style={{ display: 'flex', gap: '16px', marginTop: '6px', flexWrap: 'wrap' }}>
+                {covered > 0 && coveredLabel && <span style={{ fontSize: '11px', color: '#639922' }}>{coveredLabel}</span>}
+                {partial > 0 && partialLabel && <span style={{ fontSize: '11px', color: '#BA7517' }}>{partialLabel}</span>}
+                {notCovered > 0 && notLabel && <span style={{ fontSize: '11px', color: '#A32D2D' }}>{notLabel}</span>}
+            </div>
+        </div>
+    );
+}
+
+// Gap card component
+function GapCard({ gap }) {
+    const type = (gap.gapType || '').toUpperCase();
+    const isNotCovered = type === 'NOT COVERED' || type === 'NOT MAPPED';
+    const isPartial = type === 'PARTIALLY COVERED' || type === 'PARTIALLY MAPPED';
+    const borderColor = isNotCovered ? '#A32D2D' : isPartial ? '#BA7517' : '#9ca3af';
+    const bgColor = isNotCovered ? '#FCEBEB' : isPartial ? '#FAEEDA' : '#f9fafb';
+    const IconComp = isNotCovered ? XCircle : isPartial ? TriangleAlert : Info;
+    const iconColor = isNotCovered ? '#A32D2D' : isPartial ? '#BA7517' : '#6b7280';
+    return (
+        <div style={{ borderLeft: `3px solid ${borderColor}`, backgroundColor: bgColor, borderRadius: '6px', padding: '12px 14px', marginBottom: '10px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+            <IconComp style={{ color: iconColor, width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
+            <div>
+                <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>{gap.requirement}</p>
+                <p style={{ color: '#374151', fontSize: '13px', lineHeight: 1.5 }}>{gap.recommendation}</p>
+            </div>
+        </div>
+    );
 }
 
 function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, onSave }) {
@@ -583,147 +626,68 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
     const { sections = [], peResults = [], keResults = [], elementsResults = [], gaps = [], overallVerdict = 'REQUIRES DEVELOPMENT', summaryStatement = '' } = results;
 
     const peCovered = peResults.filter(r => r.status === 'COVERED').length;
+    const pePartial = peResults.filter(r => r.status === 'PARTIALLY COVERED').length;
+    const peNotCovered = peResults.filter(r => r.status === 'NOT COVERED').length;
     const keCovered = keResults.filter(r => r.status === 'COVERED').length;
-    const pcTotal = elementsResults.flatMap(e => e.performanceCriteria || []).length;
-    const pcMapped = elementsResults.flatMap(e => e.performanceCriteria || []).filter(pc => pc.status === 'MAPPED').length;
+    const kePartial = keResults.filter(r => r.status === 'PARTIALLY COVERED').length;
+    const keNotCovered = keResults.filter(r => r.status === 'NOT COVERED').length;
+    const allPCs = elementsResults.flatMap(e => e.performanceCriteria || []);
+    const pcTotal = allPCs.length;
+    const pcMapped = allPCs.filter(pc => pc.status === 'MAPPED').length;
+    const pcPartial = allPCs.filter(pc => pc.status === 'PARTIALLY MAPPED').length;
+    const pcNotMapped = allPCs.filter(pc => pc.status === 'NOT MAPPED').length;
     const withinRange = sections.filter(s => s._readability && Math.abs((s._readability.fkgl || 0) - cohortProfile.targetFKGL) <= 1.5).length;
-    const flagged = sections.filter(s => s._readability && Math.abs((s._readability.fkgl || 0) - cohortProfile.targetFKGL) > 2.5).length;
     const isAdequate = overallVerdict === 'ADEQUATE';
+
+    // Build ref labels for bar annotations
+    const peRefs = (items, status) => items.filter(r => r.status === status).map((r, i) => `PE${i + 1}`).join(', ');
+    const keRefs = (items, status) => items.filter(r => r.status === status).map((r, i) => `KE${i + 1}`).join(', ');
+    const pcRefs = (pcs, status) => pcs.filter(pc => pc.status === status).map(pc => pc.ref).join(', ');
 
     const handleDownload = async () => {
         setDownloading(true);
         try {
-            // Build docx inline using docx npm package via a simple approach
             const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, BorderStyle, WidthType, ShadingType } = await import('docx');
-            const NAVY = '0D2444'; const GOLD = 'C9A84C'; const WHITE = 'FFFFFF';
-            const LIGHT_GREY = 'F9FAFB'; const BORDER_GREY = 'D1D5DB';
+            const NAVY = '0D2444'; const WHITE = 'FFFFFF'; const LIGHT_GREY = 'F9FAFB'; const BORDER_GREY = 'D1D5DB';
             const PAGE_WIDTH = 9026;
             const thin = { style: BorderStyle.SINGLE, size: 1, color: BORDER_GREY };
             const navyB = { style: BorderStyle.SINGLE, size: 2, color: NAVY };
             const borders = { top: thin, bottom: thin, left: thin, right: thin };
             const navyBorders = { top: navyB, bottom: navyB, left: navyB, right: navyB };
             const cm = { top: 80, bottom: 80, left: 140, right: 140 };
-
-            const navyHeader = (text) => new Table({
-                width: { size: PAGE_WIDTH, type: WidthType.DXA }, columnWidths: [PAGE_WIDTH],
-                rows: [new TableRow({ children: [new TableCell({
-                    borders: navyBorders, width: { size: PAGE_WIDTH, type: WidthType.DXA },
-                    shading: { fill: NAVY, type: ShadingType.CLEAR }, margins: { top: 120, bottom: 120, left: 200, right: 200 },
-                    children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 26, color: WHITE, font: 'Arial' })] })]
-                })] })]
-            });
-
-            const para = (text, opts = {}) => new Paragraph({
-                spacing: { before: opts.before || 80, after: opts.after || 80 },
-                children: [new TextRun({ text, size: opts.size || 20, font: 'Arial', color: opts.color || '1A1A1A', bold: opts.bold || false, italics: opts.italic || false })]
-            });
-
-            const tableRow = (cells, isHeader = false) => new TableRow({
-                children: cells.map((text, i) => new TableCell({
-                    borders, margins: cm,
-                    shading: { fill: isHeader ? NAVY : (i % 2 === 0 ? LIGHT_GREY : WHITE), type: ShadingType.CLEAR },
-                    children: [new Paragraph({ children: [new TextRun({ text: String(text || ''), size: 18, font: 'Arial', color: isHeader ? WHITE : '1A1A1A', bold: isHeader })] })]
-                }))
-            });
-
-            const makeTable = (headers, rows) => new Table({
-                width: { size: PAGE_WIDTH, type: WidthType.DXA },
-                columnWidths: Array(headers.length).fill(Math.floor(PAGE_WIDTH / headers.length)),
-                rows: [tableRow(headers, true), ...rows.map(r => tableRow(r))]
-            });
-
+            const navyHeader = (text) => new Table({ width: { size: PAGE_WIDTH, type: WidthType.DXA }, columnWidths: [PAGE_WIDTH], rows: [new TableRow({ children: [new TableCell({ borders: navyBorders, width: { size: PAGE_WIDTH, type: WidthType.DXA }, shading: { fill: NAVY, type: ShadingType.CLEAR }, margins: { top: 120, bottom: 120, left: 200, right: 200 }, children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 26, color: WHITE, font: 'Arial' })] })] })] })] });
+            const para = (t, opts = {}) => new Paragraph({ spacing: { before: opts.before || 80, after: opts.after || 80 }, children: [new TextRun({ text: t, size: opts.size || 20, font: 'Arial', color: opts.color || '1A1A1A', bold: opts.bold || false, italics: opts.italic || false })] });
+            const tableRow = (cells, isHeader = false) => new TableRow({ children: cells.map((t, i) => new TableCell({ borders, margins: cm, shading: { fill: isHeader ? NAVY : (i % 2 === 0 ? LIGHT_GREY : WHITE), type: ShadingType.CLEAR }, children: [new Paragraph({ children: [new TextRun({ text: String(t || ''), size: 18, font: 'Arial', color: isHeader ? WHITE : '1A1A1A', bold: isHeader })] })] })) });
+            const makeTable = (headers, rows) => new Table({ width: { size: PAGE_WIDTH, type: WidthType.DXA }, columnWidths: Array(headers.length).fill(Math.floor(PAGE_WIDTH / headers.length)), rows: [tableRow(headers, true), ...rows.map(r => tableRow(r))] });
             const sp = () => new Paragraph({ spacing: { before: 120, after: 120 }, children: [new TextRun({ text: '' })] });
-
             const children = [
-                // Cover
-                navyHeader(`COMPLIANCE AUDIT REPORT`),
-                sp(),
-                para(`${unitInfo.code} — ${unitInfo.title}`, { bold: true, size: 24 }),
+                navyHeader('COMPLIANCE AUDIT REPORT'), sp(),
+                para(`${unitInfo.code} - ${unitInfo.title}`, { bold: true, size: 24 }),
                 para(`Cohort: ${cohortProfile.band} level (FKGL ${cohortProfile.targetFKGL})`, { color: '6B7280' }),
                 para(`Date: ${new Date().toLocaleDateString('en-AU')}`, { color: '6B7280' }),
-                para(`Overall verdict: ${overallVerdict}`, { bold: true, color: isAdequate ? '16A34A' : 'D97706' }),
-                sp(),
-
-                // Summary
-                navyHeader('Executive Summary'),
-                sp(),
-                para(summaryStatement || reportText.split('\n').slice(0, 4).join(' ')),
-                sp(),
-
-                // Readability table
-                navyHeader('Readability by Section'),
-                sp(),
-                makeTable(
-                    ['Section', 'FKGL', 'Target FKGL', 'Status'],
-                    sections.map(s => {
-                        const fkgl = s._readability?.fkgl ?? '—';
-                        const diff = s._readability ? Math.abs(fkgl - cohortProfile.targetFKGL) : null;
-                        const status = diff === null ? 'Not scored' : diff <= 1.5 ? 'Within range' : diff <= 2.5 ? 'Advisory' : 'Refer for review';
-                        return [s.name, typeof fkgl === 'number' ? fkgl.toFixed(1) : '—', cohortProfile.targetFKGL, status];
-                    })
-                ),
-                sp(),
-
-                // PE table
-                navyHeader('Performance Evidence Coverage'),
-                sp(),
-                makeTable(
-                    ['Requirement', 'Status', 'Coverage cited', 'Gap'],
-                    peResults.map(r => [r.requirement || '', r.status || '', r.coverage || '', r.gap || ''])
-                ),
-                sp(),
-
-                // KE table
-                navyHeader('Knowledge Evidence Coverage'),
-                sp(),
-                makeTable(
-                    ['Requirement', 'Status', 'Coverage cited', 'Gap'],
-                    keResults.map(r => [r.requirement || '', r.status || '', r.coverage || '', r.gap || ''])
-                ),
-                sp(),
-
-                // PC table
-                navyHeader('Element and Performance Criteria Mapping'),
-                sp(),
-                makeTable(
-                    ['Element', 'PC', 'Status', 'Mapped to', 'Gap'],
-                    elementsResults.flatMap(el => (el.performanceCriteria || []).map(pc => [
-                        el.title || '', pc.ref || '', pc.status || '', pc.mappedTo || '', pc.gap || ''
-                    ]))
-                ),
-                sp(),
-
-                // Gaps
-                navyHeader('Gaps and Recommendations'),
-                sp(),
-                ...(gaps.length === 0
-                    ? [para('No gaps identified.')]
-                    : gaps.map(g => para(`${g.requirement}: ${g.recommendation} (add: ${g.recommendedSectionType})`))),
-                sp(),
-
-                // Verdict
-                navyHeader('Instrument Adequacy'),
-                sp(),
-                para(overallVerdict, { bold: true, size: 24, color: isAdequate ? '16A34A' : 'D97706' }),
-                sp(),
-
-                // Disclaimer
-                navyHeader('Compliance Disclaimer'),
-                sp(),
+                para(`Overall verdict: ${overallVerdict}`, { bold: true, color: isAdequate ? '16A34A' : 'D97706' }), sp(),
+                navyHeader('Executive Summary'), sp(),
+                para(summaryStatement || reportText.split('\n').slice(0, 4).join(' ')), sp(),
+                navyHeader('Readability by Section'), sp(),
+                makeTable(['Section', 'FKGL', 'Target FKGL', 'Status'], sections.map(s => { const fkgl = s._readability?.fkgl ?? '-'; const diff = s._readability ? Math.abs(fkgl - cohortProfile.targetFKGL) : null; const status = diff === null ? 'Not scored' : diff <= 1.5 ? 'Within range' : diff <= 2.5 ? 'Advisory' : 'Refer for review'; return [s.name, typeof fkgl === 'number' ? fkgl.toFixed(1) : '-', cohortProfile.targetFKGL, status]; })), sp(),
+                navyHeader('Performance Evidence Coverage'), sp(),
+                makeTable(['Requirement', 'Status', 'Coverage cited', 'Gap'], peResults.map(r => [r.requirement || '', r.status || '', r.coverage || '', r.gap || ''])), sp(),
+                navyHeader('Knowledge Evidence Coverage'), sp(),
+                makeTable(['Requirement', 'Status', 'Coverage cited', 'Gap'], keResults.map(r => [r.requirement || '', r.status || '', r.coverage || '', r.gap || ''])), sp(),
+                navyHeader('Element and Performance Criteria Mapping'), sp(),
+                makeTable(['Element', 'PC', 'Status', 'Mapped to', 'Gap'], elementsResults.flatMap(el => (el.performanceCriteria || []).map(pc => [el.title || '', pc.ref || '', pc.status || '', pc.mappedTo || '', pc.gap || '']))), sp(),
+                navyHeader('Gaps and Recommendations'), sp(),
+                ...(gaps.length === 0 ? [para('No gaps identified.')] : gaps.map(g => para(`${g.requirement}: ${g.recommendation} (add: ${g.recommendedSectionType})`))), sp(),
+                navyHeader('Instrument Adequacy'), sp(),
+                para(overallVerdict, { bold: true, size: 24, color: isAdequate ? '16A34A' : 'D97706' }), sp(),
+                navyHeader('Compliance Disclaimer'), sp(),
                 para(DISCLAIMER, { italic: true, color: '6B7280', size: 18 }),
             ];
-
-            const doc = new Document({
-                styles: { default: { document: { run: { font: 'Arial', size: 20 } } } },
-                sections: [{ properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 } } }, children }]
-            });
-
+            const doc = new Document({ styles: { default: { document: { run: { font: 'Arial', size: 20 } } } }, sections: [{ properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 } } }, children }] });
             const blob = await Packer.toBlob(doc);
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `${unitInfo.code}-compliance-audit.docx`;
-            a.click();
+            a.href = url; a.download = `${unitInfo.code}-compliance-audit.docx`; a.click();
             URL.revokeObjectURL(url);
         } catch (err) {
             console.error('Download error:', err);
@@ -735,71 +699,100 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
 
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '600px', margin: '0 auto', padding: '32px 24px' }}>
+            <div style={{ maxWidth: '620px', margin: '0 auto', padding: '32px 24px' }}>
                 <EvalProgress step={5} />
 
-                {/* Verdict */}
-                <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                {/* Header row: verdict + readability */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
                     <div style={{
-                        width: '56px', height: '56px', borderRadius: '50%', margin: '0 auto 16px',
-                        backgroundColor: isAdequate ? '#dcfce7' : '#fef3c7',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        borderLeft: `4px solid ${isAdequate ? '#639922' : '#BA7517'}`,
+                        border: '1px solid #e5e7eb',
+                        borderLeftWidth: '4px',
+                        borderLeftColor: isAdequate ? '#639922' : '#BA7517',
+                        borderRadius: '8px', padding: '16px',
                     }}>
-                        <ClipboardCheck style={{ color: isAdequate ? '#16a34a' : '#d97706', width: '28px', height: '28px' }} />
-                    </div>
-                    <h2 style={{ color: isAdequate ? '#16a34a' : '#d97706', fontSize: '26px', fontWeight: 700, marginBottom: '8px' }}>
-                        {overallVerdict}
-                    </h2>
-                    <p style={{ color: '#6b7280', fontSize: '14px', maxWidth: '440px', margin: '0 auto' }}>
-                        {summaryStatement}
-                    </p>
-                </div>
-
-                {/* Coverage grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
-                    {[
-                        { label: 'Performance Evidence', value: `${peCovered}/${peResults.length}`, sub: 'covered' },
-                        { label: 'Knowledge Evidence', value: `${keCovered}/${keResults.length}`, sub: 'covered' },
-                        { label: 'Performance Criteria', value: `${pcMapped}/${pcTotal}`, sub: 'mapped' },
-                    ].map(({ label, value, sub }) => (
-                        <div key={label} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '14px', textAlign: 'center' }}>
-                            <p style={{ color: '#0d2444', fontSize: '22px', fontWeight: 700, marginBottom: '2px' }}>{value}</p>
-                            <p style={{ color: '#6b7280', fontSize: '11px' }}>{sub}</p>
-                            <p style={{ color: '#9ca3af', fontSize: '10px', marginTop: '4px' }}>{label}</p>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Readability summary */}
-                <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
-                    <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Readability</p>
-                    <p style={{ color: '#22c55e', fontSize: '13px', marginBottom: '4px' }}>{withinRange} section{withinRange !== 1 ? 's' : ''} within target range</p>
-                    {flagged > 0 && <p style={{ color: '#d97706', fontSize: '13px' }}>{flagged} section{flagged !== 1 ? 's' : ''} flagged for review</p>}
-                </div>
-
-                {/* Gaps */}
-                {gaps.length > 0 && (
-                    <div style={{ border: '1px solid #fcd34d', borderRadius: '8px', padding: '12px 16px', backgroundColor: '#fffbeb', marginBottom: '16px' }}>
-                        <p style={{ color: '#92400e', fontSize: '13px' }}>
-                            {gaps.length} gap{gaps.length !== 1 ? 's' : ''} identified. See report for recommendations.
+                        <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>Overall verdict</p>
+                        <p style={{ color: isAdequate ? '#3B6D11' : '#854F0B', fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>{overallVerdict}</p>
+                        <p style={{ color: '#6b7280', fontSize: '12px' }}>
+                            {gaps.length === 0 ? 'No gaps identified' : `${gaps.length} recommendation${gaps.length !== 1 ? 's' : ''}`}
                         </p>
+                    </div>
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
+                        <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>Readability</p>
+                        <p style={{ color: '#0d2444', fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>{withinRange} / {sections.length} sections</p>
+                        <p style={{ color: '#6b7280', fontSize: '12px' }}>within target range</p>
+                    </div>
+                </div>
+
+                {/* Coverage overview */}
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px', marginBottom: '20px' }}>
+                    <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '14px' }}>Coverage overview</p>
+
+                    {/* Legend */}
+                    <div style={{ display: 'flex', gap: '16px', marginBottom: '18px', flexWrap: 'wrap' }}>
+                        {[['#639922', 'Covered'], ['#BA7517', 'Partially covered'], ['#A32D2D', 'Not covered']].map(([color, label]) => (
+                            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <div style={{ width: '10px', height: '10px', borderRadius: '2px', backgroundColor: color, flexShrink: 0 }} />
+                                <span style={{ color: '#6b7280', fontSize: '11px' }}>{label}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    <CoverageBar
+                        label="Performance Evidence"
+                        covered={peCovered} partial={pePartial} notCovered={peNotCovered} total={peResults.length}
+                        coveredLabel={peRefs(peResults, 'COVERED') ? `Covered: ${peRefs(peResults, 'COVERED')}` : null}
+                        partialLabel={peRefs(peResults, 'PARTIALLY COVERED') ? `Partial: ${peRefs(peResults, 'PARTIALLY COVERED')}` : null}
+                        notLabel={peRefs(peResults, 'NOT COVERED') ? `Missing: ${peRefs(peResults, 'NOT COVERED')}` : null}
+                    />
+                    <CoverageBar
+                        label="Knowledge Evidence"
+                        covered={keCovered} partial={kePartial} notCovered={keNotCovered} total={keResults.length}
+                        coveredLabel={keRefs(keResults, 'COVERED') ? `Covered: ${keRefs(keResults, 'COVERED')}` : null}
+                        partialLabel={keRefs(keResults, 'PARTIALLY COVERED') ? `Partial: ${keRefs(keResults, 'PARTIALLY COVERED')}` : null}
+                        notLabel={keRefs(keResults, 'NOT COVERED') ? `Missing: ${keRefs(keResults, 'NOT COVERED')}` : null}
+                    />
+                    <CoverageBar
+                        label="Performance Criteria"
+                        covered={pcMapped} partial={pcPartial} notCovered={pcNotMapped} total={pcTotal}
+                        coveredLabel={pcRefs(allPCs, 'MAPPED') ? `Mapped: ${pcRefs(allPCs, 'MAPPED').split(', ').slice(0, 6).join(', ')}${allPCs.filter(p => p.status === 'MAPPED').length > 6 ? '...' : ''}` : null}
+                        partialLabel={pcRefs(allPCs, 'PARTIALLY MAPPED') ? `Partial: ${pcRefs(allPCs, 'PARTIALLY MAPPED')}` : null}
+                        notLabel={pcRefs(allPCs, 'NOT MAPPED') ? `Missing: ${pcRefs(allPCs, 'NOT MAPPED')}` : null}
+                    />
+                </div>
+
+                {/* Gaps to fix */}
+                {gaps.length > 0 && (
+                    <div style={{ marginBottom: '20px' }}>
+                        <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>Gaps to fix</p>
+                        {gaps.map((g, i) => <GapCard key={i} gap={g} />)}
                     </div>
                 )}
 
-                {/* Actions */}
+                {gaps.length === 0 && (
+                    <div style={{ border: '1px solid #639922', borderRadius: '8px', padding: '14px 16px', backgroundColor: '#f0fdf4', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <CheckCircle style={{ color: '#639922', width: '18px', height: '18px', flexShrink: 0 }} />
+                        <p style={{ color: '#3B6D11', fontSize: '13px', fontWeight: 500 }}>No gaps identified. This assessment appears to cover all requirements.</p>
+                    </div>
+                )}
+
+                {/* Download buttons */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
                     <button
                         onClick={handleDownload}
                         disabled={downloading}
                         style={{
                             width: '100%', height: '48px',
-                            backgroundColor: downloading ? '#e5e7eb' : '#c9a84c',
-                            color: downloading ? '#9ca3af' : '#0d2444',
+                            backgroundColor: downloading ? '#e5e7eb' : '#0d2444',
+                            color: downloading ? '#9ca3af' : '#ffffff',
                             borderRadius: '8px', border: 'none',
-                            fontSize: '15px', fontWeight: 500, cursor: downloading ? 'not-allowed' : 'pointer',
+                            fontSize: '14px', fontWeight: 600,
+                            cursor: downloading ? 'not-allowed' : 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                         }}
                     >
-                        {downloading ? 'Preparing document...' : 'Download audit report (.docx) →'}
+                        <Download style={{ width: '16px', height: '16px' }} />
+                        {downloading ? 'Preparing document...' : 'Download audit report (.docx)'}
                     </button>
                     <button
                         onClick={onSave}
