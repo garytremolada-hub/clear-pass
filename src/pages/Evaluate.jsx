@@ -238,6 +238,47 @@ function Screen1({ onConfirm }) {
     );
 }
 
+// ── Strip admin text before AI calls ─────────────────────────────────────────
+
+function extractAssessableContent(fullText) {
+    const startMarkers = [
+        'ASSESSMENT 1:',
+        'ASSESSMENT TASK 1:',
+        'Assessment 1:',
+        'Assessment Task 1:',
+    ];
+
+    let startIdx = -1;
+    for (const marker of startMarkers) {
+        const idx = fullText.lastIndexOf(marker);
+        if (idx !== -1) { startIdx = idx; break; }
+    }
+
+    if (startIdx === -1) {
+        const q1Match = fullText.match(/\bQ1\b\.|\bQuestion 1\b/);
+        if (q1Match) startIdx = q1Match.index;
+    }
+
+    if (startIdx === -1) return fullText;
+
+    let assessable = fullText.substring(startIdx);
+
+    const endMarkers = [
+        'TO BE COMPLETED BY THE ASSESSOR',
+        'ASSESSOR DECLARATION',
+        'RECORD OF ASSESSMENT OUTCOMES',
+        'ASSESSOR USE ONLY',
+        'Version control',
+    ];
+
+    for (const marker of endMarkers) {
+        const endIdx = assessable.indexOf(marker);
+        if (endIdx !== -1) { assessable = assessable.substring(0, endIdx); break; }
+    }
+
+    return assessable.trim();
+}
+
 // ── Screen 2: Upload the assessment ──────────────────────────────────────────
 
 function Screen2({ unitInfo, onBack, onConfirm }) {
@@ -373,7 +414,7 @@ function Screen2({ unitInfo, onBack, onConfirm }) {
                         ← Back
                     </button>
                     <button
-                        onClick={() => onConfirm({ text: activeText, fileName, wordCount: activeWc })}
+                        onClick={() => onConfirm({ text: activeText, assessableText: extractAssessableContent(activeText), fileName, wordCount: activeWc })}
                         disabled={!canContinue}
                         style={{
                             flex: 1, height: '44px', borderRadius: '8px',
@@ -803,7 +844,7 @@ export default function Evaluate() {
         setScreen(4);
 
         const uocData = unitInfo.uocData;
-        const assessmentText = assessmentDoc.text;
+        const assessableText = assessmentDoc.assessableText || assessmentDoc.text;
         const { targetFKGL, band } = cohort;
 
         const peList = (uocData?.performanceEvidence || []).join('\n');
@@ -821,13 +862,13 @@ export default function Evaluate() {
             let sectionsRaw;
             try {
                 const r1 = await llmCall(
-                    `You are an RTO assessment analyst. Extract and classify every section of the assessment text provided.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "sections": [\n    {\n      "name": "section name or heading",\n      "type": "Knowledge Questions | Observation Checklist | Workplace Project | Verbal Questions | Case Study | Third Party Report | Other",\n      "evidenceCategory": "Knowledge Evidence | Performance Evidence | Product Evidence | Indirect Evidence",\n      "items": ["item 1 text", "item 2 text"],\n      "itemCount": 3,\n      "wordCount": 450\n    }\n  ],\n  "totalWordCount": 1200,\n  "sectionCount": 3\n}\n\nSection type rules:\n- Questions starting with Q1, Q2 etc or numbered questions: Knowledge Questions\n- Checklist with tick boxes or observable behaviours: Observation Checklist\n- Steps or tasks to complete over time: Workplace Project\n- Questions marked verbal or oral: Verbal Questions\n- Scenario followed by questions: Case Study\n- Form for supervisor or third party: Third Party Report\n\nASSESSMENT TEXT:\n${assessmentText.slice(0, 8000)}`
+                    `You are an RTO assessment analyst. Extract and classify every section of the assessment text provided.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "sections": [\n    {\n      "name": "section name or heading",\n      "type": "Knowledge Questions | Observation Checklist | Workplace Project | Verbal Questions | Case Study | Third Party Report | Other",\n      "evidenceCategory": "Knowledge Evidence | Performance Evidence | Product Evidence | Indirect Evidence",\n      "items": ["item 1 text", "item 2 text"],\n      "itemCount": 3,\n      "wordCount": 450\n    }\n  ],\n  "totalWordCount": 1200,\n  "sectionCount": 3\n}\n\nSection type rules:\n- Questions starting with Q1, Q2 etc or numbered questions: Knowledge Questions\n- Checklist with tick boxes or observable behaviours: Observation Checklist\n- Steps or tasks to complete over time: Workplace Project\n- Questions marked verbal or oral: Verbal Questions\n- Scenario followed by questions: Case Study\n- Form for supervisor or third party: Third Party Report\n\nASSESSMENT TEXT:\n${assessableText.slice(0, 8000)}`
                 );
                 sectionsRaw = parseAIJson(r1);
                 sections = sectionsRaw.sections || [];
             } catch (e) {
                 console.error('Call 1 failed:', e.message);
-                sections = [{ name: 'Could not be evaluated', type: 'Other', items: [assessmentText.slice(0, 500)], itemCount: 1, wordCount: assessmentDoc.wordCount }];
+                sections = [{ name: 'Could not be evaluated', type: 'Other', items: [assessableText.slice(0, 500)], itemCount: 1, wordCount: assessmentDoc.wordCount }];
             }
 
             // Step 2 — Score readability per section using JS (no AI)
@@ -844,11 +885,9 @@ export default function Evaluate() {
 
             // Call 3 — Audit Performance Evidence
             setEvalProgress(45);
-            const obsSections = sections.filter(s => s.type === 'Observation Checklist' || s.type === 'Workplace Project' || s.type === 'Case Study');
-            const obsSectionText = obsSections.flatMap(s => s.items || []).join('\n') || assessmentText.slice(0, 4000);
             try {
                 const r3 = await llmCall(
-                    `You are an RTO compliance auditor. Check whether the assessment covers each Performance Evidence requirement.\n\nUse ONLY these three statuses: COVERED, PARTIALLY COVERED, NOT COVERED.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "performanceEvidence": [\n    {\n      "requirement": "verbatim PE requirement text",\n      "status": "COVERED | PARTIALLY COVERED | NOT COVERED",\n      "coverage": "cite specific assessment text, or none found",\n      "gap": "explain what is missing if PARTIALLY COVERED or NOT COVERED"\n    }\n  ]\n}\n\nPERFORMANCE EVIDENCE REQUIREMENTS:\n${peList || 'None specified'}\n\nASSESSMENT TEXT (observation and project sections):\n${obsSectionText}`
+                    `You are an RTO compliance auditor. Check whether the assessment covers each Performance Evidence requirement.\n\nUse ONLY these three statuses: COVERED, PARTIALLY COVERED, NOT COVERED.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "performanceEvidence": [\n    {\n      "requirement": "verbatim PE requirement text",\n      "status": "COVERED | PARTIALLY COVERED | NOT COVERED",\n      "coverage": "cite specific assessment text, or none found",\n      "gap": "explain what is missing if PARTIALLY COVERED or NOT COVERED"\n    }\n  ]\n}\n\nPERFORMANCE EVIDENCE REQUIREMENTS:\n${peList || 'None specified'}\n\nASSESSMENT TEXT:\n${assessableText.slice(0, 6000)}`
                 );
                 const parsed = parseAIJson(r3);
                 peResults = parsed.performanceEvidence || [];
@@ -859,11 +898,9 @@ export default function Evaluate() {
 
             // Call 4 — Audit Knowledge Evidence
             setEvalProgress(60);
-            const kqSections = sections.filter(s => s.type === 'Knowledge Questions' || s.type === 'Verbal Questions');
-            const kqText = kqSections.flatMap(s => s.items || []).join('\n') || assessmentText.slice(0, 4000);
             try {
                 const r4 = await llmCall(
-                    `You are an RTO compliance auditor. Check whether the assessment covers each Knowledge Evidence requirement.\n\nUse ONLY these three statuses: COVERED, PARTIALLY COVERED, NOT COVERED.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "knowledgeEvidence": [\n    {\n      "requirement": "verbatim KE requirement text",\n      "status": "COVERED | PARTIALLY COVERED | NOT COVERED",\n      "coverage": "cite specific assessment text, or none found",\n      "gap": "explain what is missing if PARTIALLY COVERED or NOT COVERED"\n    }\n  ]\n}\n\nKNOWLEDGE EVIDENCE REQUIREMENTS:\n${keList || 'None specified'}\n\nASSESSMENT TEXT (knowledge questions section):\n${kqText}`
+                    `You are an RTO compliance auditor. Check whether the assessment covers each Knowledge Evidence requirement.\n\nUse ONLY these three statuses: COVERED, PARTIALLY COVERED, NOT COVERED.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "knowledgeEvidence": [\n    {\n      "requirement": "verbatim KE requirement text",\n      "status": "COVERED | PARTIALLY COVERED | NOT COVERED",\n      "coverage": "cite specific assessment text, or none found",\n      "gap": "explain what is missing if PARTIALLY COVERED or NOT COVERED"\n    }\n  ]\n}\n\nKNOWLEDGE EVIDENCE REQUIREMENTS:\n${keList || 'None specified'}\n\nASSESSMENT TEXT:\n${assessableText.slice(0, 6000)}`
                 );
                 const parsed = parseAIJson(r4);
                 keResults = parsed.knowledgeEvidence || [];
@@ -876,7 +913,7 @@ export default function Evaluate() {
             setEvalProgress(75);
             try {
                 const r5 = await llmCall(
-                    `You are an RTO compliance auditor. Check whether the assessment maps to each Element and Performance Criterion.\n\nUse ONLY these three statuses: MAPPED, PARTIALLY MAPPED, NOT MAPPED.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "elements": [\n    {\n      "number": 1,\n      "title": "element title",\n      "status": "MAPPED | PARTIALLY MAPPED | NOT MAPPED",\n      "performanceCriteria": [\n        {\n          "ref": "1.1",\n          "text": "verbatim PC text",\n          "status": "MAPPED | PARTIALLY MAPPED | NOT MAPPED",\n          "mappedTo": "section name or none found",\n          "gap": "what context or conditions are missing if PARTIALLY MAPPED"\n        }\n      ]\n    }\n  ]\n}\n\nELEMENTS AND PERFORMANCE CRITERIA:\n${elementsText || 'None specified'}\n\nASSESSMENT TEXT:\n${assessmentText.slice(0, 6000)}`
+                    `You are an RTO compliance auditor. Check whether the assessment maps to each Element and Performance Criterion.\n\nUse ONLY these three statuses: MAPPED, PARTIALLY MAPPED, NOT MAPPED.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "elements": [\n    {\n      "number": 1,\n      "title": "element title",\n      "status": "MAPPED | PARTIALLY MAPPED | NOT MAPPED",\n      "performanceCriteria": [\n        {\n          "ref": "1.1",\n          "text": "verbatim PC text",\n          "status": "MAPPED | PARTIALLY MAPPED | NOT MAPPED",\n          "mappedTo": "section name or none found",\n          "gap": "what context or conditions are missing if PARTIALLY MAPPED"\n        }\n      ]\n    }\n  ]\n}\n\nELEMENTS AND PERFORMANCE CRITERIA:\n${elementsText || 'None specified'}\n\nASSESSMENT TEXT:\n${assessableText.slice(0, 6000)}`
                 );
                 const parsed = parseAIJson(r5);
                 elementsResults = parsed.elements || [];
