@@ -337,7 +337,7 @@ function extractAssessableContent(fullText) {
 
 // ── Screen 2: Upload the assessment ──────────────────────────────────────────
 
-function Screen2({ unitInfo, onBack, onConfirm }) {
+function Screen2({ unitInfo, onBack, onConfirm, previousEvaluation, showComparison, onSetShowComparison }) {
     const [file, setFile] = useState(null);
     const [fileName, setFileName] = useState('');
     const [extracting, setExtracting] = useState(false);
@@ -464,6 +464,40 @@ function Screen2({ unitInfo, onBack, onConfirm }) {
                         style={{ width: '100%', height: '180px', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', fontFamily: 'Arial', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }}
                     />
                 )}
+
+                {/* Previous evaluation banner */}
+                {previousEvaluation && (() => {
+                    const rd = previousEvaluation.richData;
+                    const prevDate = previousEvaluation.created_date
+                        ? new Date(previousEvaluation.created_date).toLocaleDateString('en-AU')
+                        : 'previously';
+                    const keStr = rd?.ke ? `KE: ${rd.ke.covered}/${rd.ke.total}` : null;
+                    const peStr = rd?.pe ? `PE: ${rd.pe.covered}/${rd.pe.total}` : null;
+                    const pcStr = rd?.pc ? `PC: ${rd.pc.mapped}/${rd.pc.total}` : null;
+                    const statsLine = [keStr, peStr, pcStr].filter(Boolean).join(' | ');
+                    return (
+                        <div style={{ border: '1px solid #c9a84c', borderRadius: '8px', padding: '14px 16px', backgroundColor: '#fefce8', marginBottom: '16px' }}>
+                            <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
+                                Previous evaluation found: {previousEvaluation.unit_code} evaluated {prevDate}
+                            </p>
+                            {statsLine && <p style={{ color: '#6b7280', fontSize: '12px', marginBottom: '10px' }}>{statsLine}</p>}
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    onClick={() => onSetShowComparison(true)}
+                                    style={{ padding: '5px 12px', border: 'none', borderRadius: '6px', backgroundColor: showComparison ? '#0d2444' : '#c9a84c', color: showComparison ? '#ffffff' : '#0d2444', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}
+                                >
+                                    {showComparison ? 'Comparison on' : 'Yes, show comparison'}
+                                </button>
+                                <button
+                                    onClick={() => onSetShowComparison(false)}
+                                    style={{ padding: '5px 12px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: 'transparent', color: '#6b7280', fontSize: '12px', cursor: 'pointer' }}
+                                >
+                                    No, new report only
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                     <button onClick={onBack} style={{ flex: 1, height: '44px', border: '1px solid #0d2444', borderRadius: '8px', backgroundColor: 'transparent', color: '#0d2444', fontSize: '14px', cursor: 'pointer' }}>
@@ -673,7 +707,7 @@ function GapCard({ gap }) {
     );
 }
 
-function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, onSave }) {
+function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, onSave, previousEvaluation, showComparison }) {
     const [downloading, setDownloading] = useState(false);
 
     const { sections = [], peResults = [], keResults = [], elementsResults = [], gaps = [], overallVerdict = 'REQUIRES DEVELOPMENT', summaryStatement = '' } = results;
@@ -814,6 +848,11 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
                     />
                 </div>
 
+                {/* Comparison section */}
+                {showComparison && previousEvaluation?.richData && (
+                    <ComparisonSection previous={previousEvaluation.richData} currentResults={results} />
+                )}
+
                 {/* Gaps to fix */}
                 {gaps.length > 0 && (
                     <div style={{ marginBottom: '20px' }}>
@@ -869,20 +908,158 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
     );
 }
 
+// ── Comparison helpers ────────────────────────────────────────────────────────
+
+function statusRank(status) {
+    const s = (status || '').toUpperCase();
+    if (s === 'COVERED' || s === 'MAPPED') return 2;
+    if (s.includes('PARTIAL')) return 1;
+    return 0;
+}
+
+function ChangeArrow({ prev, curr }) {
+    const pRank = statusRank(prev), cRank = statusRank(curr);
+    if (cRank > pRank) return <span style={{ color: '#639922', fontWeight: 700 }}>&#8593;</span>;
+    if (cRank < pRank) return <span style={{ color: '#A32D2D', fontWeight: 700 }}>&#8595;</span>;
+    return <span style={{ color: '#9ca3af' }}>&#8212;</span>;
+}
+
+function statusStyle(status) {
+    const s = (status || '').toUpperCase();
+    if (s === 'COVERED' || s === 'MAPPED') return { color: '#3B6D11', fontWeight: 500 };
+    if (s.includes('PARTIAL')) return { color: '#854F0B', fontWeight: 500 };
+    if (s === 'NO DATA') return { color: '#9ca3af' };
+    return { color: '#A32D2D', fontWeight: 500 };
+}
+
+function ComparisonSection({ previous, currentResults }) {
+    const { peResults = [], keResults = [], elementsResults = [] } = currentResults;
+    const allPCs = elementsResults.flatMap(e => e.performanceCriteria || []);
+    const prevDate = previous.savedAt ? new Date(previous.savedAt).toLocaleDateString('en-AU') : 'Previous';
+
+    const prevPE = previous.pe || {};
+    const prevKE = previous.ke || {};
+    const prevPC = previous.pc || {};
+
+    const keChanged = (keResults.filter(r => r.status === 'COVERED').length) - (prevKE.covered || 0);
+    const peChanged = (peResults.filter(r => r.status === 'COVERED').length) - (prevPE.covered || 0);
+    const pcChanged = (allPCs.filter(r => r.status === 'MAPPED').length) - (prevPC.mapped || 0);
+
+    const changeCard = (label, prevVal, currVal, total) => {
+        const diff = currVal - prevVal;
+        const color = diff > 0 ? '#639922' : diff < 0 ? '#A32D2D' : '#6b7280';
+        const arrow = diff > 0 ? '↑' : diff < 0 ? '↓' : '';
+        return (
+            <div key={label} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '14px', flex: 1, minWidth: 0 }}>
+                <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>{label}</p>
+                <p style={{ color, fontSize: '15px', fontWeight: 700, marginBottom: '2px' }}>
+                    {prevVal}/{total} {arrow} {currVal}/{total}
+                </p>
+                <p style={{ color: '#9ca3af', fontSize: '11px' }}>{diff === 0 ? 'No change' : diff > 0 ? `${diff} improved` : `${Math.abs(diff)} regressed`}</p>
+            </div>
+        );
+    };
+
+    // Build item-by-item rows
+    const rows = [];
+    keResults.forEach((r, i) => {
+        const prevItem = (previous.ke?.items || [])[i];
+        const prevStatus = prevItem?.status || 'NO DATA';
+        rows.push({ req: `KE${i + 1}: ${(r.requirement || '').slice(0, 60)}`, prev: prevStatus, curr: r.status });
+    });
+    peResults.forEach((r, i) => {
+        const prevItem = (previous.pe?.items || [])[i];
+        const prevStatus = prevItem?.status || 'NO DATA';
+        rows.push({ req: `PE${i + 1}: ${(r.requirement || '').slice(0, 60)}`, prev: prevStatus, curr: r.status });
+    });
+    allPCs.forEach((r) => {
+        const prevItem = (previous.pc?.items || []).find(p => p.ref === r.ref);
+        const prevStatus = prevItem?.status || 'NO DATA';
+        rows.push({ req: `${r.ref}: ${(r.text || '').slice(0, 60)}`, prev: prevStatus, curr: r.status });
+    });
+
+    return (
+        <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px', marginBottom: '20px' }}>
+            <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '14px' }}>Changes since previous evaluation</p>
+
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <div style={{ flex: 1, textAlign: 'center', padding: '8px', backgroundColor: '#f9fafb', borderRadius: '6px', fontSize: '12px', color: '#6b7280' }}>
+                    Previous: {prevDate}
+                </div>
+                <div style={{ flex: 1, textAlign: 'center', padding: '8px', backgroundColor: '#f0f7ff', borderRadius: '6px', fontSize: '12px', color: '#0d2444', fontWeight: 500 }}>
+                    Current: {new Date().toLocaleDateString('en-AU')}
+                </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                {changeCard('Knowledge Evidence', prevKE.covered || 0, keResults.filter(r => r.status === 'COVERED').length, keResults.length)}
+                {changeCard('Performance Evidence', prevPE.covered || 0, peResults.filter(r => r.status === 'COVERED').length, peResults.length)}
+                {changeCard('Performance Criteria', prevPC.mapped || 0, allPCs.filter(r => r.status === 'MAPPED').length, allPCs.length)}
+            </div>
+
+            {rows.length > 0 && (
+                <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                        <thead>
+                            <tr style={{ backgroundColor: '#0d2444' }}>
+                                {['Requirement', 'Previous', 'Current', 'Change'].map(h => (
+                                    <th key={h} style={{ padding: '8px 10px', color: '#ffffff', fontWeight: 600, textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((r, i) => (
+                                <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
+                                    <td style={{ padding: '7px 10px', color: '#374151', maxWidth: '280px' }}>{r.req}</td>
+                                    <td style={{ padding: '7px 10px', whiteSpace: 'nowrap', ...statusStyle(r.prev) }}>{r.prev || 'No data'}</td>
+                                    <td style={{ padding: '7px 10px', whiteSpace: 'nowrap', ...statusStyle(r.curr) }}>{r.curr}</td>
+                                    <td style={{ padding: '7px 10px', textAlign: 'center' }}><ChangeArrow prev={r.prev} curr={r.curr} /></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ── Main Evaluate page ────────────────────────────────────────────────────────
 
 export default function Evaluate() {
     const navigate = useNavigate();
     const [screen, setScreen] = useState(1);
     const [unitInfo, setUnitInfo] = useState(null);
-    const [assessmentDoc, setAssessmentDoc] = useState(null); // { text, fileName, wordCount }
+    const [assessmentDoc, setAssessmentDoc] = useState(null);
     const [cohortProfile, setCohortProfile] = useState(null);
     const [evalProgress, setEvalProgress] = useState(0);
     const [evalError, setEvalError] = useState(null);
     const [results, setResults] = useState({});
     const [reportText, setReportText] = useState('');
+    const [previousEvaluation, setPreviousEvaluation] = useState(null);
+    const [showComparison, setShowComparison] = useState(false);
 
-    const handleScreen1Confirm = (info) => { setUnitInfo(info); setScreen(2); };
+    const handleScreen1Confirm = async (info) => {
+        setUnitInfo(info);
+        // Look for a previous evaluation of the same unit
+        try {
+            const library = await base44.entities.WorkLibraryItem.filter({ task_type: 'evaluate', unit_code: info.code });
+            if (library && library.length > 0) {
+                const sorted = library.sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
+                const prev = sorted[0];
+                // Parse stored notes field for rich data
+                let richData = null;
+                try { richData = prev.notes ? JSON.parse(prev.notes) : null; } catch (e) { /* no rich data */ }
+                setPreviousEvaluation({ ...prev, richData });
+            } else {
+                setPreviousEvaluation(null);
+            }
+        } catch (e) {
+            setPreviousEvaluation(null);
+        }
+        setShowComparison(false);
+        setScreen(2);
+    };
     const handleScreen2Confirm = (doc) => { setAssessmentDoc(doc); setScreen(3); };
 
     const handleScreen3Confirm = async (cohort) => {
@@ -1024,14 +1201,44 @@ export default function Evaluate() {
     };
 
     const handleSave = async () => {
+        const { peResults = [], keResults = [], elementsResults = [], gaps = [], overallVerdict = '' } = results;
+        const allPCs = elementsResults.flatMap(e => e.performanceCriteria || []);
+        const richData = {
+            verdict: overallVerdict,
+            savedAt: new Date().toISOString(),
+            cohort: cohortProfile,
+            ke: {
+                total: keResults.length,
+                covered: keResults.filter(r => r.status === 'COVERED').length,
+                partial: keResults.filter(r => r.status === 'PARTIALLY COVERED').length,
+                notCovered: keResults.filter(r => r.status === 'NOT COVERED').length,
+                items: keResults.map(r => ({ requirement: r.requirement, status: r.status })),
+            },
+            pe: {
+                total: peResults.length,
+                covered: peResults.filter(r => r.status === 'COVERED').length,
+                partial: peResults.filter(r => r.status === 'PARTIALLY COVERED').length,
+                notCovered: peResults.filter(r => r.status === 'NOT COVERED').length,
+                items: peResults.map(r => ({ requirement: r.requirement, status: r.status })),
+            },
+            pc: {
+                total: allPCs.length,
+                mapped: allPCs.filter(r => r.status === 'MAPPED').length,
+                partial: allPCs.filter(r => r.status === 'PARTIALLY MAPPED').length,
+                notMapped: allPCs.filter(r => r.status === 'NOT MAPPED').length,
+                items: allPCs.map(r => ({ ref: r.ref, text: r.text, status: r.status })),
+            },
+            gapCount: gaps.length,
+        };
         try {
             await base44.entities.WorkLibraryItem.create({
-                title: `Evaluate: ${unitInfo.code} — ${unitInfo.title}`,
+                title: `Evaluate: ${unitInfo.code} - ${unitInfo.title}`,
                 task_type: 'evaluate',
                 unit_code: unitInfo.code,
                 unit_title: unitInfo.title,
                 aqf_level: cohortProfile?.band || '',
                 output_text: reportText,
+                notes: JSON.stringify(richData),
             });
             navigate('/library');
         } catch (err) {
@@ -1049,6 +1256,8 @@ export default function Evaluate() {
         setReportText('');
         setEvalError(null);
         setEvalProgress(0);
+        setPreviousEvaluation(null);
+        setShowComparison(false);
     };
 
     return (
@@ -1061,7 +1270,7 @@ export default function Evaluate() {
             </div>
 
             {screen === 1 && <Screen1 onConfirm={handleScreen1Confirm} />}
-            {screen === 2 && <Screen2 unitInfo={unitInfo} onBack={() => setScreen(1)} onConfirm={handleScreen2Confirm} />}
+            {screen === 2 && <Screen2 unitInfo={unitInfo} onBack={() => setScreen(1)} onConfirm={handleScreen2Confirm} previousEvaluation={previousEvaluation} showComparison={showComparison} onSetShowComparison={setShowComparison} />}
             {screen === 3 && <Screen3 unitInfo={unitInfo} onBack={() => setScreen(2)} onConfirm={handleScreen3Confirm} />}
             {screen === 4 && <Screen4Progress progress={evalProgress} evalError={evalError} />}
             {screen === 5 && (
@@ -1072,6 +1281,8 @@ export default function Evaluate() {
                     reportText={reportText}
                     onReset={handleReset}
                     onSave={handleSave}
+                    previousEvaluation={previousEvaluation}
+                    showComparison={showComparison}
                 />
             )}
         </div>
