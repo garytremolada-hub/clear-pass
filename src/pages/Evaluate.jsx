@@ -251,7 +251,9 @@ function extractAssessableContent(fullText) {
     let startIdx = -1;
     for (const marker of startMarkers) {
         const idx = fullText.lastIndexOf(marker);
-        if (idx !== -1) { startIdx = idx; break; }
+        if (idx !== -1 && (startIdx === -1 || idx < startIdx)) {
+            startIdx = idx;
+        }
     }
 
     if (startIdx === -1) {
@@ -268,6 +270,7 @@ function extractAssessableContent(fullText) {
         'ASSESSOR DECLARATION',
         'RECORD OF ASSESSMENT OUTCOMES',
         'ASSESSOR USE ONLY',
+        'ADMIN USE ONLY',
         'Version control',
     ];
 
@@ -843,7 +846,11 @@ export default function Evaluate() {
         setScreen(4);
 
         const uocData = unitInfo.uocData;
-        const assessableText = assessmentDoc.assessableText || assessmentDoc.text;
+        const rawText = assessmentDoc.text;
+        const assessableText = assessmentDoc.assessableText || rawText;
+        console.log('Raw text length:', rawText.length);
+        console.log('Assessable text length:', assessableText.length);
+        console.log('Assessable text starts with:', assessableText.substring(0, 100));
         const { targetFKGL, band } = cohort;
 
         const peList = (uocData?.performanceEvidence || []).join('\n');
