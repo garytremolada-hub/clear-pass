@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Library, Settings, Menu, X, Ruler, PlayCircle } from 'lucide-react';
+import { Home, Library, Settings, Menu, X, Ruler, PlayCircle, ClipboardCheck, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navItems = [
     { label: 'Home', path: '/', icon: Home },
     { label: 'Level Check', path: '/level-check', icon: Ruler },
+    { label: 'Build Assessment', path: '/build', icon: Layers },
+    { label: 'Evaluate', path: '/evaluate', icon: ClipboardCheck },
     { label: 'Work Library', path: '/library', icon: Library },
     { label: 'How It Works', path: '/how-it-works', icon: PlayCircle },
     { label: 'Settings', path: '/settings', icon: Settings },
