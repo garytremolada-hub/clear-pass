@@ -697,11 +697,33 @@ function GapCard({ gap }) {
     const IconComp = isNotCovered ? XCircle : isPartial ? TriangleAlert : Info;
     const iconColor = isNotCovered ? '#A32D2D' : isPartial ? '#BA7517' : '#6b7280';
     return (
-        <div style={{ borderLeft: `3px solid ${borderColor}`, backgroundColor: bgColor, borderRadius: '6px', padding: '12px 14px', marginBottom: '10px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-            <IconComp style={{ color: iconColor, width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
-            <div>
-                <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>{gap.requirement}</p>
-                <p style={{ color: '#374151', fontSize: '13px', lineHeight: 1.5 }}>{gap.recommendation}</p>
+        <div style={{ borderLeft: `3px solid ${borderColor}`, backgroundColor: bgColor, borderRadius: '6px', padding: '12px 14px', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                <IconComp style={{ color: iconColor, width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>{gap.requirement}</p>
+                    <p style={{ color: '#374151', fontSize: '13px', lineHeight: 1.5 }}>{gap.recommendation}</p>
+                    {gap.exampleContent && (
+                        <details style={{ marginTop: '8px' }}>
+                            <summary style={{ fontSize: '12px', color: '#185FA5', cursor: 'pointer', fontWeight: 500 }}>
+                                Show example question or activity
+                            </summary>
+                            <div style={{
+                                marginTop: '8px', padding: '12px',
+                                background: '#EFF6FF',
+                                borderLeft: '3px solid #185FA5',
+                                borderRadius: '4px',
+                                fontSize: '13px',
+                                whiteSpace: 'pre-wrap',
+                                color: '#1e3a5f',
+                                lineHeight: 1.6,
+                                fontFamily: 'var(--font-mono)',
+                            }}>
+                                {gap.exampleContent}
+                            </div>
+                        </details>
+                    )}
+                </div>
             </div>
         </div>
     );
@@ -734,10 +756,11 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
     const handleDownload = async () => {
         setDownloading(true);
         try {
-            const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, BorderStyle, WidthType, ShadingType } = await import('docx');
+            const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, BorderStyle, WidthType, ShadingType, VerticalAlign } = await import('docx');
             const NAVY = '0D2444'; const WHITE = 'FFFFFF'; const LIGHT_GREY = 'F9FAFB'; const BORDER_GREY = 'D1D5DB';
             const PAGE_WIDTH = 9026;
             const thin = { style: BorderStyle.SINGLE, size: 1, color: BORDER_GREY };
+            const none = { style: BorderStyle.NONE };
             const navyB = { style: BorderStyle.SINGLE, size: 2, color: NAVY };
             const borders = { top: thin, bottom: thin, left: thin, right: thin };
             const navyBorders = { top: navyB, bottom: navyB, left: navyB, right: navyB };
@@ -745,8 +768,151 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
             const navyHeader = (text) => new Table({ width: { size: PAGE_WIDTH, type: WidthType.DXA }, columnWidths: [PAGE_WIDTH], rows: [new TableRow({ children: [new TableCell({ borders: navyBorders, width: { size: PAGE_WIDTH, type: WidthType.DXA }, shading: { fill: NAVY, type: ShadingType.CLEAR }, margins: { top: 120, bottom: 120, left: 200, right: 200 }, children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 26, color: WHITE, font: 'Arial' })] })] })] })] });
             const para = (t, opts = {}) => new Paragraph({ spacing: { before: opts.before || 80, after: opts.after || 80 }, children: [new TextRun({ text: t, size: opts.size || 20, font: 'Arial', color: opts.color || '1A1A1A', bold: opts.bold || false, italics: opts.italic || false })] });
             const tableRow = (cells, isHeader = false) => new TableRow({ children: cells.map((t, i) => new TableCell({ borders, margins: cm, shading: { fill: isHeader ? NAVY : (i % 2 === 0 ? LIGHT_GREY : WHITE), type: ShadingType.CLEAR }, children: [new Paragraph({ children: [new TextRun({ text: String(t || ''), size: 18, font: 'Arial', color: isHeader ? WHITE : '1A1A1A', bold: isHeader })] })] })) });
-            const makeTable = (headers, rows) => new Table({ width: { size: PAGE_WIDTH, type: WidthType.DXA }, columnWidths: Array(headers.length).fill(Math.floor(PAGE_WIDTH / headers.length)), rows: [tableRow(headers, true), ...rows.map(r => tableRow(r))] });
+            const makeTable = (headers, trows) => new Table({ width: { size: PAGE_WIDTH, type: WidthType.DXA }, columnWidths: Array(headers.length).fill(Math.floor(PAGE_WIDTH / headers.length)), rows: [tableRow(headers, true), ...trows.map(r => tableRow(r))] });
             const sp = () => new Paragraph({ spacing: { before: 120, after: 120 }, children: [new TextRun({ text: '' })] });
+
+            // ── Readability chart builder ─────────────────────────────────────
+            const buildReadabilityChart = (sectionList, targetFKGL) => {
+                const MAX_FKGL = 20;
+                const LABEL_COL = Math.floor(PAGE_WIDTH * 0.35);
+                const BAR_ZONE_TOTAL = PAGE_WIDTH - LABEL_COL;
+                const FKGL_LABEL_W = 600;
+                const BAR_ZONE = BAR_ZONE_TOTAL - FKGL_LABEL_W;
+                const noBorder = { top: none, bottom: none, left: none, right: none };
+                const bottomOnly = { top: none, bottom: thin, left: none, right: none };
+
+                const chartRows = [
+                    // Header row
+                    new TableRow({ children: [
+                        new TableCell({ width: { size: LABEL_COL, type: WidthType.DXA }, borders: bottomOnly, margins: { top: 60, bottom: 60, left: 0, right: 140 }, children: [new Paragraph({ children: [new TextRun({ text: 'Section', bold: true, size: 18, font: 'Arial', color: '6B7280' })] })] }),
+                        new TableCell({ width: { size: BAR_ZONE_TOTAL, type: WidthType.DXA }, borders: bottomOnly, margins: { top: 60, bottom: 60, left: 0, right: 0 }, children: [new Paragraph({ children: [new TextRun({ text: `Reading level (FKGL)  target: ${targetFKGL}`, bold: true, size: 18, font: 'Arial', color: '6B7280' })] })] }),
+                    ]}),
+                ];
+
+                sectionList.forEach(section => {
+                    const fkgl = parseFloat(section._readability?.fkgl) || 0;
+                    const diff = section._readability ? Math.abs(fkgl - targetFKGL) : null;
+                    const status = diff === null ? 'not scored' : diff <= 1.5 ? 'within' : diff <= 2.5 ? 'advisory' : 'refer';
+                    const barColour = status === 'within' ? '639922' : status === 'advisory' ? 'BA7517' : status === 'refer' ? 'A32D2D' : 'D1D5DB';
+                    const barPct = Math.min(fkgl / MAX_FKGL, 1);
+                    const filledW = Math.max(Math.floor(BAR_ZONE * barPct), 20);
+                    const emptyW = Math.max(BAR_ZONE - filledW, 20);
+
+                    chartRows.push(new TableRow({
+                        height: { value: 380, rule: 'exact' },
+                        children: [
+                            new TableCell({
+                                width: { size: LABEL_COL, type: WidthType.DXA },
+                                borders: noBorder,
+                                margins: { top: 80, bottom: 0, left: 0, right: 140 },
+                                verticalAlign: VerticalAlign.CENTER,
+                                children: [new Paragraph({ children: [new TextRun({ text: section.name || 'Section', size: 17, font: 'Arial', color: '374151' })] })],
+                            }),
+                            new TableCell({
+                                width: { size: BAR_ZONE_TOTAL, type: WidthType.DXA },
+                                borders: noBorder,
+                                margins: { top: 80, bottom: 0, left: 0, right: 0 },
+                                verticalAlign: VerticalAlign.CENTER,
+                                children: [new Table({
+                                    width: { size: BAR_ZONE_TOTAL, type: WidthType.DXA },
+                                    columnWidths: [filledW, emptyW, FKGL_LABEL_W],
+                                    rows: [new TableRow({
+                                        height: { value: 200, rule: 'exact' },
+                                        children: [
+                                            new TableCell({ width: { size: filledW, type: WidthType.DXA }, shading: { fill: barColour, type: ShadingType.CLEAR }, borders: noBorder, children: [new Paragraph({ children: [] })] }),
+                                            new TableCell({ width: { size: emptyW, type: WidthType.DXA }, shading: { fill: 'F3F4F6', type: ShadingType.CLEAR }, borders: noBorder, children: [new Paragraph({ children: [] })] }),
+                                            new TableCell({ width: { size: FKGL_LABEL_W, type: WidthType.DXA }, borders: noBorder, margins: { left: 80 }, children: [new Paragraph({ children: [new TextRun({ text: fkgl > 0 ? fkgl.toFixed(1) : 'N/A', size: 17, bold: true, font: 'Arial', color: barColour })] })] }),
+                                        ],
+                                    })],
+                                })],
+                            }),
+                        ],
+                    }));
+                });
+
+                return new Table({ width: { size: PAGE_WIDTH, type: WidthType.DXA }, columnWidths: [LABEL_COL, BAR_ZONE_TOTAL], rows: chartRows });
+            };
+
+            // Legend table
+            const buildChartLegend = () => {
+                const legendItems = [
+                    { fill: '639922', label: 'Within range (FKGL within 1.5 of target)' },
+                    { fill: 'BA7517', label: 'Advisory (1.6 to 2.5 above target)' },
+                    { fill: 'A32D2D', label: 'Refer for review (more than 2.5 above target)' },
+                ];
+                const colW = Math.floor(PAGE_WIDTH / 3);
+                return new Table({
+                    width: { size: PAGE_WIDTH, type: WidthType.DXA },
+                    columnWidths: [colW, colW, colW],
+                    rows: [new TableRow({ children: legendItems.map(item => new TableCell({
+                        width: { size: colW, type: WidthType.DXA },
+                        borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } },
+                        margins: { top: 60, bottom: 60, left: 0, right: 40 },
+                        children: [new Paragraph({ children: [
+                            new TextRun({ text: '\u25A0 ', size: 18, font: 'Arial', color: item.fill, bold: true }),
+                            new TextRun({ text: item.label, size: 16, font: 'Arial', color: '6B7280' }),
+                        ] })],
+                    })) })]
+                });
+            };
+
+            // Reading Ease table
+            const buildReadingEaseTable = (sectionList) => {
+                const freLabel = (fre) => {
+                    if (fre >= 70) return 'Easy';
+                    if (fre >= 50) return 'Standard';
+                    if (fre >= 30) return 'Difficult';
+                    return 'Very difficult';
+                };
+                const colW = Math.floor(PAGE_WIDTH / 3);
+                return new Table({
+                    width: { size: PAGE_WIDTH, type: WidthType.DXA },
+                    columnWidths: [colW, colW, colW],
+                    rows: [
+                        tableRow(['Section', 'Reading Ease', 'Plain English'], true),
+                        ...sectionList.map((s, i) => {
+                            const fre = s._readability?.fre;
+                            const freVal = typeof fre === 'number' ? fre.toFixed(0) : 'N/A';
+                            const label = typeof fre === 'number' ? freLabel(fre) : 'Not scored';
+                            return tableRow([s.name || 'Section', freVal, label]);
+                        }),
+                    ],
+                });
+            };
+
+            // Gap example box builder
+            const buildExampleBox = (gap) => {
+                if (!gap.exampleContent) return null;
+                const blueLeft = { style: BorderStyle.SINGLE, size: 8, color: '185FA5' };
+                const lines = gap.exampleContent.split('\n');
+                const boldStarts = ['Model answer', 'Assessor decision', 'What to look', 'Example question', 'Example task'];
+                return new Table({
+                    width: { size: PAGE_WIDTH, type: WidthType.DXA },
+                    columnWidths: [PAGE_WIDTH],
+                    rows: [new TableRow({ children: [new TableCell({
+                        borders: { top: thin, bottom: thin, left: blueLeft, right: thin },
+                        shading: { fill: 'EFF6FF', type: ShadingType.CLEAR },
+                        margins: { top: 100, bottom: 100, left: 160, right: 140 },
+                        children: [
+                            new Paragraph({ children: [new TextRun({ text: 'Example addition:', bold: true, size: 18, font: 'Arial', color: '185FA5' })] }),
+                            ...lines.map(line => new Paragraph({
+                                spacing: { before: 40 },
+                                children: [new TextRun({
+                                    text: line,
+                                    size: 18,
+                                    font: 'Arial',
+                                    color: '374151',
+                                    bold: boldStarts.some(s => line.startsWith(s)),
+                                })],
+                            })),
+                        ],
+                    })] })],
+                });
+            };
+
+            const withinRangeCount = sections.filter(s => s._readability && Math.abs((s._readability.fkgl || 0) - cohortProfile.targetFKGL) <= 1.5).length;
+            const cohortDesc = `${cohortProfile.band} (FKGL ${cohortProfile.targetFKGL})`;
+
             const children = [
                 navyHeader('COMPLIANCE AUDIT REPORT'), sp(),
                 para(`${unitInfo.code} - ${unitInfo.title}`, { bold: true, size: 24 }),
@@ -755,8 +921,12 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
                 para(`Overall verdict: ${overallVerdict}`, { bold: true, color: isAdequate ? '16A34A' : 'D97706' }), sp(),
                 navyHeader('Executive Summary'), sp(),
                 para(summaryStatement || reportText.split('\n').slice(0, 4).join(' ')), sp(),
-                navyHeader('Readability by Section'), sp(),
-                makeTable(['Section', 'FKGL', 'Target FKGL', 'Status'], sections.map(s => { const fkgl = s._readability?.fkgl ?? '-'; const diff = s._readability ? Math.abs(fkgl - cohortProfile.targetFKGL) : null; const status = diff === null ? 'Not scored' : diff <= 1.5 ? 'Within range' : diff <= 2.5 ? 'Advisory' : 'Refer for review'; return [s.name, typeof fkgl === 'number' ? fkgl.toFixed(1) : '-', cohortProfile.targetFKGL, status]; })), sp(),
+                navyHeader('Readability Analysis'), sp(),
+                para(`Target: FKGL ${cohortProfile.targetFKGL} for ${cohortDesc}. ${withinRangeCount} of ${sections.length} sections are within acceptable range.`, { color: '374151' }), sp(),
+                buildReadabilityChart(sections, cohortProfile.targetFKGL), sp(),
+                buildChartLegend(), sp(),
+                para('Reading Ease Scores (0 to 100, higher is easier)', { bold: true, size: 18, color: '0D2444' }), sp(),
+                buildReadingEaseTable(sections), sp(),
                 navyHeader('Performance Evidence Coverage'), sp(),
                 makeTable(['Requirement', 'Status', 'Coverage cited', 'Gap'], peResults.map(r => [r.requirement || '', r.status || '', r.coverage || '', r.gap || ''])), sp(),
                 navyHeader('Knowledge Evidence Coverage'), sp(),
@@ -764,12 +934,23 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
                 navyHeader('Element and Performance Criteria Mapping'), sp(),
                 makeTable(['Element', 'PC', 'Status', 'Mapped to', 'Gap'], elementsResults.flatMap(el => (el.performanceCriteria || []).map(pc => [el.title || '', pc.ref || '', pc.status || '', pc.mappedTo || '', pc.gap || '']))), sp(),
                 navyHeader('Gaps and Recommendations'), sp(),
-                ...(gaps.length === 0 ? [para('No gaps identified.')] : gaps.map(g => para(`${g.requirement}: ${g.recommendation} (add: ${g.recommendedSectionType})`))), sp(),
-                navyHeader('Instrument Adequacy'), sp(),
-                para(overallVerdict, { bold: true, size: 24, color: isAdequate ? '16A34A' : 'D97706' }), sp(),
-                navyHeader('Compliance Disclaimer'), sp(),
-                para(DISCLAIMER, { italic: true, color: '6B7280', size: 18 }),
             ];
+
+            if (gaps.length === 0) {
+                children.push(para('No gaps identified.'));
+            } else {
+                gaps.forEach(g => {
+                    children.push(para(`${g.requirement}: ${g.recommendation} (add: ${g.recommendedSectionType})`, { before: 80, after: 60 }));
+                    const exBox = buildExampleBox(g);
+                    if (exBox) { children.push(exBox); children.push(sp()); }
+                });
+            }
+
+            children.push(sp(), navyHeader('Instrument Adequacy'), sp());
+            children.push(para(overallVerdict, { bold: true, size: 24, color: isAdequate ? '16A34A' : 'D97706' }));
+            children.push(sp(), navyHeader('Compliance Disclaimer'), sp());
+            children.push(para(DISCLAIMER, { italic: true, color: '6B7280', size: 18 }));
+
             const doc = new Document({ styles: { default: { document: { run: { font: 'Arial', size: 20 } } } }, sections: [{ properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 } } }, children }] });
             const blob = await Packer.toBlob(doc);
             const url = URL.createObjectURL(blob);
@@ -1165,7 +1346,7 @@ export default function Evaluate() {
             const pcGaps = elementsResults.flatMap(el => (el.performanceCriteria || []).filter(pc => pc.status !== 'MAPPED').map(pc => ({ ...pc, elementTitle: el.title })));
             try {
                 const r6 = await llmCall(
-                    `You are an RTO assessment designer. Based on the coverage audit results, write specific recommendations for each gap.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "gaps": [\n    {\n      "requirement": "PE or KE or PC reference and text",\n      "gapType": "NOT COVERED | PARTIALLY COVERED | NOT MAPPED | PARTIALLY MAPPED",\n      "recommendedSectionType": "exact type name",\n      "recommendation": "plain English description of what to add",\n      "minimumContent": ["required field 1", "required field 2"]\n    }\n  ],\n  "overallVerdict": "ADEQUATE | REQUIRES DEVELOPMENT",\n  "summaryStatement": "one sentence plain English summary"\n}\n\nUOC TITLE: ${unitInfo.title}\n\nPE GAPS:\n${JSON.stringify(peGaps.slice(0, 10))}\n\nKE GAPS:\n${JSON.stringify(keGaps.slice(0, 10))}\n\nPC GAPS:\n${JSON.stringify(pcGaps.slice(0, 10))}`
+                    `You are an RTO assessment designer. Based on the coverage audit results, write specific recommendations for each gap.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "gaps": [\n    {\n      "requirement": "PE or KE or PC reference and text",\n      "gapType": "NOT COVERED | PARTIALLY COVERED | NOT MAPPED | PARTIALLY MAPPED",\n      "recommendedSectionType": "exact type name",\n      "recommendation": "plain English description of what to add",\n      "minimumContent": ["required field 1", "required field 2"],\n      "exampleContent": "Complete ready-to-use example the assessor can adapt directly. See rules below."\n    }\n  ],\n  "overallVerdict": "ADEQUATE | REQUIRES DEVELOPMENT",\n  "summaryStatement": "one sentence plain English summary"\n}\n\nRULES FOR exampleContent:\n- Write at FKGL 9 to 11 (plain workplace language, not academic)\n- Match the section type: write a question for Knowledge Questions, write a task step for Project tasks or Observation Checklists\n- Include a model answer guide with 3 to 5 key points\n- Include an S/NYS decision field label\n- Keep the total under 200 words\n- Do not use em dashes anywhere\n- Label the model answer clearly: Model answer guide:\n\nExample format for a knowledge question gap:\nExample question:\nQ[n]. [Question text here]\n\nModel answer guide:\nA satisfactory response must include:\n- [Key point 1]\n- [Key point 2]\n- [Key point 3]\n\nAssessor decision: S / NYS\n\nExample format for a project task or observation gap:\nExample task step:\nStep [n]: [Task instruction here]\n\nWhat to look for:\n- [Observable indicator 1]\n- [Observable indicator 2]\n- [Observable indicator 3]\n\nAssessor decision: S / NYS\n\nUOC TITLE: ${unitInfo.title}\n\nPE GAPS:\n${JSON.stringify(peGaps.slice(0, 10))}\n\nKE GAPS:\n${JSON.stringify(keGaps.slice(0, 10))}\n\nPC GAPS:\n${JSON.stringify(pcGaps.slice(0, 10))}`
                 );
                 const parsed = parseAIJson(r6);
                 gaps = parsed.gaps || [];
@@ -1173,7 +1354,7 @@ export default function Evaluate() {
                 summaryStatement = parsed.summaryStatement || '';
             } catch (e) {
                 console.error('Call 6 failed:', e.message);
-                gaps = [...peGaps, ...keGaps].map(g => ({ requirement: g.requirement, gapType: g.status, recommendedSectionType: 'Knowledge Questions', recommendation: 'Review and add coverage for this requirement.', minimumContent: [] }));
+                gaps = [...peGaps, ...keGaps].map(g => ({ requirement: g.requirement, gapType: g.status, recommendedSectionType: 'Knowledge Questions', recommendation: 'Review and add coverage for this requirement.', minimumContent: [], exampleContent: '' }));
                 overallVerdict = (peGaps.length === 0 && keGaps.length === 0 && pcGaps.length === 0) ? 'ADEQUATE' : 'REQUIRES DEVELOPMENT';
             }
 
