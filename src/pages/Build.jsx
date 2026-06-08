@@ -5,6 +5,8 @@ import { useCohort } from '@/lib/CohortContext';
 import { downloadDocx } from '@/lib/downloadDocx';
 import { buildBSBLDR413Mapping } from '@/lib/buildBSBLDR413Mapping';
 import { CheckCircle, Upload, AlertCircle, CheckCircle2, Loader2, Search } from 'lucide-react';
+import FeedbackButton from '@/components/feedback/FeedbackButton';
+import FeedbackModal from '@/components/feedback/FeedbackModal';
 import { extractMappingData } from '@/lib/extractMappingData';
 
 function isNewUocStructure(data) {
@@ -761,6 +763,7 @@ function Screen4Loading({ onReset, progress, buildError }) {
 
 function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, validationResult, mappingError, validationError, studentBookletBase64, studentBookletError, onBack, onReset, onSave }) {
     const navigate = useNavigate();
+    const [showFeedback, setShowFeedback] = useState(false);
     const hasGaps = assessmentText?.includes('⚠') || assessmentText?.includes('NOT COVERED');
     const gapCount = hasGaps ? (assessmentText.match(/GAP \d+:/g) || []).length : 0;
 
@@ -932,7 +935,15 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, val
                 <p style={{ color: '#9ca3af', fontSize: '11px', fontStyle: 'italic', textAlign: 'center' }}>
                     All content is AI-generated. Review with a qualified assessor before submitting for validation or audit purposes.
                 </p>
+
+                <div style={{ textAlign: 'center', marginTop: '8px' }}>
+                    <FeedbackButton onClick={() => setShowFeedback(true)} />
+                </div>
             </div>
+
+            {showFeedback && (
+                <FeedbackModal flow="Build" unitCode={unitInfo?.code} onClose={() => setShowFeedback(false)} />
+            )}
         </div>
     );
 }

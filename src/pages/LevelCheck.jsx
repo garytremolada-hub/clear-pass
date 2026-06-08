@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, CheckCircle, ArrowRight } from 'lucide-react';
+import FeedbackButton from '@/components/feedback/FeedbackButton';
+import FeedbackModal from '@/components/feedback/FeedbackModal';
 import { base44 } from '@/api/base44Client';
 import { ResultCard, BeforeAfterCards } from '@/components/chat/ReadabilityResultCard';
 import { getBandForFkgl } from '@/lib/parseReadabilityResult';
@@ -55,6 +57,7 @@ export default function LevelCheck() {
     const [wordCount, setWordCount] = useState(null); // authoritative count from extracted text
     const [error, setError] = useState(null);
     const [showRewriteModal, setShowRewriteModal] = useState(false);
+    const [showFeedback, setShowFeedback] = useState(false);
     const [rewriting, setRewriting] = useState(false);
     const [rewritingLabel, setRewritingLabel] = useState('');
     const [rewritingProgress, setRewritingProgress] = useState('');
@@ -573,6 +576,9 @@ ${batchText}`;
                         >
                             Build an assessment at this level →
                         </button>
+                        <div style={{ textAlign: 'center', marginTop: '4px' }}>
+                            <FeedbackButton onClick={() => setShowFeedback(true)} />
+                        </div>
                     </div>
                 )}
 
@@ -639,6 +645,11 @@ ${batchText}`;
                     </div>
                 )}
             </div>
+
+            {/* Feedback modal */}
+            {showFeedback && (
+                <FeedbackModal flow="Level Check" unitCode={null} onClose={() => setShowFeedback(false)} />
+            )}
 
             {/* Rewrite modal */}
             {showRewriteModal && (

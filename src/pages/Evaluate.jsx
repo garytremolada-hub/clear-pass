@@ -2,6 +2,8 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { CheckCircle, Upload, AlertCircle, Loader2, Search, ClipboardCheck, Download, XCircle, TriangleAlert, Info } from 'lucide-react';
+import FeedbackButton from '@/components/feedback/FeedbackButton';
+import FeedbackModal from '@/components/feedback/FeedbackModal';
 import { calculateReadability } from '@/lib/calculateReadability';
 
 // ── Shared constants (mirrored from Build) ────────────────────────────────────
@@ -731,6 +733,7 @@ function GapCard({ gap }) {
 
 function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, onSave, previousEvaluation, showComparison }) {
     const [downloading, setDownloading] = useState(false);
+    const [showFeedback, setShowFeedback] = useState(false);
 
     const { sections = [], peResults = [], keResults = [], elementsResults = [], gaps = [], overallVerdict = 'REQUIRES DEVELOPMENT', summaryStatement = '' } = results;
 
@@ -1084,7 +1087,15 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
                 <p style={{ color: '#9ca3af', fontSize: '11px', fontStyle: 'italic', lineHeight: 1.6 }}>
                     {DISCLAIMER}
                 </p>
+
+                <div style={{ textAlign: 'center', marginTop: '8px' }}>
+                    <FeedbackButton onClick={() => setShowFeedback(true)} />
+                </div>
             </div>
+
+            {showFeedback && (
+                <FeedbackModal flow="Evaluate" unitCode={unitInfo?.code} onClose={() => setShowFeedback(false)} />
+            )}
         </div>
     );
 }

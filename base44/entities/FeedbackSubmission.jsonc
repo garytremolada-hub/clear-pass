@@ -1,0 +1,46 @@
+{
+  "name": "FeedbackSubmission",
+  "type": "object",
+  "properties": {
+    "flow": {
+      "type": "string",
+      "enum": [
+        "Build",
+        "Evaluate",
+        "Level Check"
+      ],
+      "description": "Which tool flow the feedback came from"
+    },
+    "unit_code": {
+      "type": "string",
+      "description": "Unit code if applicable"
+    },
+    "category": {
+      "type": "string",
+      "description": "Feedback category selected by user"
+    },
+    "rating": {
+      "type": "string",
+      "enum": [
+        "Poor",
+        "Fair",
+        "Good",
+        "Excellent"
+      ],
+      "description": "Rating selected by user"
+    },
+    "comments": {
+      "type": "string",
+      "description": "Optional free text comments"
+    },
+    "submitted_at": {
+      "type": "string",
+      "description": "Human-readable submission timestamp"
+    }
+  },
+  "required": [
+    "flow",
+    "category",
+    "rating"
+  ]
+}
