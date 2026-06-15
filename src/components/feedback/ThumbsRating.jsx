@@ -12,27 +12,35 @@ export default function ThumbsRating({ flow, unitCode, context }) {
         setVoted(vote);
         setShowComment(vote === 'down');
         if (vote === 'up') {
-            await base44.entities.FeedbackSubmission.create({
-                flow,
-                unit_code: unitCode || '',
-                category: context || 'Quick rating',
-                rating: 'Good',
-                comments: '👍',
-                submitted_at: new Date().toLocaleDateString('en-AU'),
-            });
+            try {
+                await base44.entities.FeedbackSubmission.create({
+                    flow,
+                    unit_code: unitCode || '',
+                    category: context || 'Quick rating',
+                    rating: 'Good',
+                    comments: '👍',
+                    submitted_at: new Date().toLocaleDateString('en-AU'),
+                });
+            } catch (_) {
+                // non-blocking — still show thank you
+            }
             setSubmitted(true);
         }
     };
 
     const handleSubmitComment = async () => {
-        await base44.entities.FeedbackSubmission.create({
-            flow,
-            unit_code: unitCode || '',
-            category: context || 'Quick rating',
-            rating: 'Poor',
-            comments: comment || '👎',
-            submitted_at: new Date().toLocaleDateString('en-AU'),
-        });
+        try {
+            await base44.entities.FeedbackSubmission.create({
+                flow,
+                unit_code: unitCode || '',
+                category: context || 'Quick rating',
+                rating: 'Poor',
+                comments: comment || '👎',
+                submitted_at: new Date().toLocaleDateString('en-AU'),
+            });
+        } catch (_) {
+            // non-blocking — still show thank you
+        }
         setSubmitted(true);
         setShowComment(false);
     };
