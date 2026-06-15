@@ -123,7 +123,7 @@ export default function HowItWorks() {
 
     const levelCheckNodes = [
         { Icon: Upload,    label: 'Upload document',   sublabel: '.docx or PDF',       iconBg: '#3B82F6' },
-        { Icon: BarChart2, label: 'Get your scores',   sublabel: 'FKGL · FRE · Words', iconBg: '#8B5CF6' },
+        { Icon: BarChart2, label: 'Get your scores',   sublabel: 'Level · Ease · Words', iconBg: '#8B5CF6' },
         { Icon: RotateCcw, label: 'Rewrite if needed', sublabel: 'Pick target level',   iconBg: '#F59E0B' },
         { Icon: Download,  label: 'Download',          sublabel: 'Formatted Word file', iconBg: '#10B981' },
     ];
@@ -196,7 +196,7 @@ export default function HowItWorks() {
                         iconColor="#8B5CF6"
                         label="Level Check"
                         path="/level-check"
-                        description="Upload any document (Word or PDF) to measure its reading level. Clearpass calculates the FKGL grade level and Reading Ease score, then tells you whether it is appropriate for your learner cohort. If it is not, you can rewrite it to the right level and download the corrected version as a formatted Word file."
+                        description="Upload any document (Word or PDF) to measure its reading level. Clearpass calculates the Reading Level and Reading Ease score, then tells you whether it is appropriate for your learner cohort. If it is not, you can rewrite it to the right level and download the corrected version as a formatted Word file."
                         steps={[
                             'Upload a Word or PDF file.',
                             'See the FKGL and FRE scores and which band the document sits in.',
@@ -282,20 +282,20 @@ export default function HowItWorks() {
                 <div style={{ marginBottom: '48px' }}>
                     <SectionHeading text="Reading level reference" />
                     <p style={{ color: GREY_TEXT, fontSize: '14px', lineHeight: 1.7, marginBottom: '16px' }}>
-                        Clearpass uses two scores: <strong>FKGL</strong> (Flesch-Kincaid Grade Level) maps to school year — Grade 10 means a Year 10 student can read it comfortably. <strong>FRE</strong> (Flesch Reading Ease) runs the opposite way — a higher score means easier reading. Both scores map to the eight bands below, which align with Australian AQF levels.
+                        Clearpass uses a proprietary readability scoring system that maps text complexity to school grade levels and AQF qualifications. A lower Reading Level score means easier reading — Grade 10 means a Year 10 student can read it comfortably. The Reading Ease score works the other way — a higher number means easier text. Both scores map to the eight bands below, which align with Australian AQF levels.
                     </p>
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '540px' }}>
                             <thead>
                                 <tr style={{ backgroundColor: NAVY, color: '#fff' }}>
-                                    {['Band', 'FKGL', 'FRE', 'AQF level', 'Typical reader'].map(h => (
+                                    {['Band', 'Reading Level', 'Reading Ease', 'AQF level', 'Typical reader'].map(h => (
                                         <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
                                 {[
-                                    { band: 'Very Easy',         fkgl: '≤ 3',  fre: '90–100', aqf: 'Pre-vocational',               reader: 'Early primary school' },
+                                                    { band: 'Very Easy',         fkgl: '≤ 3',  fre: '90–100', aqf: 'Pre-vocational',               reader: 'Early primary school' },
                                     { band: 'Easy',              fkgl: '4–5',  fre: '80–90',  aqf: 'Pre-vocational / Cert I',       reader: 'Upper primary school' },
                                     { band: 'Fairly Easy',       fkgl: '6–7',  fre: '70–80',  aqf: 'Certificate I / II',            reader: 'Year 7–8 student' },
                                     { band: 'Cert I/II · Yr 10', fkgl: '8–9',  fre: '60–70',  aqf: 'Certificate II / III',          reader: 'Year 9–10 student' },
@@ -303,6 +303,7 @@ export default function HowItWorks() {
                                     { band: 'Diploma',           fkgl: '12–13',fre: '30–50',  aqf: 'Diploma / Advanced Diploma',    reader: 'VET diploma student' },
                                     { band: 'Degree / Grad Dip', fkgl: '14–16',fre: '10–30',  aqf: 'Bachelor / Graduate Diploma',   reader: 'University student' },
                                     { band: 'Very Difficult',    fkgl: '17+',  fre: '< 10',   aqf: 'Postgraduate / Specialist',     reader: 'Academic or specialist' },
+
                                 ].map(({ band, fkgl, fre, aqf, reader }, idx) => (
                                     <tr key={band} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
                                         <td style={{ padding: '9px 12px', borderBottom: `1px solid ${BORDER}` }}>
@@ -313,6 +314,7 @@ export default function HowItWorks() {
                                         </td>
                                         <td style={{ padding: '9px 12px', color: GREY_TEXT, borderBottom: `1px solid ${BORDER}` }}>{fkgl}</td>
                                         <td style={{ padding: '9px 12px', color: GREY_TEXT, borderBottom: `1px solid ${BORDER}` }}>{fre}</td>
+
                                         <td style={{ padding: '9px 12px', color: GREY_TEXT, borderBottom: `1px solid ${BORDER}` }}>{aqf}</td>
                                         <td style={{ padding: '9px 12px', color: GREY_TEXT, borderBottom: `1px solid ${BORDER}` }}>{reader}</td>
                                     </tr>
@@ -321,7 +323,7 @@ export default function HowItWorks() {
                         </table>
                     </div>
                     <p style={{ color: '#9ca3af', fontSize: '12px', fontStyle: 'italic', marginTop: '10px' }}>
-                        Scores are calculated using the Flesch-Kincaid formula on extracted text. Scanned PDFs and heavily formatted documents may produce less accurate scores.
+                        Scores are calculated from sentence length and word complexity. Scanned PDFs and heavily formatted documents may produce less accurate scores.
                     </p>
                 </div>
 

@@ -100,7 +100,7 @@ export default function RewriteModal({ bandName, fkglStr, onConfirm, onCancel })
                             Rewrite for your learners
                         </h2>
                         <p style={{ fontSize: '13px', color: '#6b7280' }}>
-                            Current level: {bandName} — Reading Grade Level {fkglStr}
+                            Current level: {bandName}
                         </p>
                     </div>
                     <button

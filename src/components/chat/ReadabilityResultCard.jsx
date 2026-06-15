@@ -65,7 +65,7 @@ function ScaleBar({ fkgl, rewriteFkgl }) {
                         key={b.name}
                         className="flex-1"
                         style={{ backgroundColor: b.color }}
-                        title={`${b.name} (${b.gradeRange})`}
+                        title={b.name}
                     />
                 ))}
             </div>
@@ -87,7 +87,7 @@ function ScaleBar({ fkgl, rewriteFkgl }) {
             {band && (
                 <div className="mt-1.5 text-center">
                     <span className="text-sm font-medium" style={{ color: '#0d2444' }}>{band.name}</span>
-                    <span className="text-xs ml-1.5" style={{ color: '#6b7280' }}>— {band.gradeRange} · {band.aqf}</span>
+                    <span className="text-xs ml-1.5" style={{ color: '#6b7280' }}>— {band.aqf}</span>
                 </div>
             )}
 
@@ -122,25 +122,19 @@ function TrafficLight({ tl, onRewrite }) {
             bg: '#22c55e', color: '#14532d',
             icon: '✓',
             label: 'Within range for your cohort',
-            sub: tl.targetFkgl != null
-                ? `FKGL ${tl.fkgl} is within ±1.5 of your target FKGL ${tl.targetFkgl}`
-                : 'Text is within expected readability range.',
+            sub: 'Text is within the expected readability range for your learners.',
         },
         amber: {
             bg: '#fde047', color: '#713f12',
             icon: '⚠',
             label: 'Outside expected range',
-            sub: tl.targetFkgl != null
-                ? `FKGL ${tl.fkgl} is ${absDiff} grade levels ${direction} your target. Assessor review recommended.`
-                : 'Text is outside expected readability range. Assessor review recommended.',
+            sub: `Reading level is ${absDiff} grade level${absDiff !== '1.0' ? 's' : ''} ${direction} the target for your learners. Assessor review recommended.`,
         },
         red: {
             bg: '#ef4444', color: '#ffffff',
             icon: '✗',
             label: 'Material readability concern',
-            sub: tl.targetFkgl != null
-                ? `FKGL ${tl.fkgl} is ${absDiff} grade levels ${direction} your target. Must be addressed before use.`
-                : 'Text has a significant readability concern. Must be addressed before use.',
+            sub: `Reading level is ${absDiff} grade level${absDiff !== '1.0' ? 's' : ''} ${direction} the target for your learners. Must be addressed before use.`,
         },
     }[tl.status];
 
@@ -208,8 +202,8 @@ export function ResultCard({ result, wordCount, headerLabel, headerColor, rewrit
                 {/* Key stats */}
                 <div className="grid grid-cols-3 gap-2">
                     {[
-                        { abbr: 'Reading Grade Level', label: 'Grade Level',   value: result.fkgl?.toFixed(1) ?? '—', note: 'lower = easier' },
-                        { abbr: 'Reading Ease Score',  label: 'Reading Ease',  value: result.fre?.toFixed(1) ?? '—',  note: '0–100, higher = easier' },
+                        { abbr: 'Reading Level',      label: 'Grade Level',   value: result.fkgl?.toFixed(1) ?? '—', note: 'lower = easier' },
+                        { abbr: 'Reading Ease',        label: 'Ease Score',    value: result.fre?.toFixed(1) ?? '—',  note: '0–100, higher = easier' },
                         { abbr: 'Words',               label: 'Word Count',    value: (wordCount ?? result.words) ?? '—', note: null },
                     ].map(stat => (
                         <div key={stat.abbr} className="rounded-xl p-3 text-center" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
@@ -250,7 +244,7 @@ export function ResultCard({ result, wordCount, headerLabel, headerColor, rewrit
 
                 {/* Disclaimer */}
                 <p className="text-[11px] italic leading-relaxed" style={{ color: '#9ca3af' }}>
-                    Scores are AI estimates based on sentence length and word complexity. For critical compliance decisions, verify with a qualified assessor.
+                    Scores are calculated from sentence length and word complexity. For critical compliance decisions, verify with a qualified assessor.
                 </p>
 
                 {result.benchmark && (

@@ -106,7 +106,7 @@ export default function Dashboard() {
                                         <div className="min-w-0">
                                             <p className="text-sm font-medium truncate" style={{ color: '#0d2444' }}>{item.title}</p>
                                             <p className="text-xs mt-0.5" style={{ color: '#6b7280' }}>
-                                                {item.task_type}{band ? ` · ${band.name}` : ''}{item.fkgl != null ? ` · FKGL ${item.fkgl.toFixed(1)}` : ''}
+                                                {item.task_type}{band ? ` · ${band.name}` : ''}
                                             </p>
                                         </div>
                                         {band && (

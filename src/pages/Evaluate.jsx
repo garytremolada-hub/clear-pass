@@ -400,7 +400,7 @@ function Screen2({ unitInfo, onBack, onConfirm, previousEvaluation, showComparis
                     Upload the assessment to evaluate
                 </h2>
                 <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
-                    Upload the existing assessment document you want to check against {unitInfo.code}
+                    Upload the existing assessment you want to check against {unitInfo.code}
                 </p>
 
                 {/* Drop zone */}
@@ -543,7 +543,7 @@ function Screen3({ unitInfo, onBack, onConfirm }) {
                     Who was this assessment written for?
                 </h2>
                 <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
-                    This sets the readability target we compare against
+                    This sets the reading level we compare the assessment against
                 </p>
 
                 <div style={{ marginBottom: '16px' }}>
@@ -584,10 +584,10 @@ function Screen3({ unitInfo, onBack, onConfirm }) {
                         <CheckCircle style={{ color: '#22c55e', width: '18px', height: '18px', flexShrink: 0, marginTop: '1px' }} />
                         <div>
                             <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 500, marginBottom: '2px' }}>
-                                Target readability: {band} (FKGL {targetFKGL})
+                                Target readability: {band}
                             </p>
                             <p style={{ color: '#6b7280', fontSize: '12px' }}>
-                                We will compare the assessment against this level.
+                                We'll compare the assessment against this reading level.
                             </p>
                         </div>
                     </div>
@@ -788,7 +788,7 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
                     // Header row
                     new TableRow({ children: [
                         new TableCell({ width: { size: LABEL_COL, type: WidthType.DXA }, borders: bottomOnly, margins: { top: 60, bottom: 60, left: 0, right: 140 }, children: [new Paragraph({ children: [new TextRun({ text: 'Section', bold: true, size: 18, font: 'Arial', color: '6B7280' })] })] }),
-                        new TableCell({ width: { size: BAR_ZONE_TOTAL, type: WidthType.DXA }, borders: bottomOnly, margins: { top: 60, bottom: 60, left: 0, right: 0 }, children: [new Paragraph({ children: [new TextRun({ text: `Reading level (FKGL)  target: ${targetFKGL}`, bold: true, size: 18, font: 'Arial', color: '6B7280' })] })] }),
+                        new TableCell({ width: { size: BAR_ZONE_TOTAL, type: WidthType.DXA }, borders: bottomOnly, margins: { top: 60, bottom: 60, left: 0, right: 0 }, children: [new Paragraph({ children: [new TextRun({ text: `Reading level  —  target: ${cohortProfile.band}`, bold: true, size: 18, font: 'Arial', color: '6B7280' })] })] }),
                     ]}),
                 ];
 
@@ -914,19 +914,19 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
             };
 
             const withinRangeCount = sections.filter(s => s._readability && Math.abs((s._readability.fkgl || 0) - cohortProfile.targetFKGL) <= 1.5).length;
-            const cohortDesc = `${cohortProfile.band} (FKGL ${cohortProfile.targetFKGL})`;
+            const cohortDesc = cohortProfile.band;
 
             const children = [
                 navyHeader('COMPLIANCE AUDIT REPORT'), sp(),
                 para(`${unitInfo.code} - ${unitInfo.title}`, { bold: true, size: 24 }),
-                para(`Cohort: ${cohortProfile.band} level (FKGL ${cohortProfile.targetFKGL})`, { color: '6B7280' }),
+                para(`Cohort: ${cohortProfile.band} level`, { color: '6B7280' }),
                 para(`Date: ${new Date().toLocaleDateString('en-AU')}`, { color: '6B7280' }),
                 para(`Overall verdict: ${overallVerdict}`, { bold: true, color: isAdequate ? '16A34A' : 'D97706' }), sp(),
                 navyHeader('Executive Summary'), sp(),
                 para(summaryStatement || reportText.split('\n').slice(0, 4).join(' ')), sp(),
                 navyHeader('Readability Analysis'), sp(),
-                para(`Target: FKGL ${cohortProfile.targetFKGL} for ${cohortDesc}. ${withinRangeCount} of ${sections.length} sections are within acceptable range.`, { color: '374151' }), sp(),
-                buildReadabilityChart(sections, cohortProfile.targetFKGL), sp(),
+                para(`Target reading level: ${cohortDesc}. ${withinRangeCount} of ${sections.length} sections are within the acceptable range.`, { color: '374151' }), sp(),
+                buildReadabilityChart(sections, cohortProfile.targetFKGL ?? 10.5), sp(),
                 buildChartLegend(), sp(),
                 para('Reading Ease Scores (0 to 100, higher is easier)', { bold: true, size: 18, color: '0D2444' }), sp(),
                 buildReadingEaseTable(sections), sp(),
@@ -991,7 +991,7 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
                     <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
                         <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>Readability</p>
                         <p style={{ color: '#0d2444', fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>{withinRange} / {sections.length} sections</p>
-                        <p style={{ color: '#6b7280', fontSize: '12px' }}>within target range</p>
+                        <p style={{ color: '#6b7280', fontSize: '12px' }}>at the right reading level</p>
                     </div>
                 </div>
 

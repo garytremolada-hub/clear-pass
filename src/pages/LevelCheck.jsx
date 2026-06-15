@@ -148,7 +148,7 @@ export default function LevelCheck() {
             const desc = band ? bandDescriptions[band.name] : null;
             const summary = band && desc
                 ? `This document reads at ${band.name} level — ${desc}.`
-                : `This document reads at FKGL ${scoreResult.fkgl} level.`;
+                : `This document is at ${band?.name || 'an unknown'} reading level.`;
             
             const parsed = {
                 fkgl: scoreResult.fkgl,
@@ -190,9 +190,10 @@ export default function LevelCheck() {
     const handleRewriteConfirm = async ({ targetFkgl, learnerLabel, learnerDesc, support }) => {
         setShowRewriteModal(false);
         setRewriting(true);
-        const currentGrade = result?.fkgl != null ? Math.round(result.fkgl) : '?';
-        const targetGrade = targetFkgl != null ? Math.round(targetFkgl) : '?';
-        setRewritingLabel(`Grade ${currentGrade} to Grade ${targetGrade}`);
+        const currentBand = getBandForFkgl(result?.fkgl)?.name || '?';
+        const targetBandObj = targetFkgl != null ? getBandForFkgl(targetFkgl) : null;
+        const targetBandName = targetBandObj?.name || '?';
+        setRewritingLabel(`${currentBand} to ${targetBandName}`);
         setRewritingProgress('');
         setRewriteResult(null);
         setRewrittenText(null);
@@ -284,13 +285,14 @@ ${batchText}`;
             const afterScore = calculateReadability(fullRewritten);
             if (!afterScore) throw new Error('Could not score the rewritten document.');
 
+            const afterBand = getBandForFkgl(afterScore.fkgl);
             const afterResult = {
                 fkgl: afterScore.fkgl,
                 fre: afterScore.fre,
                 words: afterScore.wordCount,
                 sentences: afterScore.sentenceCount,
                 syllables: afterScore.syllables,
-                summary: `This document reads at FKGL ${afterScore.fkgl} level.`,
+                summary: `This document reads at ${afterBand?.name || 'an unknown'} level.`,
                 benchmark: null,
                 trafficLight: null,
             };
