@@ -199,7 +199,7 @@ export default function HowItWorks() {
                         description="Upload any document (Word or PDF) to measure its reading level. Clearpass calculates the Reading Level and Reading Ease score, then tells you whether it is appropriate for your learner cohort. If it is not, you can rewrite it to the right level and download the corrected version as a formatted Word file."
                         steps={[
                             'Upload a Word or PDF file.',
-                            'See the FKGL and FRE scores and which band the document sits in.',
+                            'See the Reading Level and Reading Ease scores and which band the document sits in.',
                             'Choose a target reading level if a rewrite is needed.',
                             'Download the rewritten document as a Word file.',
                         ]}
