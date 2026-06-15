@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Upload, CheckCircle, ArrowRight } from 'lucide-react';
 import FeedbackButton from '@/components/feedback/FeedbackButton';
 import FeedbackModal from '@/components/feedback/FeedbackModal';
+import ThumbsRating from '@/components/feedback/ThumbsRating';
 import { base44 } from '@/api/base44Client';
 import { ResultCard, BeforeAfterCards } from '@/components/chat/ReadabilityResultCard';
 import { getBandForFkgl } from '@/lib/parseReadabilityResult';
@@ -578,6 +579,7 @@ ${batchText}`;
                         >
                             Build an assessment at this level →
                         </button>
+                        <ThumbsRating flow="Level Check" context="Rewrite result" />
                         <div style={{ textAlign: 'center', marginTop: '4px' }}>
                             <FeedbackButton onClick={() => setShowFeedback(true)} />
                         </div>
@@ -602,6 +604,11 @@ ${batchText}`;
                             Build an assessment for this level
                             <ArrowRight className="h-4 w-4" />
                         </button>
+
+                        <ThumbsRating flow="Level Check" context="Readability score" />
+                        <div style={{ textAlign: 'center', marginTop: '4px' }}>
+                            <FeedbackButton onClick={() => setShowFeedback(true)} />
+                        </div>
                     </div>
                 )}
 

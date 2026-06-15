@@ -7,6 +7,7 @@ import { buildBSBLDR413Mapping } from '@/lib/buildBSBLDR413Mapping';
 import { CheckCircle, Upload, AlertCircle, CheckCircle2, Loader2, Search } from 'lucide-react';
 import FeedbackButton from '@/components/feedback/FeedbackButton';
 import FeedbackModal from '@/components/feedback/FeedbackModal';
+import ThumbsRating from '@/components/feedback/ThumbsRating';
 import { extractMappingData } from '@/lib/extractMappingData';
 
 function isNewUocStructure(data) {
@@ -936,6 +937,7 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, val
                     All content is AI-generated. Review with a qualified assessor before submitting for validation or audit purposes.
                 </p>
 
+                <ThumbsRating flow="Build" unitCode={unitInfo?.code} context="Assessment build result" />
                 <div style={{ textAlign: 'center', marginTop: '8px' }}>
                     <FeedbackButton onClick={() => setShowFeedback(true)} />
                 </div>
