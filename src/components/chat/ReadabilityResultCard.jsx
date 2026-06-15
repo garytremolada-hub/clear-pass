@@ -1,19 +1,25 @@
 import { useState } from 'react';
 import { ArrowDown } from 'lucide-react';
 
-function Tooltip({ text }) {
+function Tooltip({ text, position = 'center' }) {
     const [visible, setVisible] = useState(false);
+    const leftStyle = position === 'left' ? { left: 'auto', right: '0', transform: 'none' }
+        : position === 'right' ? { left: '0', right: 'auto', transform: 'none' }
+        : { left: '50%', transform: 'translateX(-50%)' };
+    const arrowLeft = position === 'left' ? { left: 'auto', right: '6px', transform: 'none' }
+        : position === 'right' ? { left: '6px', right: 'auto', transform: 'none' }
+        : { left: '50%', transform: 'translateX(-50%)' };
     return (
         <span style={{ position: 'relative', display: 'inline-block', marginLeft: '3px', verticalAlign: 'middle' }}>
             <span
                 onMouseEnter={() => setVisible(true)}
                 onMouseLeave={() => setVisible(false)}
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '13px', height: '13px', borderRadius: '50%', backgroundColor: '#e5e7eb', color: '#6b7280', fontSize: '9px', fontWeight: 700, cursor: 'default', lineHeight: 1 }}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '14px', height: '14px', borderRadius: '50%', backgroundColor: '#e5e7eb', color: '#6b7280', fontSize: '9px', fontWeight: 700, cursor: 'default', lineHeight: 1 }}
             >?</span>
             {visible && (
-                <div style={{ position: 'absolute', bottom: '120%', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#0d2444', color: '#ffffff', fontSize: '11px', lineHeight: 1.5, padding: '7px 10px', borderRadius: '7px', whiteSpace: 'nowrap', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.2)', maxWidth: '200px', whiteSpace: 'normal', textAlign: 'center' }}>
+                <div style={{ position: 'absolute', bottom: 'calc(100% + 8px)', ...leftStyle, backgroundColor: '#0d2444', color: '#ffffff', fontSize: '12px', lineHeight: 1.6, padding: '10px 12px', borderRadius: '8px', zIndex: 100, boxShadow: '0 4px 16px rgba(0,0,0,0.25)', width: '200px', textAlign: 'left', pointerEvents: 'none' }}>
                     {text}
-                    <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', borderWidth: '5px', borderStyle: 'solid', borderColor: '#0d2444 transparent transparent transparent' }} />
+                    <div style={{ position: 'absolute', top: '100%', ...arrowLeft, borderWidth: '5px', borderStyle: 'solid', borderColor: '#0d2444 transparent transparent transparent' }} />
                 </div>
             )}
         </span>
@@ -221,9 +227,9 @@ export function ResultCard({ result, wordCount, headerLabel, headerColor, rewrit
                 {/* Key stats */}
                 <div className="grid grid-cols-3 gap-2">
                     {[
-                        { abbr: 'Reading Level',  value: result.fkgl?.toFixed(1) ?? '—', note: 'lower = easier', tooltip: 'A score based on sentence length and word length. Lower means easier to read. Grade 8 = Year 8 level.' },
-                        { abbr: 'Reading Ease',  value: result.fre?.toFixed(1) ?? '—',  note: '0–100, higher = easier', tooltip: 'Rates how easy the text is to understand. 0 is very hard, 100 is very easy. Most workplace documents sit between 40 and 70.' },
-                        { abbr: 'Words',         value: (wordCount ?? result.words) ?? '—', note: null, tooltip: 'Total number of words in the document.' },
+                        { abbr: 'Reading Level',  value: result.fkgl?.toFixed(1) ?? '—', note: 'lower = easier', tooltip: 'A score based on sentence length and word length. Lower means easier to read. Grade 8 = Year 8 level.', pos: 'right' },
+                        { abbr: 'Reading Ease',  value: result.fre?.toFixed(1) ?? '—',  note: '0–100, higher = easier', tooltip: 'Rates how easy the text is to understand. 0 is very hard, 100 is very easy. Most workplace documents sit between 40 and 70.', pos: 'center' },
+                        { abbr: 'Words',         value: (wordCount ?? result.words) ?? '—', note: null, tooltip: 'Total number of words in the document.', pos: 'left' },
                     ].map(stat => (
                         <div key={stat.abbr} className="rounded-xl p-3 text-center" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
                             <div className="font-mono text-2xl font-medium tabular-nums" style={{ color: '#0d2444' }}>
@@ -231,7 +237,7 @@ export function ResultCard({ result, wordCount, headerLabel, headerColor, rewrit
                             </div>
                             <div className="text-[11px] font-medium mt-0.5" style={{ color: '#374151' }}>
                                 {stat.abbr}
-                                <Tooltip text={stat.tooltip} />
+                                <Tooltip text={stat.tooltip} position={stat.pos} />
                             </div>
                             {stat.note && (
                                 <div className="text-[9px] mt-0.5 leading-tight italic" style={{ color: '#9ca3af' }}>{stat.note}</div>
