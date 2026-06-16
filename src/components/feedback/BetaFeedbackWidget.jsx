@@ -68,9 +68,9 @@ export default function BetaFeedbackWidget() {
                     bottom: '24px',
                     right: '24px',
                     zIndex: 9000,
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '50%',
+                    height: '40px',
+                    borderRadius: '20px',
+                    padding: '0 16px',
                     backgroundColor: NAVY,
                     border: `2px solid ${GOLD}`,
                     color: GOLD,
@@ -84,7 +84,8 @@ export default function BetaFeedbackWidget() {
                 onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
                 onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
             >
-                <MessageSquarePlus style={{ width: '20px', height: '20px' }} />
+                <MessageSquarePlus style={{ width: '16px', height: '16px', marginRight: '6px' }} />
+                <span style={{ fontSize: '13px', fontWeight: 500 }}>Feedback</span>
             </button>
 
             {/* Modal overlay */}
