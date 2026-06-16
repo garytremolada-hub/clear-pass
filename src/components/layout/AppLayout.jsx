@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { CohortProvider } from '@/lib/CohortContext';
+import BetaFeedbackWidget from '@/components/feedback/BetaFeedbackWidget';
 
 export default function AppLayout() {
     return (
@@ -11,6 +12,7 @@ export default function AppLayout() {
                     <Outlet />
                 </main>
             </div>
+            <BetaFeedbackWidget />
         </CohortProvider>
     );
 }

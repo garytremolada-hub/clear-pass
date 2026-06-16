@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Library, Settings, Menu, X, Ruler, PlayCircle, ClipboardCheck, Layers } from 'lucide-react';
+import { Home, Library, Settings, Menu, X, Ruler, PlayCircle, ClipboardCheck, Layers, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { base44 } from '@/api/base44Client';
 
 const navItems = [
     { label: 'Home', path: '/', icon: Home },
@@ -17,6 +18,11 @@ const navItems = [
 export default function Sidebar() {
     const location = useLocation();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
+
+    useEffect(() => {
+        base44.auth.me().then(u => setIsAdmin(u?.role === 'admin')).catch(() => {});
+    }, []);
 
     return (
         <>
@@ -86,6 +92,27 @@ export default function Sidebar() {
                         );
                     })}
                 </nav>
+
+                {/* Admin: Beta Feedback link */}
+                {isAdmin && (
+                    <div className="px-3 pb-2">
+                        <Link
+                            to="/beta-feedback"
+                            onClick={() => setMobileOpen(false)}
+                            className={cn(
+                                "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors",
+                                location.pathname === '/beta-feedback' ? "font-medium" : "hover:bg-white/5"
+                            )}
+                            style={{
+                                backgroundColor: location.pathname === '/beta-feedback' ? '#162d50' : undefined,
+                                color: location.pathname === '/beta-feedback' ? '#c9a84c' : '#8ba4c4',
+                            }}
+                        >
+                            <FlaskConical className="h-4 w-4 shrink-0" style={{ color: location.pathname === '/beta-feedback' ? '#c9a84c' : '#8ba4c4' }} />
+                            Beta Feedback
+                        </Link>
+                    </div>
+                )}
 
                 {/* Footer */}
                 <div className="p-4 border-t" style={{ borderColor: '#162d50' }} />

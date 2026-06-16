@@ -1,0 +1,39 @@
+{
+  "name": "BetaFeedback",
+  "type": "object",
+  "properties": {
+    "rating": {
+      "type": "number",
+      "description": "Star rating 1-5"
+    },
+    "issue_type": {
+      "type": "string",
+      "enum": [
+        "Bug",
+        "UX",
+        "Feature Request"
+      ],
+      "description": "Type of feedback"
+    },
+    "comment": {
+      "type": "string",
+      "description": "Free text comment"
+    },
+    "page_path": {
+      "type": "string",
+      "description": "Page path when feedback was submitted"
+    },
+    "user_name": {
+      "type": "string",
+      "description": "Name of the user who submitted"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Email of the user who submitted"
+    }
+  },
+  "required": [
+    "rating",
+    "issue_type"
+  ]
+}

@@ -16,6 +16,7 @@ import LevelCheck from './pages/LevelCheck';
 import Build from './pages/Build';
 import Evaluate from './pages/Evaluate';
 import HowItWorks from './pages/HowItWorks';
+import BetaFeedbackAdmin from './pages/BetaFeedbackAdmin';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -49,6 +50,7 @@ const AuthenticatedApp = () => {
       <Route path="/build" element={<Build />} />
       <Route path="/evaluate" element={<Evaluate />} />
       <Route path="/how-it-works" element={<HowItWorks />} />
+      <Route path="/beta-feedback" element={<BetaFeedbackAdmin />} />
       </Route>
       <Route path="/subscription-success" element={<SubscriptionSuccess />} />
       <Route path="*" element={<PageNotFound />} />
