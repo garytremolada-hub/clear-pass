@@ -295,14 +295,14 @@ export default function HowItWorks() {
                             </thead>
                             <tbody>
                                 {[
-                                                    { band: 'Very Easy',         fkgl: '≤ 3',  fre: '90–100', aqf: 'Pre-vocational',               reader: 'Early primary school' },
-                                    { band: 'Easy',              fkgl: '4–5',  fre: '80–90',  aqf: 'Pre-vocational / Cert I',       reader: 'Upper primary school' },
-                                    { band: 'Fairly Easy',       fkgl: '6–7',  fre: '70–80',  aqf: 'Certificate I / II',            reader: 'Year 7–8 student' },
-                                    { band: 'Cert I/II · Yr 10', fkgl: '8–9',  fre: '60–70',  aqf: 'Certificate II / III',          reader: 'Year 9–10 student' },
-                                    { band: 'Cert III/IV',       fkgl: '10–11',fre: '50–60',  aqf: 'Certificate III / IV',          reader: 'Working adult' },
-                                    { band: 'Diploma',           fkgl: '12–13',fre: '30–50',  aqf: 'Diploma / Advanced Diploma',    reader: 'VET diploma student' },
-                                    { band: 'Degree / Grad Dip', fkgl: '14–16',fre: '10–30',  aqf: 'Bachelor / Graduate Diploma',   reader: 'University student' },
-                                    { band: 'Very Difficult',    fkgl: '17+',  fre: '< 10',   aqf: 'Postgraduate / Specialist',     reader: 'Academic or specialist' },
+                                                    { band: 'Very Easy',         fkgl: '3 or below',  fre: '90 to 100', aqf: 'Pre-vocational',               reader: 'Early primary school' },
+                                                    { band: 'Easy',              fkgl: '4 to 5',  fre: '80 to 90',  aqf: 'Pre-vocational / Cert I',       reader: 'Upper primary school' },
+                                                    { band: 'Fairly Easy',       fkgl: '6 to 7',  fre: '70 to 80',  aqf: 'Certificate I / II',            reader: 'Year 7 to 8 student' },
+                                                    { band: 'Cert I/II · Yr 10', fkgl: '8 to 9',  fre: '60 to 70',  aqf: 'Certificate II / III',          reader: 'Year 9 to 10 student' },
+                                                    { band: 'Cert III/IV',       fkgl: '10 to 11', fre: '50 to 60',  aqf: 'Certificate III / IV',          reader: 'Working adult' },
+                                                    { band: 'Diploma',           fkgl: '12 to 13', fre: '30 to 50',  aqf: 'Diploma / Advanced Diploma',    reader: 'VET diploma student' },
+                                                    { band: 'Degree / Grad Dip', fkgl: '14 to 16', fre: '10 to 30',  aqf: 'Bachelor / Graduate Diploma',   reader: 'University student' },
+                                                    { band: 'Very Difficult',    fkgl: '17 or above',  fre: 'below 10',   aqf: 'Postgraduate / Specialist',     reader: 'Academic or specialist' },
 
                                 ].map(({ band, fkgl, fre, aqf, reader }, idx) => (
                                     <tr key={band} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f9fafb' }}>

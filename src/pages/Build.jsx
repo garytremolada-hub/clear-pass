@@ -78,10 +78,10 @@ function HelpIcon({ url, heading, description }) {
 // ── Cohort config ─────────────────────────────────────────────────────────────
 
 const LEARNER_OPTIONS = [
-    { value: 'high_school', label: 'High school students', feedback: "High school students → we'll use a junior secondary reading level." },
-    { value: 'apprentices', label: 'Apprentices and trainees', feedback: "Apprentices and trainees → standard working adult literacy assumed." },
-    { value: 'working_adults', label: 'Working adults', feedback: "Working adults → standard adult literacy assumed." },
-    { value: 'university', label: 'University students', feedback: "University students → we'll use a higher academic reading level." },
+    { value: 'high_school', label: 'High school students', feedback: "High school students: we'll use a junior secondary reading level." },
+    { value: 'apprentices', label: 'Apprentices and trainees', feedback: "Apprentices and trainees: standard working adult literacy assumed." },
+    { value: 'working_adults', label: 'Working adults', feedback: "Working adults: standard adult literacy assumed." },
+    { value: 'university', label: 'University students', feedback: "University students: we'll use a higher academic reading level." },
 ];
 
 const SUPPORT_OPTIONS = [

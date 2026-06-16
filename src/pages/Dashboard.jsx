@@ -38,7 +38,7 @@ export default function Dashboard() {
                         Build audit-ready assessments in minutes
                     </h1>
                     <p style={{ color: '#6b7280', fontSize: '15px', lineHeight: 1.7 }}>
-                        Upload your Unit of Competency and we'll generate a complete, compliant assessment instrument — tailored to your learner cohort and reading level.
+                        Upload your Unit of Competency and we'll generate a complete, compliant assessment instrument, tailored to your learner cohort and reading level.
                     </p>
 
                     {/* CTA button */}
@@ -65,7 +65,7 @@ export default function Dashboard() {
 
                 {/* Readability scale */}
                 <div>
-                    <p className="text-xs font-medium mb-2" style={{ color: '#374151' }}>Readability scale — your assessment will be written to the right level for your learners</p>
+                    <p className="text-xs font-medium mb-2" style={{ color: '#374151' }}>Readability scale: your assessment will be written to the right level for your learners</p>
                     <div className="flex rounded-lg overflow-hidden h-3 w-full">
                         {BAND_CONFIG.map(b => (
                             <div key={b.name} className="flex-1" style={{ backgroundColor: b.color }} title={b.name} />

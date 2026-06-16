@@ -210,7 +210,7 @@ export function ResultCard({ result, wordCount, headerLabel, headerColor, rewrit
                     };
                     const desc = band ? bandDescriptions[band.name] : null;
                     const headline = band && desc
-                        ? `This document reads at ${band.name} level — ${desc}.`
+                        ? `This document reads at ${band.name} level. It is ${desc}.`
                         : result.summary;
                     return headline ? (
                         <p className="text-base font-medium leading-snug" style={{ color: '#0d2444' }}>
@@ -310,7 +310,7 @@ export function BeforeAfterCards({ before, after, originalWordCount, onRewrite, 
                 <span>
                     Moved from <span style={{ fontWeight: 600 }}>{beforeBand?.name}</span> to{' '}
                     <span style={{ fontWeight: 600 }}>{afterBand?.name}</span>
-                    {' '}— {absDiff} grade level{absDiff !== '1.0' ? 's' : ''} simpler ✓
+                    {'. '}{absDiff} grade level{absDiff !== '1.0' ? 's' : ''} simpler ✓
                 </span>
             ),
         },

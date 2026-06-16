@@ -9,10 +9,10 @@ import { calculateReadability } from '@/lib/calculateReadability';
 // ── Shared constants (mirrored from Build) ────────────────────────────────────
 
 const LEARNER_OPTIONS = [
-    { value: 'high_school', label: 'High school students', feedback: "High school students — we'll use a junior secondary reading level." },
-    { value: 'apprentices', label: 'Apprentices and trainees', feedback: "Apprentices and trainees — standard working adult literacy assumed." },
-    { value: 'working_adults', label: 'Working adults', feedback: "Working adults — standard adult literacy assumed." },
-    { value: 'university', label: 'University students', feedback: "University students — we'll use a higher academic reading level." },
+    { value: 'high_school', label: 'High school students', feedback: "High school students: we'll use a junior secondary reading level." },
+    { value: 'apprentices', label: 'Apprentices and trainees', feedback: "Apprentices and trainees: standard working adult literacy assumed." },
+    { value: 'working_adults', label: 'Working adults', feedback: "Working adults: standard adult literacy assumed." },
+    { value: 'university', label: 'University students', feedback: "University students: we'll use a higher academic reading level." },
 ];
 
 const SUPPORT_OPTIONS = [
@@ -788,7 +788,7 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
                     // Header row
                     new TableRow({ children: [
                         new TableCell({ width: { size: LABEL_COL, type: WidthType.DXA }, borders: bottomOnly, margins: { top: 60, bottom: 60, left: 0, right: 140 }, children: [new Paragraph({ children: [new TextRun({ text: 'Section', bold: true, size: 18, font: 'Arial', color: '6B7280' })] })] }),
-                        new TableCell({ width: { size: BAR_ZONE_TOTAL, type: WidthType.DXA }, borders: bottomOnly, margins: { top: 60, bottom: 60, left: 0, right: 0 }, children: [new Paragraph({ children: [new TextRun({ text: `Reading level  —  target: ${cohortProfile.band}`, bold: true, size: 18, font: 'Arial', color: '6B7280' })] })] }),
+                        new TableCell({ width: { size: BAR_ZONE_TOTAL, type: WidthType.DXA }, borders: bottomOnly, margins: { top: 60, bottom: 60, left: 0, right: 0 }, children: [new Paragraph({ children: [new TextRun({ text: `Reading level. Target: ${cohortProfile.band}`, bold: true, size: 18, font: 'Arial', color: '6B7280' })] })] }),
                     ]}),
                 ];
 

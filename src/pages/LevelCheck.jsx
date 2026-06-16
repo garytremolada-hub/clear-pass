@@ -148,7 +148,7 @@ export default function LevelCheck() {
             };
             const desc = band ? bandDescriptions[band.name] : null;
             const summary = band && desc
-                ? `This document reads at ${band.name} level — ${desc}.`
+                ? `This document reads at ${band.name} level. It is ${desc}.`
                 : `This document is at ${band?.name || 'an unknown'} reading level.`;
             
             const parsed = {
@@ -501,7 +501,7 @@ ${batchText}`;
                 {result && fileName && (
                     <div className="flex items-center justify-between px-4 py-2.5 rounded-lg" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
                         <span className="text-sm" style={{ color: '#6b7280' }}>
-                            Showing result for — <span className="font-medium" style={{ color: '#0d2444' }}>{fileName}</span>
+                            Showing result for: <span className="font-medium" style={{ color: '#0d2444' }}>{fileName}</span>
                         </span>
                         <button
                             onClick={handleCheckAnother}
