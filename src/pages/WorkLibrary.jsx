@@ -78,7 +78,7 @@ export default function WorkLibrary() {
                             return (
                                 <Card
                                     key={item.id}
-                                    className="cursor-pointer hover:shadow-md transition-shadow group"
+                                    className="cursor-pointer hover:shadow-md transition-shadow group relative"
                                     onClick={() => setSelectedItem(item)}
                                 >
                                     <CardHeader className="pb-2">
@@ -87,12 +87,21 @@ export default function WorkLibrary() {
                                                 <TypeIcon className="h-3 w-3 mr-1" />
                                                 {config.label}
                                             </Badge>
-                                            {item.created_date && (
-                                                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                                    <Calendar className="h-3 w-3" />
-                                                    {format(new Date(item.created_date), 'dd MMM yyyy')}
-                                                </span>
-                                            )}
+                                            <div className="flex items-center gap-2">
+                                                {item.created_date && (
+                                                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                                        <Calendar className="h-3 w-3" />
+                                                        {format(new Date(item.created_date), 'dd MMM yyyy')}
+                                                    </span>
+                                                )}
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(item.id); }}
+                                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-50"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                                                </button>
+                                            </div>
                                         </div>
                                         <CardTitle className="text-sm mt-2 line-clamp-2">{item.title}</CardTitle>
                                     </CardHeader>
