@@ -589,13 +589,6 @@ ${batchText}`;
                 {/* Original result (only show when no rewrite yet) */}
                 {result && !rewriteResult && !rewriting && (
                     <div className="space-y-4">
-                        <ResultCard
-                            result={result}
-                            wordCount={wordCount}
-                            onRewrite={() => setShowRewriteModal(true)}
-                            onSaveToLibrary={handleSave}
-                        />
-
                         <button
                             onClick={handleBuild}
                             className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
@@ -604,6 +597,13 @@ ${batchText}`;
                             Build an assessment for this level
                             <ArrowRight className="h-4 w-4" />
                         </button>
+
+                        <ResultCard
+                            result={result}
+                            wordCount={wordCount}
+                            onRewrite={() => setShowRewriteModal(true)}
+                            onSaveToLibrary={handleSave}
+                        />
 
                         <ThumbsRating flow="Level Check" context="Readability score" />
                         <div style={{ textAlign: 'center', marginTop: '4px' }}>
