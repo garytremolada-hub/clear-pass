@@ -268,14 +268,7 @@ export default function HowItWorks() {
                         navigate={navigate}
                     />
 
-                    <MenuCard
-                        Icon={Settings}
-                        iconColor="#374151"
-                        label="Settings"
-                        path="/settings"
-                        description="Manage your subscription and account. From here you can view your current plan, access billing, or sign out of the app."
-                        navigate={navigate}
-                    />
+
                 </div>
 
                 {/* ── Reading level reference ── */}
