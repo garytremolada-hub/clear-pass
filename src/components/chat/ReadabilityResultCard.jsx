@@ -254,18 +254,18 @@ export function ResultCard({ result, wordCount, headerLabel, headerColor, rewrit
                 {/* Action buttons */}
                 <div className="flex gap-2 pt-1">
                     <button
-                        className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
-                        style={{ border: '1px solid #0d2444', color: '#0d2444', backgroundColor: 'transparent' }}
-                        onClick={onSaveToLibrary}
-                    >
-                        Save to library
-                    </button>
-                    <button
                         className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
                         style={{ backgroundColor: '#c9a84c', color: '#0d2444', border: 'none' }}
                         onClick={onRewrite}
                     >
                         Rewrite to different level
+                    </button>
+                    <button
+                        className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
+                        style={{ border: '1px solid #0d2444', color: '#0d2444', backgroundColor: 'transparent' }}
+                        onClick={onSaveToLibrary}
+                    >
+                        Save to library
                     </button>
                 </div>
 
