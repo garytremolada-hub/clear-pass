@@ -41,26 +41,53 @@ export default function Dashboard() {
                         Upload your Unit of Competency and we'll generate a complete, compliant assessment instrument, tailored to your learner cohort and reading level.
                     </p>
 
-                    {/* CTA button */}
-                    <button
-                        onClick={() => navigate('/build')}
-                        style={{
-                            marginTop: '8px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '14px 28px',
-                            backgroundColor: '#c9a84c',
-                            color: '#0d2444',
-                            borderRadius: '10px',
-                            border: 'none',
-                            fontSize: '15px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                        }}
-                    >
-                        Upload your UoC and get started →
-                    </button>
+                    {/* Tool cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '8px' }}>
+                        {[
+                            {
+                                path: '/level-check',
+                                icon: '📏',
+                                title: 'Level Check',
+                                desc: 'Check where your document sits on the readability scale',
+                            },
+                            {
+                                path: '/evaluate',
+                                icon: '✅',
+                                title: 'Evaluate',
+                                desc: 'Review an existing assessment for compliance',
+                            },
+                            {
+                                path: '/build',
+                                icon: '✏️',
+                                title: 'Build Assessment',
+                                desc: 'Generate a complete assessment from a UoC',
+                            },
+                        ].map(tool => (
+                            <button
+                                key={tool.path}
+                                onClick={() => navigate(tool.path)}
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'flex-start',
+                                    gap: '8px',
+                                    padding: '20px 16px',
+                                    backgroundColor: '#ffffff',
+                                    border: '1.5px solid #e5e7eb',
+                                    borderRadius: '12px',
+                                    cursor: 'pointer',
+                                    textAlign: 'left',
+                                    transition: 'border-color 0.15s, box-shadow 0.15s',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#c9a84c'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(201,168,76,0.15)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none'; }}
+                            >
+                                <span style={{ fontSize: '24px' }}>{tool.icon}</span>
+                                <span style={{ color: '#0d2444', fontSize: '14px', fontWeight: 600 }}>{tool.title}</span>
+                                <span style={{ color: '#6b7280', fontSize: '12px', lineHeight: 1.5 }}>{tool.desc}</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Readability scale */}
