@@ -115,15 +115,15 @@ export default function HowItWorks() {
 
     const buildNodes = [
         { Icon: Search,        label: 'Find your unit',     sublabel: 'Search by code',       iconBg: '#3B82F6' },
-        { Icon: Users,         label: 'Set your cohort',    sublabel: 'Learner type + support', iconBg: '#8B5CF6' },
+        { Icon: Users,         label: 'Set your cohort',    sublabel: 'Learner type and support', iconBg: '#8B5CF6' },
         { Icon: ClipboardList, label: 'Review structure',   sublabel: 'Confirm sections',      iconBg: '#F59E0B' },
         { Icon: Cpu,           label: 'AI builds it',       sublabel: '~3 minutes',            iconBg: '#EF4444' },
-        { Icon: Download,      label: 'Download files',     sublabel: 'Booklet · Map · Record', iconBg: '#10B981' },
+        { Icon: Download,      label: 'Download files',     sublabel: 'Booklet, Map, Record', iconBg: '#10B981' },
     ];
 
     const levelCheckNodes = [
         { Icon: Upload,    label: 'Upload document',   sublabel: '.docx or PDF',       iconBg: '#3B82F6' },
-        { Icon: BarChart2, label: 'Get your scores',   sublabel: 'Level · Ease · Words', iconBg: '#8B5CF6' },
+        { Icon: BarChart2, label: 'Get your scores',   sublabel: 'Level, Ease, Words', iconBg: '#8B5CF6' },
         { Icon: RotateCcw, label: 'Rewrite if needed', sublabel: 'Pick target level',   iconBg: '#F59E0B' },
         { Icon: Download,  label: 'Download',          sublabel: 'Formatted Word file', iconBg: '#10B981' },
     ];
@@ -131,7 +131,7 @@ export default function HowItWorks() {
     const evaluateNodes = [
         { Icon: Search,    label: 'Find unit',          sublabel: 'Search by code',         iconBg: '#3B82F6' },
         { Icon: Upload,    label: 'Upload assessment',  sublabel: '.docx or PDF',            iconBg: '#8B5CF6' },
-        { Icon: Users,     label: 'Set your cohort',    sublabel: 'Learner type + support',  iconBg: '#F59E0B' },
+        { Icon: Users,     label: 'Set your cohort',    sublabel: 'Learner type and support',  iconBg: '#F59E0B' },
         { Icon: Cpu,       label: 'AI evaluates',       sublabel: 'PE, KE, PC coverage',     iconBg: '#EF4444' },
         { Icon: Download,  label: 'Download report',    sublabel: 'Audit-ready Word doc',    iconBg: '#10B981' },
     ];
@@ -298,7 +298,7 @@ export default function HowItWorks() {
                                                     { band: 'Very Easy',         fkgl: '3 or below',  fre: '90 to 100', aqf: 'Pre-vocational',               reader: 'Early primary school' },
                                                     { band: 'Easy',              fkgl: '4 to 5',  fre: '80 to 90',  aqf: 'Pre-vocational / Cert I',       reader: 'Upper primary school' },
                                                     { band: 'Fairly Easy',       fkgl: '6 to 7',  fre: '70 to 80',  aqf: 'Certificate I / II',            reader: 'Year 7 to 8 student' },
-                                                    { band: 'Cert I/II · Yr 10', fkgl: '8 to 9',  fre: '60 to 70',  aqf: 'Certificate II / III',          reader: 'Year 9 to 10 student' },
+                                                    { band: 'Cert I/II Yr 10', fkgl: '8 to 9',  fre: '60 to 70',  aqf: 'Certificate II / III',          reader: 'Year 9 to 10 student' },
                                                     { band: 'Cert III/IV',       fkgl: '10 to 11', fre: '50 to 60',  aqf: 'Certificate III / IV',          reader: 'Working adult' },
                                                     { band: 'Diploma',           fkgl: '12 to 13', fre: '30 to 50',  aqf: 'Diploma / Advanced Diploma',    reader: 'VET diploma student' },
                                                     { band: 'Degree / Grad Dip', fkgl: '14 to 16', fre: '10 to 30',  aqf: 'Bachelor / Graduate Diploma',   reader: 'University student' },
