@@ -70,21 +70,22 @@ export default function Dashboard() {
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'flex-start',
-                                    gap: '8px',
-                                    padding: '20px 16px',
-                                    backgroundColor: '#ffffff',
-                                    border: '1.5px solid #e5e7eb',
-                                    borderRadius: '12px',
+                                    gap: '10px',
+                                    padding: '24px 20px',
+                                    backgroundColor: '#0d2444',
+                                    border: '2px solid #0d2444',
+                                    borderRadius: '14px',
                                     cursor: 'pointer',
                                     textAlign: 'left',
-                                    transition: 'border-color 0.15s, box-shadow 0.15s',
+                                    transition: 'background-color 0.15s, box-shadow 0.15s, transform 0.1s',
+                                    boxShadow: '0 4px 14px rgba(13,36,68,0.18)',
                                 }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#c9a84c'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(201,168,76,0.15)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none'; }}
+                                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#162d50'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(13,36,68,0.25)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#0d2444'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(13,36,68,0.18)'; }}
                             >
-                                <span style={{ fontSize: '24px' }}>{tool.icon}</span>
-                                <span style={{ color: '#0d2444', fontSize: '14px', fontWeight: 600 }}>{tool.title}</span>
-                                <span style={{ color: '#6b7280', fontSize: '12px', lineHeight: 1.5 }}>{tool.desc}</span>
+                                <span style={{ fontSize: '28px' }}>{tool.icon}</span>
+                                <span style={{ color: '#c9a84c', fontSize: '15px', fontWeight: 700 }}>{tool.title}</span>
+                                <span style={{ color: '#8ba4c4', fontSize: '12px', lineHeight: 1.5 }}>{tool.desc}</span>
                             </button>
                         ))}
                     </div>
