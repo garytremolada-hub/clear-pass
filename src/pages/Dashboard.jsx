@@ -63,7 +63,7 @@ export default function Dashboard() {
                             },
                             {
                                 path: '/level-check',
-                                icon: '📏',
+                                icon: '📐',
                                 title: 'Level Check',
                                 desc: 'Upload a document and see if the reading level fits your cohort',
                                 primary: false,
