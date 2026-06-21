@@ -4,9 +4,9 @@ import { base44 } from '@/api/base44Client';
 import { getBandForFkgl, BAND_CONFIG } from '@/lib/parseReadabilityResult';
 
 const TRUST_ITEMS = [
-    { icon: '✓', text: 'Mapped to AQF levels 1–10' },
-    { icon: '✓', text: 'Every requirement covered' },
-    { icon: '✓', text: 'Exports as Word document' },
+    { icon: '✓', text: 'All UoC requirements covered' },
+    { icon: '✓', text: 'Written to your learners reading level' },
+    { icon: '✓', text: 'Downloads as Word document' },
 ];
 
 export default function Dashboard() {
@@ -35,32 +35,45 @@ export default function Dashboard() {
                 {/* Hero */}
                 <div className="space-y-4">
                     <h1 style={{ color: '#0d2444', fontSize: '32px', fontWeight: 600, lineHeight: 1.25 }}>
-                        Build audit-ready assessments in minutes
+                        Compliant assessments, written for your learners
                     </h1>
                     <p style={{ color: '#6b7280', fontSize: '15px', lineHeight: 1.7 }}>
-                        Upload your Unit of Competency and we'll generate a complete, compliant assessment instrument, tailored to your learner cohort and reading level.
+                        Search for a unit, tell us who your learners are, and get a complete audit-ready assessment instrument in about three minutes.
                     </p>
 
-                    {/* Tool cards */}
+                    {/* Trust indicators */}
+                    <div className="flex flex-wrap gap-x-6 gap-y-2 pt-1">
+                        {TRUST_ITEMS.map(item => (
+                            <div key={item.text} className="flex items-center gap-2">
+                                <span style={{ color: '#c9a84c', fontWeight: 700, fontSize: '14px' }}>{item.icon}</span>
+                                <span style={{ color: '#6b7280', fontSize: '13px' }}>{item.text}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Tool cards — Build leads as primary action */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '8px' }}>
                         {[
+                            {
+                                path: '/build',
+                                icon: '✏️',
+                                title: 'Build Assessment',
+                                desc: 'Generate a complete, compliant assessment from any unit code',
+                                primary: true,
+                            },
                             {
                                 path: '/level-check',
                                 icon: '📏',
                                 title: 'Level Check',
-                                desc: 'Check where your document sits on the readability scale',
+                                desc: 'Upload a document and see if the reading level fits your cohort',
+                                primary: false,
                             },
                             {
                                 path: '/evaluate',
                                 icon: '✅',
                                 title: 'Evaluate',
-                                desc: 'Review an existing assessment for compliance',
-                            },
-                            {
-                                path: '/build',
-                                icon: '✏️',
-                                title: 'Build Assessment',
-                                desc: 'Generate a complete assessment from a UoC',
+                                desc: 'Audit an existing assessment for coverage gaps',
+                                primary: false,
                             },
                         ].map(tool => (
                             <button
@@ -73,15 +86,15 @@ export default function Dashboard() {
                                     gap: '10px',
                                     padding: '24px 20px',
                                     backgroundColor: '#0d2444',
-                                    border: '2px solid #0d2444',
+                                    border: tool.primary ? '2px solid #c9a84c' : '2px solid #0d2444',
                                     borderRadius: '14px',
                                     cursor: 'pointer',
                                     textAlign: 'left',
                                     transition: 'background-color 0.15s, box-shadow 0.15s, transform 0.1s',
-                                    boxShadow: '0 4px 14px rgba(13,36,68,0.18)',
+                                    boxShadow: tool.primary ? '0 4px 14px rgba(201,168,76,0.25)' : '0 4px 14px rgba(13,36,68,0.18)',
                                 }}
                                 onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#162d50'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(13,36,68,0.25)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#0d2444'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(13,36,68,0.18)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#0d2444'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = tool.primary ? '0 4px 14px rgba(201,168,76,0.25)' : '0 4px 14px rgba(13,36,68,0.18)'; }}
                             >
                                 <span style={{ fontSize: '28px' }}>{tool.icon}</span>
                                 <span style={{ color: '#c9a84c', fontSize: '15px', fontWeight: 700 }}>{tool.title}</span>
@@ -106,16 +119,6 @@ export default function Dashboard() {
                             </div>
                         ))}
                     </div>
-                </div>
-
-                {/* Trust indicators */}
-                <div className="flex flex-wrap gap-x-6 gap-y-2">
-                    {TRUST_ITEMS.map(item => (
-                        <div key={item.text} className="flex items-center gap-2">
-                            <span style={{ color: '#c9a84c', fontWeight: 700, fontSize: '14px' }}>{item.icon}</span>
-                            <span style={{ color: '#6b7280', fontSize: '13px' }}>{item.text}</span>
-                        </div>
-                    ))}
                 </div>
 
                 {/* Recent work — only shown when there are items */}
