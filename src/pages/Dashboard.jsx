@@ -30,7 +30,7 @@ export default function Dashboard() {
                 </span>
             </div>
 
-            <div className="mx-auto px-8 py-12 space-y-10" style={{ maxWidth: '900px' }}>
+            <div className="mx-auto px-14 py-12 space-y-10" style={{ maxWidth: '1100px' }}>
 
                 {/* Hero */}
                 <div className="space-y-4">

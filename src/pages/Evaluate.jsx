@@ -137,7 +137,7 @@ function Screen1({ onConfirm }) {
 
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 40px' }}>
+            <div style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 56px' }}>
                 <EvalProgress step={1} />
                 <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
                     Which unit is this assessment for?
@@ -394,7 +394,7 @@ function Screen2({ unitInfo, onBack, onConfirm, previousEvaluation, showComparis
 
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 40px' }}>
+            <div style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 56px' }}>
                 <EvalProgress step={2} />
                 <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
                     Upload the assessment to evaluate
@@ -537,7 +537,7 @@ function Screen3({ unitInfo, onBack, onConfirm }) {
 
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 40px' }}>
+            <div style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 56px' }}>
                 <EvalProgress step={3} />
                 <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
                     Who was this assessment written for?
@@ -624,7 +624,7 @@ function Screen4Progress({ progress, evalError }) {
     if (evalError) {
         return (
             <div className="flex-1 flex flex-col" style={{ backgroundColor: '#ffffff' }}>
-                <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 40px', width: '100%' }}>
+                <div style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 56px', width: '100%' }}>
                     <EvalProgress step={4} />
                     <div style={{ border: '1px solid #ef4444', backgroundColor: '#fef2f2', borderRadius: '8px', padding: '16px', marginTop: '40px', textAlign: 'center' }}>
                         <AlertCircle style={{ color: '#ef4444', width: '24px', height: '24px', margin: '0 auto 10px' }} />
@@ -638,7 +638,7 @@ function Screen4Progress({ progress, evalError }) {
 
     return (
         <div className="flex-1 flex flex-col" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 40px', width: '100%' }}>
+            <div style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 56px', width: '100%' }}>
                 <EvalProgress step={4} />
                 <div style={{ paddingTop: '40px' }}>
                     <h2 style={{ color: '#0d2444', fontSize: '20px', fontWeight: 500, marginBottom: '32px', textAlign: 'center' }}>
@@ -970,7 +970,7 @@ function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, 
 
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 40px' }}>
+            <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 56px' }}>
                 <EvalProgress step={5} />
 
                 {/* Header row: verdict + readability */}
