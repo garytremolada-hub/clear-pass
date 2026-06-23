@@ -141,7 +141,7 @@ export default function HowItWorks() {
 
             {/* Header */}
             <div style={{ backgroundColor: NAVY, padding: '40px 24px' }}>
-                <div style={{ maxWidth: '780px', margin: '0 auto' }}>
+                <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
                     <h1 style={{ color: '#fff', fontSize: '26px', fontWeight: 700, marginBottom: '8px' }}>How It Works</h1>
                     <p style={{ color: '#C8D6E8', fontSize: '15px', margin: 0 }}>
                         A guide to every tool in Clearpass and what each one does
@@ -149,7 +149,7 @@ export default function HowItWorks() {
                 </div>
             </div>
 
-            <div style={{ maxWidth: '780px', margin: '0 auto', padding: '40px 24px' }}>
+            <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '40px 40px' }}>
 
                 {/* ── What is Clearpass ── */}
                 <div style={{ marginBottom: '48px' }}>
@@ -337,7 +337,7 @@ export default function HowItWorks() {
 
             {/* Footer CTA */}
             <div style={{ backgroundColor: NAVY, padding: '48px 24px' }}>
-                <div style={{ maxWidth: '780px', margin: '0 auto', textAlign: 'center' }}>
+                <div style={{ maxWidth: '1000px', margin: '0 auto', textAlign: 'center' }}>
                     <h2 style={{ color: '#fff', fontSize: '22px', fontWeight: 700, marginBottom: '10px' }}>Ready to get started?</h2>
                     <p style={{ color: '#C8D6E8', fontSize: '15px', marginBottom: '28px' }}>
                         Build an assessment, check a document, or evaluate an existing tool.

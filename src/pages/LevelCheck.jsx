@@ -420,7 +420,7 @@ ${batchText}`;
             </div>
 
             {/* Main content */}
-            <div className="mx-auto px-6 py-10 space-y-8" style={{ maxWidth: '600px' }}>
+            <div className="mx-auto px-8 py-10 space-y-8" style={{ maxWidth: '860px' }}>
 
                 {/* Heading */}
                 <div className="space-y-1.5">

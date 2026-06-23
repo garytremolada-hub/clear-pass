@@ -238,7 +238,7 @@ function Screen1({ onConfirm }) {
 
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '540px', margin: '0 auto', padding: '32px 24px' }}>
+            <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 40px' }}>
                 <BuildProgress step={1} contextNote="Enter a unit code to load it directly from training.gov.au — no file upload needed." />
 
                 <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
@@ -449,7 +449,7 @@ function Screen2({ unitInfo, onBack, onConfirm }) {
 
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '540px', margin: '0 auto', padding: '32px 24px' }}>
+            <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 40px' }}>
                 <BuildProgress step={2} contextNote="This sets the reading level for your assessment — takes about 30 seconds." />
 
                 <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '24px' }}>
@@ -595,7 +595,7 @@ function Screen3Structure({ unitInfo, cohortInfo, structureProposal, onBack, onB
 
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '640px', margin: '0 auto', padding: '32px 24px' }}>
+            <div style={{ maxWidth: '860px', margin: '0 auto', padding: '32px 40px' }}>
                 <BuildProgress step={3} contextNote="Review your assessment structure — takes 2-3 minutes to build." />
                 <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
                     Your assessment structure
@@ -700,7 +700,7 @@ function Screen4Loading({ onReset, progress, buildError }) {
     if (buildError) {
         return (
             <div className="flex-1 flex flex-col" style={{ backgroundColor: '#ffffff' }}>
-                <div style={{ maxWidth: '480px', margin: '0 auto', padding: '32px 24px', width: '100%' }}>
+                <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 40px', width: '100%' }}>
                     <BuildProgress step={4} contextNote="" />
                     <div style={{
                         border: '1px solid #ef4444',
@@ -735,7 +735,7 @@ function Screen4Loading({ onReset, progress, buildError }) {
 
     return (
         <div className="flex-1 flex flex-col" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '480px', margin: '0 auto', padding: '32px 24px', width: '100%' }}>
+            <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 40px', width: '100%' }}>
                 <BuildProgress step={4} contextNote="" />
                 <div style={{ paddingTop: '40px' }}>
                     <h2 style={{ color: '#0d2444', fontSize: '20px', fontWeight: 500, marginBottom: '32px', textAlign: 'center' }}>
@@ -801,7 +801,7 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, val
 
     return (
         <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '540px', margin: '0 auto', padding: '32px 24px' }}>
+            <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 40px' }}>
                 <BuildProgress step={4} contextNote="" />
 
                 <div style={{ textAlign: 'center', marginBottom: '20px' }}>
