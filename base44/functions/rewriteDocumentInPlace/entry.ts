@@ -48,10 +48,8 @@ Deno.serve(async (req) => {
         // as a fallback for the rare case where the frontend's paragraph ids
         // don't line up with the docx (e.g. mammoth-based fallback numbering).
         const rewriteById = {};
-        const rewriteByNormText = {};
         for (const item of items) {
             rewriteById[item.id] = item.rewritten;
-            if (item.original) rewriteByNormText[normalizeForCompare(item.original)] = item.rewritten;
         }
 
         console.log(`[rewriteDocumentInPlace] ${items.length} rewrites to apply, file="${filename}"`);
@@ -126,21 +124,18 @@ Deno.serve(async (req) => {
             noMatchSamples: noMatchSamples.slice(0, 10),
         };
 
-        // Match by paragraph ID first (each id → its own rewrite, so duplicate
-        // paragraphs are rewritten independently). Fall back to normalized text
-        // only when no rewrite exists for that id — this avoids the old bug
-        // where a text-keyed lookup collapsed duplicates and applied the wrong
-        // rewrite to the first occurrence, and where encoding/whitespace
-        // differences silently broke exact text matching.
+        // Match by paragraph id ONLY. The frontend sends docx-accurate ids
+        // (extractDocumentText → extractParagraphs), which align exactly with
+        // the ids enumerated here from the same document.xml. The previous
+        // normalized-text fallback applied each rewrite to EVERY paragraph
+        // sharing that text — rewriting duplicate table cells / labels the user
+        // never selected and collapsing each to a single run, which destroyed
+        // their formatting. id-only matching guarantees applied == received and
+        // leaves every other paragraph (and its formatting) untouched.
         const rewriteByIndex = {};
         for (const p of docParagraphs) {
             if (rewriteById[p.id] != null) {
                 rewriteByIndex[p.id] = rewriteById[p.id];
-            } else if (p.text) {
-                const norm = normalizeForCompare(p.text);
-                if (rewriteByNormText[norm] != null) {
-                    rewriteByIndex[p.id] = rewriteByNormText[norm];
-                }
             }
         }
 
