@@ -182,7 +182,7 @@ function TrafficLight({ tl, onRewrite }) {
 
 // ─── Single result card ───────────────────────────────────────────────────────
 
-export function ResultCard({ result, wordCount, headerLabel, headerColor, rewriteFkgl, onRewrite, onSaveToLibrary }) {
+export function ResultCard({ result, wordCount, headerLabel, headerColor, rewriteFkgl, onRewrite, onSaveToLibrary, showActions = true }) {
     return (
         <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb' }}>
             {headerLabel && (
@@ -252,6 +252,7 @@ export function ResultCard({ result, wordCount, headerLabel, headerColor, rewrit
                 )}
 
                 {/* Action buttons */}
+                {showActions && (
                 <div className="flex gap-2 pt-1">
                     <button
                         className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
@@ -268,6 +269,7 @@ export function ResultCard({ result, wordCount, headerLabel, headerColor, rewrit
                         Save to library
                     </button>
                 </div>
+                )}
 
                 {/* Disclaimer */}
                 <p className="text-[11px] italic leading-relaxed" style={{ color: '#9ca3af' }}>
@@ -338,29 +340,27 @@ export function BeforeAfterCards({ before, after, originalWordCount, onRewrite, 
 
     return (
         <div className="space-y-3">
-            {/* Before card */}
-            <ResultCard
-                result={before}
-                wordCount={originalWordCount}
-                headerLabel="Before"
-                headerColor="#0d2444"
-                onRewrite={onRewrite}
-                onSaveToLibrary={onSaveToLibrary}
-            />
+            <div className="grid md:grid-cols-2 gap-3 items-start">
+                {/* Before card */}
+                <ResultCard
+                    result={before}
+                    wordCount={originalWordCount}
+                    headerLabel="Before"
+                    headerColor="#0d2444"
+                    onRewrite={onRewrite}
+                    onSaveToLibrary={onSaveToLibrary}
+                />
 
-            {/* Down arrow */}
-            <div className="flex justify-center">
-                <ArrowDown className="h-6 w-6" style={{ color: '#6b7280' }} />
+                {/* After card (no duplicate action buttons) */}
+                <ResultCard
+                    result={after}
+                    headerLabel="After"
+                    headerColor="#c9a84c"
+                    onRewrite={onRewrite}
+                    onSaveToLibrary={onSaveToLibrary}
+                    showActions={false}
+                />
             </div>
-
-            {/* After card */}
-            <ResultCard
-                result={after}
-                headerLabel="After"
-                headerColor="#c9a84c"
-                onRewrite={onRewrite}
-                onSaveToLibrary={onSaveToLibrary}
-            />
 
             {/* Movement summary */}
             {cfg && (
