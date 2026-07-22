@@ -169,7 +169,8 @@ Deno.serve(async (req) => {
         });
 
         const outputFilename = filename.replace(/\.docx$/i, '') + '-rewritten.docx';
-        return Response.json({ file_base64: outB64, filename: outputFilename, _debug });
+        console.log(`[rewriteDocumentInPlace] SUMMARY: docxParagraphs=${docParagraphs.length} rewriteItems=${items.length} applied=${replaced}`);
+        return Response.json({ file_base64: outB64, filename: outputFilename, _debug: { ..._debug, replaced } });
     } catch (error) {
         console.error('[rewriteDocumentInPlace]', error.message, error.stack);
         return Response.json({ error: error.message }, { status: 500 });

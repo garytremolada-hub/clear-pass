@@ -68,6 +68,7 @@ export default function LevelCheck() {
     const [originalFileBase64, setOriginalFileBase64] = useState(null);
     const [numberedParagraphs, setNumberedParagraphs] = useState(null); // [{id, text, protected}]
     const [aiRewriteJson, setAiRewriteJson] = useState(null); // raw JSON string from AI
+    const [downloadDebug, setDownloadDebug] = useState(null); // temporary diagnostic from backend
     const inputRef = useRef(null);
     const secondaryInputRef = useRef(null);
     const navigate = useNavigate();
@@ -104,6 +105,7 @@ export default function LevelCheck() {
         setOriginalFileBase64(null);
         setNumberedParagraphs(null);
         setAiRewriteJson(null);
+        setDownloadDebug(null);
         setError(null);
         clearPersisted();
         
@@ -200,6 +202,7 @@ export default function LevelCheck() {
         setRewriteResult(null);
         setRewrittenText(null);
         setAiRewriteJson(null);
+        setDownloadDebug(null);
         setError(null);
 
         const allParagraphs = numberedParagraphs || extractAndNumberParagraphs(extractedText || '');
@@ -259,33 +262,42 @@ ${batchText}`;
         };
 
         try {
-            const allRewrittenItems = [];
-
+            // Collect LLM output per batch so we can pair rewrites back to their
+            // source paragraphs BY ORDER. We do NOT trust the LLM's returned id
+            // — models sometimes renumber or restart numbering across batches,
+            // which made original="" and caused zero paragraphs to be rewritten.
+            const batchResults = [];
             for (let i = 0; i < batches.length; i++) {
                 setRewritingProgress(`Rewriting section ${i + 1} of ${batches.length}…`);
                 const raw = await base44.integrations.Core.InvokeLLM({
                     prompt: buildPrompt(batches[i]),
                     model: 'claude_sonnet_4_6',
                 });
-                const items = validateRewriteJson(raw);
-                allRewrittenItems.push(...items);
+                batchResults.push(validateRewriteJson(raw));
             }
 
-            // Enrich each rewrite item with its original text so the backend can
-            // match paragraphs by text (robust to numbering mismatches).
-            const paraById = {};
-            allParagraphs.forEach(p => { paraById[p.id] = p.text; });
-            const enrichedItems = allRewrittenItems.map(item => ({
-                id: item.id,
-                original: paraById[item.id] || '',
-                rewritten: item.rewritten,
-            }));
+            // Pair each rewrite to its source paragraph by position within the
+            // batch. This guarantees the real docx id and real source text are
+            // sent to the backend, so both id- and text-based matching work
+            // regardless of how the LLM numbered its response.
+            const enrichedItems = [];
+            for (let i = 0; i < batches.length; i++) {
+                const batch = batches[i];
+                const items = batchResults[i] || [];
+                for (let j = 0; j < batch.length && j < items.length; j++) {
+                    enrichedItems.push({
+                        id: batch[j].id,
+                        original: batch[j].text,
+                        rewritten: items[j].rewritten,
+                    });
+                }
+            }
             const jsonString = JSON.stringify(enrichedItems);
             setAiRewriteJson(jsonString);
 
             // Build a plain-text version for scoring (merge rewrites into original order)
             const rewriteMap = {};
-            allRewrittenItems.forEach(item => { rewriteMap[item.id] = item.rewritten; });
+            enrichedItems.forEach(item => { rewriteMap[item.id] = item.rewritten; });
             const fullRewritten = allParagraphs
                 .map(p => rewriteMap[p.id] || p.text)
                 .join('\n');
@@ -335,6 +347,7 @@ ${batchText}`;
                 filename: fileName,
             });
             if (res?.data?.error) throw new Error(res.data.error);
+            setDownloadDebug(res.data._debug || null);
             const outB64 = res.data.file_base64;
             const bytes = atob(outB64);
             const buf = new Uint8Array(bytes.length);
@@ -422,6 +435,7 @@ ${batchText}`;
         setRewriteResult(null);
         setNumberedParagraphs(null);
         setAiRewriteJson(null);
+        setDownloadDebug(null);
         setRewrittenText(null);
         clearPersisted();
     };
@@ -569,6 +583,12 @@ ${batchText}`;
                             onDownload={handleDownloadRewrite}
                             downloadDisabled={!rewrittenText || downloading}
                         />
+
+                        {downloadDebug && (
+                            <div style={{ fontSize: '11px', color: '#6b7280', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontFamily: 'monospace' }}>
+                                <strong>Debug (temporary):</strong> docx paragraphs: {downloadDebug.docxParagraphCount} · rewrites received: {downloadDebug.rewriteItemCount} · applied: {downloadDebug.replaced ?? '?'} · exact-false: {downloadDebug.exactFalseCount} · duplicate docx texts: {downloadDebug.duplicateDocxTexts}
+                            </div>
+                        )}
 
                         {/* Download original (rewrite download lives in the After card) */}
                         <div className="space-y-2">
