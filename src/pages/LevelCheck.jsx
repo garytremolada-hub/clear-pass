@@ -332,27 +332,40 @@ ${batchText}`;
         }
     };
 
-    // Download: formatted student-booklet-style .docx
+    // Resolve the original .docx bytes for an in-place rewrite. The file is
+    // held in memory (originalFileBase64) during a session, but that's lost on
+    // refresh — so fall back to re-fetching the uploaded file URL (persisted in
+    // localStorage). Shared by both download handlers so the same class of
+    // "original document not found" bug can't resurface in either path.
+    const ensureOriginalFileBase64 = async (progressMsg) => {
+        if (originalFileBase64) return originalFileBase64;
+        if (!originalFileUrl) return null;
+        if (progressMsg) setRewritingProgress(progressMsg);
+        try {
+            const fres = await fetch(originalFileUrl);
+            if (!fres.ok) return null;
+            const ab = await fres.arrayBuffer();
+            const bytes = new Uint8Array(ab);
+            let s = '';
+            for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+            const b64 = btoa(s);
+            setOriginalFileBase64(b64);
+            return b64;
+        } catch (_) {
+            return null;
+        }
+    };
+
+    // Download: in-place rewritten .docx (original layout + formatting kept)
     const handleDownloadRewrite = async () => {
         if (!rewrittenText || !fileName || downloading) return;
         try {
             setDownloading(true);
             setRewritingProgress('Preparing download…');
 
-            let fileBase64 = originalFileBase64;
-            if (!fileBase64 && originalFileUrl) {
-                setRewritingProgress('Fetching original document…');
-                const fres = await fetch(originalFileUrl);
-                if (!fres.ok) throw new Error('Could not download the original document. Please re-upload and run the rewrite again.');
-                const ab = await fres.arrayBuffer();
-                const bytes = new Uint8Array(ab);
-                let s = '';
-                for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-                fileBase64 = btoa(s);
-                setOriginalFileBase64(fileBase64);
-            }
+            const fileBase64 = await ensureOriginalFileBase64('Fetching original document…');
             if (!fileBase64) {
-                throw new Error('Original document not found. Please re-upload and run the rewrite again.');
+                throw new Error('Original document not found. Please re-upload the same file, run the level check, then download again.');
             }
             const paragraphs = numberedParagraphs || extractAndNumberParagraphs(extractedText || '');
             const res = await base44.functions.invoke('rewriteDocumentInPlace', {
@@ -383,9 +396,11 @@ ${batchText}`;
         }
     };
 
-    const handleDownloadOriginal = () => {
-        if (!originalFileBase64 || !fileName) return;
-        const bytes = atob(originalFileBase64);
+    const handleDownloadOriginal = async () => {
+        if (!fileName) return;
+        const fileBase64 = await ensureOriginalFileBase64('Fetching original document…');
+        if (!fileBase64) return;
+        const bytes = atob(fileBase64);
         const buf = new Uint8Array(bytes.length);
         for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
         const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
