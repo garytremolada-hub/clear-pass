@@ -182,7 +182,7 @@ function TrafficLight({ tl, onRewrite }) {
 
 // ─── Single result card ───────────────────────────────────────────────────────
 
-export function ResultCard({ result, wordCount, headerLabel, headerColor, rewriteFkgl, onRewrite, onSaveToLibrary, showActions = true }) {
+export function ResultCard({ result, wordCount, headerLabel, headerColor, rewriteFkgl, onRewrite, onSaveToLibrary, onDownload, downloadDisabled, showActions = true }) {
     return (
         <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb' }}>
             {headerLabel && (
@@ -253,21 +253,33 @@ export function ResultCard({ result, wordCount, headerLabel, headerColor, rewrit
 
                 {/* Action buttons */}
                 {showActions && (
-                <div className="flex gap-2 pt-1">
-                    <button
-                        className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
-                        style={{ backgroundColor: '#c9a84c', color: '#0d2444', border: 'none' }}
-                        onClick={onRewrite}
-                    >
-                        Rewrite to different level
-                    </button>
-                    <button
-                        className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
-                        style={{ border: '1px solid #0d2444', color: '#0d2444', backgroundColor: 'transparent' }}
-                        onClick={onSaveToLibrary}
-                    >
-                        Save to library
-                    </button>
+                <div className="space-y-2 pt-1">
+                    {onDownload && (
+                        <button
+                            onClick={onDownload}
+                            disabled={downloadDisabled}
+                            className="w-full px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                            style={{ backgroundColor: '#c9a84c', color: '#0d2444', border: 'none' }}
+                        >
+                            {downloadDisabled ? 'Preparing…' : 'Download rewritten document (.docx) →'}
+                        </button>
+                    )}
+                    <div className="flex gap-2">
+                        <button
+                            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
+                            style={{ backgroundColor: onDownload ? 'transparent' : '#c9a84c', color: '#0d2444', border: onDownload ? '1px solid #0d2444' : 'none' }}
+                            onClick={onRewrite}
+                        >
+                            Rewrite to different level
+                        </button>
+                        <button
+                            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
+                            style={{ border: '1px solid #0d2444', color: '#0d2444', backgroundColor: 'transparent' }}
+                            onClick={onSaveToLibrary}
+                        >
+                            Save to library
+                        </button>
+                    </div>
                 </div>
                 )}
 
@@ -288,7 +300,7 @@ export function ResultCard({ result, wordCount, headerLabel, headerColor, rewrit
 
 // ─── Before / After pair ──────────────────────────────────────────────────────
 
-export function BeforeAfterCards({ before, after, originalWordCount, onRewrite, onSaveToLibrary }) {
+export function BeforeAfterCards({ before, after, originalWordCount, onRewrite, onSaveToLibrary, onDownload, downloadDisabled }) {
     const beforeBand = getBandForFkgl(before.fkgl);
     const afterBand  = getBandForFkgl(after.fkgl);
 
@@ -351,14 +363,15 @@ export function BeforeAfterCards({ before, after, originalWordCount, onRewrite, 
                     onSaveToLibrary={onSaveToLibrary}
                 />
 
-                {/* After card (no duplicate action buttons) */}
+                {/* After card — Download, Rewrite and Save to library live here */}
                 <ResultCard
                     result={after}
                     headerLabel="After"
                     headerColor="#c9a84c"
                     onRewrite={onRewrite}
                     onSaveToLibrary={onSaveToLibrary}
-                    showActions={false}
+                    onDownload={onDownload}
+                    downloadDisabled={downloadDisabled}
                 />
             </div>
 

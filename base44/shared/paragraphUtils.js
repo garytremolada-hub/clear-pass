@@ -70,7 +70,7 @@ export function rewriteParagraph(pXml, rewritten) {
 export const PARAGRAPH_SOURCE = '<w:p\\b[^>]*\\/>|<w:p\\b[^>]*>[\\s\\S]*?<\\/w:p>';
 
 export function newParagraphRegex() {
-    return new RegExp(PAGRAPH_SOURCE, 'g');
+    return new RegExp(PARAGRAPH_SOURCE, 'g');
 }
 
 export function isSelfClosingParagraph(pXml) {

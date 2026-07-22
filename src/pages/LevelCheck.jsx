@@ -64,6 +64,7 @@ export default function LevelCheck() {
     const [rewritingProgress, setRewritingProgress] = useState('');
     const [rewriteResult, setRewriteResult] = useState(null); // { before, after }
     const [rewrittenText, setRewrittenText] = useState(null);
+    const [downloading, setDownloading] = useState(false);
     const [originalFileBase64, setOriginalFileBase64] = useState(null);
     const [numberedParagraphs, setNumberedParagraphs] = useState(null); // [{id, text, protected}]
     const [aiRewriteJson, setAiRewriteJson] = useState(null); // raw JSON string from AI
@@ -309,8 +310,9 @@ ${batchText}`;
 
     // Download: formatted student-booklet-style .docx
     const handleDownloadRewrite = async () => {
-        if (!rewrittenText || !fileName) return;
+        if (!rewrittenText || !fileName || downloading) return;
         try {
+            setDownloading(true);
             setRewritingProgress('Preparing download…');
 
             if (!originalFileBase64) {
@@ -339,6 +341,7 @@ ${batchText}`;
         } catch (err) {
             setError('Download failed: ' + err.message);
         } finally {
+            setDownloading(false);
             setRewritingProgress('');
         }
     };
@@ -552,18 +555,12 @@ ${batchText}`;
                             originalWordCount={wordCount}
                             onRewrite={() => setShowRewriteModal(true)}
                             onSaveToLibrary={handleSave}
+                            onDownload={handleDownloadRewrite}
+                            downloadDisabled={!rewrittenText || downloading}
                         />
 
-                        {/* Download buttons */}
+                        {/* Download original (rewrite download lives in the After card) */}
                         <div className="space-y-2">
-                            <button
-                                onClick={handleDownloadRewrite}
-                                disabled={!rewrittenText}
-                                className="w-full py-3 px-6 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-                                style={{ backgroundColor: '#c9a84c', color: '#0d2444' }}
-                            >
-                                Download rewritten document (.docx) →
-                            </button>
                             <p style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic', lineHeight: 1.5, textAlign: 'center', margin: '4px 0 0' }}>
                                 Your original layout, tables and formatting are kept, with the language simplified throughout.
                                 Apply your RTO template before submitting.
