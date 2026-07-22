@@ -369,21 +369,35 @@ ${batchText}`;
         });
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!result) return;
         const band = getBandForFkgl(result?.fkgl);
-        navigate('/library', {
-            state: {
-                prefill: {
+        try {
+            if (rewriteResult) {
+                const afterBand = getBandForFkgl(rewriteResult.after?.fkgl);
+                await base44.entities.WorkLibraryItem.create({
+                    title: fileName || 'Rewritten document',
+                    task_type: 'rewrite',
+                    fkgl: rewriteResult.after?.fkgl,
+                    fre: rewriteResult.after?.fre,
+                    band: afterBand?.name,
+                    original_text: extractedText || '',
+                    output_text: rewrittenText || '',
+                });
+            } else {
+                await base44.entities.WorkLibraryItem.create({
                     title: fileName || 'Level Check result',
                     task_type: 'score',
                     fkgl: result.fkgl,
                     fre: result.fre,
                     band: band?.name,
-                    original_text: fileName || '',
-                },
-            },
-        });
+                    original_text: extractedText || '',
+                });
+            }
+            navigate('/library');
+        } catch (err) {
+            setError('Could not save to library. Please try again.');
+        }
     };
 
     const handleCheckAnother = () => {
