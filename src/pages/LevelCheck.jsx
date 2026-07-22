@@ -271,7 +271,16 @@ ${batchText}`;
                 allRewrittenItems.push(...items);
             }
 
-            const jsonString = JSON.stringify(allRewrittenItems);
+            // Enrich each rewrite item with its original text so the backend can
+            // match paragraphs by text (robust to numbering mismatches).
+            const paraById = {};
+            allParagraphs.forEach(p => { paraById[p.id] = p.text; });
+            const enrichedItems = allRewrittenItems.map(item => ({
+                id: item.id,
+                original: paraById[item.id] || '',
+                rewritten: item.rewritten,
+            }));
+            const jsonString = JSON.stringify(enrichedItems);
             setAiRewriteJson(jsonString);
 
             // Build a plain-text version for scoring (merge rewrites into original order)
