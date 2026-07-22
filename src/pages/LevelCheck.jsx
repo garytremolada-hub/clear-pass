@@ -313,22 +313,13 @@ ${batchText}`;
         try {
             setRewritingProgress('Preparing download…');
 
-            // Extract unit code from filename (e.g. MSMSUP204 from MSMSUP204_Assessment.docx)
-            const unitCodeMatch = fileName.match(/^([A-Z]{2,}[A-Z0-9]*\d{3,}[A-Z0-9]*)/i);
-            const unitCode = unitCodeMatch ? unitCodeMatch[1].toUpperCase() : '';
-
-            // Extract unit title from first line of extracted text
-            const firstLine = (extractedText || '').split('\n').find(l => l.trim().length > 10) || '';
-            const unitTitle = firstLine.replace(/\*\*/g, '').trim().slice(0, 120);
-
-            // Document title from filename (strip extension)
-            const documentTitle = fileName.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
-
-            const res = await base44.functions.invoke('generateFormattedRewrite', {
-                unitCode,
-                unitTitle,
-                documentTitle,
-                rewrittenText,
+            // Use rewriteDocumentFormatted: preserves the full original document
+            // structure with simplified text and yellow highlighting on changed sections.
+            const paragraphs = numberedParagraphs || extractAndNumberParagraphs(extractedText || '');
+            const res = await base44.functions.invoke('rewriteDocumentFormatted', {
+                original_paragraphs: paragraphs,
+                rewrite_json: aiRewriteJson,
+                filename: fileName,
             });
             if (res?.data?.error) throw new Error(res.data.error);
             const outB64 = res.data.file_base64;
