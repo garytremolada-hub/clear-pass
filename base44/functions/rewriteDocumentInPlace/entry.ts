@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
 
         // Replace each <w:p> whose text matches a rewritten paragraph
         let replaced = 0;
-        docXml = docXml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, (pXml) => {
+        docXml = docXml.replace(/<w:p\b[^>]*(?<!\/)>[\s\S]*?<\/w:p>/g, (pXml) => {
             // Skip paragraphs that embed images/objects — don't risk destroying them
             if (/<w:drawing\b|<w:pict\b|<w:object\b/.test(pXml)) return pXml;
 
