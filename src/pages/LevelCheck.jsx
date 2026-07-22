@@ -69,7 +69,6 @@ export default function LevelCheck() {
     const [originalFileUrl, setOriginalFileUrl] = useState(null);
     const [numberedParagraphs, setNumberedParagraphs] = useState(null); // [{id, text, protected}]
     const [aiRewriteJson, setAiRewriteJson] = useState(null); // raw JSON string from AI
-    const [downloadDebug, setDownloadDebug] = useState(null); // temporary diagnostic from backend
     const inputRef = useRef(null);
     const secondaryInputRef = useRef(null);
     const navigate = useNavigate();
@@ -107,7 +106,7 @@ export default function LevelCheck() {
         setOriginalFileUrl(null);
         setNumberedParagraphs(null);
         setAiRewriteJson(null);
-        setDownloadDebug(null);
+
         setError(null);
         clearPersisted();
         
@@ -205,7 +204,7 @@ export default function LevelCheck() {
         setRewriteResult(null);
         setRewrittenText(null);
         setAiRewriteJson(null);
-        setDownloadDebug(null);
+
         setError(null);
 
         const allParagraphs = numberedParagraphs || extractAndNumberParagraphs(extractedText || '');
@@ -375,7 +374,6 @@ ${batchText}`;
                 filename: fileName,
             });
             if (res?.data?.error) throw new Error(res.data.error);
-            setDownloadDebug(res.data._debug || null);
             const outB64 = res.data.file_base64;
             const bytes = atob(outB64);
             const buf = new Uint8Array(bytes.length);
@@ -465,7 +463,7 @@ ${batchText}`;
         setRewriteResult(null);
         setNumberedParagraphs(null);
         setAiRewriteJson(null);
-        setDownloadDebug(null);
+
         setRewrittenText(null);
         setOriginalFileBase64(null);
         setOriginalFileUrl(null);
@@ -615,12 +613,6 @@ ${batchText}`;
                             onDownload={handleDownloadRewrite}
                             downloadDisabled={!rewrittenText || downloading}
                         />
-
-                        {downloadDebug && (
-                            <div style={{ fontSize: '11px', color: '#6b7280', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontFamily: 'monospace' }}>
-                                <strong>Debug (temporary):</strong> docx paragraphs: {downloadDebug.docxParagraphCount} · rewrites received: {downloadDebug.rewriteItemCount} · applied: {downloadDebug.replaced ?? '?'} · exact-false: {downloadDebug.exactFalseCount} · duplicate docx texts: {downloadDebug.duplicateDocxTexts}
-                            </div>
-                        )}
 
                         {/* Download original (rewrite download lives in the After card) */}
                         <div className="space-y-2">
