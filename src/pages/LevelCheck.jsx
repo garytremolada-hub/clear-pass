@@ -384,6 +384,8 @@ ${batchText}`;
     const handleSave = async () => {
         if (!result) return;
         const band = getBandForFkgl(result?.fkgl);
+        const MAX_TEXT = 18000;
+        const clip = (s) => (s && s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) + '…' : s || '');
         try {
             if (rewriteResult) {
                 const afterBand = getBandForFkgl(rewriteResult.after?.fkgl);
@@ -393,8 +395,8 @@ ${batchText}`;
                     fkgl: rewriteResult.after?.fkgl,
                     fre: rewriteResult.after?.fre,
                     band: afterBand?.name,
-                    original_text: extractedText || '',
-                    output_text: rewrittenText || '',
+                    original_text: clip(extractedText),
+                    output_text: clip(rewrittenText),
                 });
             } else {
                 await base44.entities.WorkLibraryItem.create({
@@ -403,7 +405,7 @@ ${batchText}`;
                     fkgl: result.fkgl,
                     fre: result.fre,
                     band: band?.name,
-                    original_text: extractedText || '',
+                    original_text: clip(extractedText),
                 });
             }
             navigate('/library');
