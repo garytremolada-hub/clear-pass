@@ -1,5 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import mammoth from 'npm:mammoth@1.9.0';
+import JSZip from 'npm:jszip@3.10.1';
+import { extractParagraphs } from '../../shared/paragraphUtils.js';
 
 Deno.serve(async (req) => {
     try {
@@ -20,9 +22,10 @@ Deno.serve(async (req) => {
                        file_url.toLowerCase().includes('.docx');
 
         let text = '';
+        let paragraphs = [];
 
         if (isDocx) {
-            // Fetch the file bytes and extract text with mammoth
+            // Fetch the file bytes and extract text with mammoth (for scoring).
             const fileRes = await fetch(file_url);
             if (!fileRes.ok) {
                 return Response.json({ error: `Failed to fetch file: ${fileRes.status}` }, { status: 500 });
@@ -31,6 +34,20 @@ Deno.serve(async (req) => {
             const buffer = new Uint8Array(arrayBuffer);
             const result = await mammoth.extractRawText({ buffer });
             text = result.value || '';
+
+            // Also extract docx-accurate paragraphs (id + text + protected)
+            // directly from document.xml, so the in-place rewrite can match
+            // paragraphs by their exact index instead of fragile text matching.
+            try {
+                const zip = await JSZip.loadAsync(buffer);
+                const docFile = zip.file('word/document.xml');
+                if (docFile) {
+                    const docXml = await docFile.async('string');
+                    paragraphs = extractParagraphs(docXml);
+                }
+            } catch (e) {
+                console.log('[extractDocumentText] paragraph extraction failed: ' + e.message);
+            }
         } else {
             // PDF: use InvokeLLM with file_urls (vision model handles PDFs well)
             const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
@@ -54,9 +71,9 @@ Deno.serve(async (req) => {
             return Response.json({ error: 'No text could be extracted from the document.' }, { status: 422 });
         }
 
-        console.log(`[extractDocumentText] SUCCESS label="${label}" extracted ${text.length} chars — preview: ${text.slice(0, 150)}`);
+        console.log(`[extractDocumentText] SUCCESS label="${label}" extracted ${text.length} chars, ${paragraphs.length} paragraphs — preview: ${text.slice(0, 150)}`);
 
-        return Response.json({ text, label: label || 'document' });
+        return Response.json({ text, paragraphs, label: label || 'document' });
     } catch (error) {
         return Response.json({ error: error.message }, { status: 500 });
     }

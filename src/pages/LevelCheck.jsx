@@ -162,7 +162,7 @@ export default function LevelCheck() {
                 trafficLight: null,
             };
             
-            const paragraphs = extractAndNumberParagraphs(text);
+            const paragraphs = (res?.data?.paragraphs && res.data.paragraphs.length) ? res.data.paragraphs : extractAndNumberParagraphs(text);
             setNumberedParagraphs(paragraphs);
             setResult(parsed);
             setFileName(f.name);
