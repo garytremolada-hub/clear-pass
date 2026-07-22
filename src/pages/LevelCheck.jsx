@@ -313,10 +313,12 @@ ${batchText}`;
         try {
             setRewritingProgress('Preparing download…');
 
-            // Use rewriteDocumentFormatted: preserves the full original document
-            // structure with simplified text and yellow highlighting on changed sections.
+            if (!originalFileBase64) {
+                throw new Error('Original document not found. Please re-upload and run the rewrite again.');
+            }
             const paragraphs = numberedParagraphs || extractAndNumberParagraphs(extractedText || '');
-            const res = await base44.functions.invoke('rewriteDocumentFormatted', {
+            const res = await base44.functions.invoke('rewriteDocumentInPlace', {
+                file_base64: originalFileBase64,
                 original_paragraphs: paragraphs,
                 rewrite_json: aiRewriteJson,
                 filename: fileName,
@@ -549,9 +551,8 @@ ${batchText}`;
                                 Download rewritten document (.docx) →
                             </button>
                             <p style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic', lineHeight: 1.5, textAlign: 'center', margin: '4px 0 0' }}>
-                                Downloaded document contains all assessment content with simplified language.
-                                Yellow highlighting shows changed sections.
-                                Tables and complex formatting are simplified — apply your RTO template before submitting.
+                                Your original layout, tables and formatting are kept, with the language simplified throughout.
+                                Apply your RTO template before submitting.
                             </p>
                             <button
                                 onClick={handleDownloadOriginal}
