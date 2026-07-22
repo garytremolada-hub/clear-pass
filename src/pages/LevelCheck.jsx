@@ -66,6 +66,7 @@ export default function LevelCheck() {
     const [rewrittenText, setRewrittenText] = useState(null);
     const [downloading, setDownloading] = useState(false);
     const [originalFileBase64, setOriginalFileBase64] = useState(null);
+    const [originalFileUrl, setOriginalFileUrl] = useState(null);
     const [numberedParagraphs, setNumberedParagraphs] = useState(null); // [{id, text, protected}]
     const [aiRewriteJson, setAiRewriteJson] = useState(null); // raw JSON string from AI
     const [downloadDebug, setDownloadDebug] = useState(null); // temporary diagnostic from backend
@@ -78,15 +79,15 @@ export default function LevelCheck() {
         try {
             const saved = localStorage.getItem(LS_KEY);
             if (saved) {
-                const { result: r, fileName: n, extractedText: t, wordCount: wc } = JSON.parse(saved);
-                if (r) { setResult(r); setFileName(n); setExtractedText(t || null); setWordCount(wc || null); }
+                const { result: r, fileName: n, extractedText: t, wordCount: wc, originalFileUrl: u } = JSON.parse(saved);
+                if (r) { setResult(r); setFileName(n); setExtractedText(t || null); setWordCount(wc || null); setOriginalFileUrl(u || null); }
             }
         } catch (_) {}
     }, []);
 
-    const persistResult = (r, name, text, wc) => {
+    const persistResult = (r, name, text, wc, url) => {
         try {
-            localStorage.setItem(LS_KEY, JSON.stringify({ result: r, fileName: name, extractedText: text, wordCount: wc }));
+            localStorage.setItem(LS_KEY, JSON.stringify({ result: r, fileName: name, extractedText: text, wordCount: wc, originalFileUrl: url }));
         } catch (_) {}
     };
 
@@ -103,6 +104,7 @@ export default function LevelCheck() {
         setWordCount(null);
         setRewriteResult(null);
         setOriginalFileBase64(null);
+        setOriginalFileUrl(null);
         setNumberedParagraphs(null);
         setAiRewriteJson(null);
         setDownloadDebug(null);
@@ -171,7 +173,8 @@ export default function LevelCheck() {
             setFileName(f.name);
             setExtractedText(text);
             setWordCount(scoreResult.wordCount);
-            persistResult(parsed, f.name, text, scoreResult.wordCount);
+            setOriginalFileUrl(fileUrl);
+            persistResult(parsed, f.name, text, scoreResult.wordCount, fileUrl);
         } catch (err) {
             setError(err.message || 'Something went wrong. Please try again.');
         } finally {
@@ -336,12 +339,24 @@ ${batchText}`;
             setDownloading(true);
             setRewritingProgress('Preparing download…');
 
-            if (!originalFileBase64) {
+            let fileBase64 = originalFileBase64;
+            if (!fileBase64 && originalFileUrl) {
+                setRewritingProgress('Fetching original document…');
+                const fres = await fetch(originalFileUrl);
+                if (!fres.ok) throw new Error('Could not download the original document. Please re-upload and run the rewrite again.');
+                const ab = await fres.arrayBuffer();
+                const bytes = new Uint8Array(ab);
+                let s = '';
+                for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+                fileBase64 = btoa(s);
+                setOriginalFileBase64(fileBase64);
+            }
+            if (!fileBase64) {
                 throw new Error('Original document not found. Please re-upload and run the rewrite again.');
             }
             const paragraphs = numberedParagraphs || extractAndNumberParagraphs(extractedText || '');
             const res = await base44.functions.invoke('rewriteDocumentInPlace', {
-                file_base64: originalFileBase64,
+                file_base64: fileBase64,
                 original_paragraphs: paragraphs,
                 rewrite_json: aiRewriteJson,
                 filename: fileName,
@@ -437,6 +452,8 @@ ${batchText}`;
         setAiRewriteJson(null);
         setDownloadDebug(null);
         setRewrittenText(null);
+        setOriginalFileBase64(null);
+        setOriginalFileUrl(null);
         clearPersisted();
     };
 
