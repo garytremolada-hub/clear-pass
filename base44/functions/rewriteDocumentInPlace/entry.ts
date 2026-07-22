@@ -162,6 +162,15 @@ Deno.serve(async (req) => {
 
         console.log(`[rewriteDocumentInPlace] replaced ${replaced} paragraphs (of ${docParagraphs.length} total)`);
 
+        // === MARKER TEST (temporary) ===
+        // MUST run before zip.file() below, otherwise the marker is added to the
+        // in-memory string but never written into the .docx. Inserts a bold red
+        // line at the top of the returned document so the user can confirm
+        // whether this function's output is what gets downloaded.
+        const markerText = `REWRITE FUNCTION RAN — applied ${replaced} of ${docParagraphs.length} paragraphs (received ${items.length} rewrites)`;
+        const markerPara = `<w:p><w:pPr><w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr><w:t xml:space="preserve">${escapeXml(markerText)}</w:t></w:r></w:p>`;
+        docXml = docXml.replace(/<w:body>/, `<w:body>${markerPara}`);
+
         zip.file('word/document.xml', docXml);
         const outB64 = await zip.generateAsync({
             type: 'base64',
@@ -172,15 +181,6 @@ Deno.serve(async (req) => {
         const outputFilename = filename.replace(/\.docx$/i, '') + '-rewritten.docx';
         console.log(`[rewriteDocumentInPlace] SUMMARY: docxParagraphs=${docParagraphs.length} rewriteItems=${items.length} applied=${replaced}`);
 
-        // === MARKER TEST (temporary) ===
-        // Inserts a bold, unmistakable line at the very top of the returned
-        // document so the user can open the .docx and confirm visually whether
-        // rewriteDocumentInPlace actually produced this file (and how many
-        // paragraphs it rewrote). If this marker is ABSENT, the download button
-        // is not serving this function's output at all.
-        const markerText = `REWRITE FUNCTION RAN — applied ${replaced} of ${docParagraphs.length} paragraphs (received ${items.length} rewrites)`;
-        const markerPara = `<w:p><w:pPr><w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr><w:t xml:space="preserve">${escapeXml(markerText)}</w:t></w:r></w:p>`;
-        docXml = docXml.replace(/<w:body>/, `<w:body>${markerPara}`);
         return Response.json({ file_base64: outB64, filename: outputFilename, _debug: { ..._debug, replaced } });
     } catch (error) {
         console.error('[rewriteDocumentInPlace]', error.message, error.stack);
