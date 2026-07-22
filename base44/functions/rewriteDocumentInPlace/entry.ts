@@ -14,9 +14,9 @@ Deno.serve(async (req) => {
         const user = await base44.auth.me();
         if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-        const { file_base64, rewrite_json, filename } = await req.json();
-        if (!file_base64) return Response.json({ error: 'file_base64 is required' }, { status: 400 });
+        const { file_url, file_base64, rewrite_json, filename } = await req.json();
         if (!rewrite_json) return Response.json({ error: 'rewrite_json is required' }, { status: 400 });
+        if (!file_url && !file_base64) return Response.json({ error: 'file_url or file_base64 is required' }, { status: 400 });
 
         // rewrite_json: [{id, original, rewritten}] from the frontend. Each id is
         // the docx-accurate paragraph index (extractDocumentText →
@@ -35,12 +35,23 @@ Deno.serve(async (req) => {
             rewriteById[item.id] = item.rewritten;
         }
 
-        console.log(`[rewriteDocumentInPlace] ${items.length} rewrites to apply, file="${filename}"`);
+        console.log(`[rewriteDocumentInPlace] ${items.length} rewrites to apply, file="${filename}" url="${!!file_url}" b64="${!!file_base64}"`);
 
-        // Decode base64 → bytes for robust zip loading.
-        const binString = atob(file_base64);
-        const fileBytes = new Uint8Array(binString.length);
-        for (let i = 0; i < binString.length; i++) fileBytes[i] = binString.charCodeAt(i);
+        // Load the original document bytes. Prefer file_url (the frontend always
+        // has it from UploadFile), fetched server-side — this avoids the
+        // browser-side fetch that failed with "Original document not found"
+        // (CORS / lost in-memory base64 on refresh). file_base64 is a fallback.
+        let fileBytes;
+        if (file_url) {
+            const fileRes = await fetch(file_url);
+            if (!fileRes.ok) return Response.json({ error: `Could not fetch original document (status ${fileRes.status}).` }, { status: 502 });
+            const ab = await fileRes.arrayBuffer();
+            fileBytes = new Uint8Array(ab);
+        } else {
+            const binString = atob(file_base64);
+            fileBytes = new Uint8Array(binString.length);
+            for (let i = 0; i < binString.length; i++) fileBytes[i] = binString.charCodeAt(i);
+        }
         const zip = await JSZip.loadAsync(fileBytes);
         const docFile = zip.file('word/document.xml');
         if (!docFile) return Response.json({ error: 'Not a valid .docx (no document.xml).' }, { status: 400 });

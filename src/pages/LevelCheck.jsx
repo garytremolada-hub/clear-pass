@@ -362,17 +362,16 @@ ${batchText}`;
             setDownloading(true);
             setRewritingProgress('Preparing download…');
 
-            const fileBase64 = await ensureOriginalFileBase64('Fetching original document…');
-            if (!fileBase64) {
-                throw new Error('Original document not found. Please re-upload the same file, run the level check, then download again.');
-            }
-            const paragraphs = numberedParagraphs || extractAndNumberParagraphs(extractedText || '');
-            const res = await base44.functions.invoke('rewriteDocumentInPlace', {
-                file_base64: fileBase64,
-                original_paragraphs: paragraphs,
-                rewrite_json: aiRewriteJson,
-                filename: fileName,
-            });
+            // The original document is fetched server-side from its upload URL
+            // (always available from the level-check upload), so we no longer
+            // depend on an in-browser fetch that can fail with CORS / be lost on
+            // refresh. file_base64 (in-memory) is passed as a fallback only.
+            const payload = { rewrite_json: aiRewriteJson, filename: fileName };
+            if (originalFileUrl) payload.file_url = originalFileUrl;
+            else if (originalFileBase64) payload.file_base64 = originalFileBase64;
+            else throw new Error('Original document not found. Please re-upload the document and run the level check again.');
+
+            const res = await base44.functions.invoke('rewriteDocumentInPlace', payload);
             if (res?.data?.error) throw new Error(res.data.error);
             const outB64 = res.data.file_base64;
             const bytes = atob(outB64);
