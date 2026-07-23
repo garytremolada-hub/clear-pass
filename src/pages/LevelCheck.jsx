@@ -226,7 +226,10 @@ export default function LevelCheck() {
         }
 
         const buildPrompt = (batchParagraphs) => {
-            const batchText = batchParagraphs.map(p => `${p.id}. ${p.text}`).join('\n');
+            const batchText = batchParagraphs.map(p => {
+                const label = p.section ? `[${p.section}] ` : '';
+                return `${label}${p.id}. ${p.text}`;
+            }).join('\n');
             return `Rewrite these paragraphs to FKGL ${targetFkgl}.
 Learner type: ${learnerDesc}
 Support needs: ${support}
@@ -234,6 +237,7 @@ Support needs: ${support}
 Rules:
 - Return a JSON array only. No explanation. No commentary.
 - Each element must have: "id" (original number as integer), "rewritten" (new text as string)
+- Rewrite EACH paragraph independently. Never move, merge or mix content between labelled sections (shown in [brackets] before each id). Keep every paragraph in its own section.
 - Shorten sentences to maximum 12 words each
 - Replace complex words with simpler ones:
   demonstrate → show

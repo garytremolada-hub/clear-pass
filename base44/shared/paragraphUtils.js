@@ -28,6 +28,28 @@ export function isProtectedText(text) {
     return PROTECTED_PATTERNS.some(p => p.test(text || ''));
 }
 
+// ── Section / assessor-block / admin-section detection ──────────────────────
+// Used by extractParagraphs to (a) keep section labels intact and (b) exclude
+// assessor-only blocks and admin overview sections from the rewrite candidates
+// so they are never rewritten or blended into student instructions. A block
+// runs from its marker to the next student-facing section heading.
+
+const SECTION_HEADING_RE = /^\s*(ASSESSMENT\s+\d+\s*[:\-]|OCCASION\s+\d|PART\s+[A-D]\b)/i;
+const ASSESSOR_MARKER_RE = /(TO BE COMPLETED BY THE ASSESSOR|ASSESSOR USE ONLY|ADMIN USE ONLY|DID THE STUDENT|SATISFACTORY\s*\(S\)\s*\/\s*NOT SATISFACTORY\s*\(NS\))/i;
+const ADMIN_HEADING_RE = /^\s*(UNIT INFORMATION|EVIDENCE GUIDE|ABOUT YOUR ASSESSMENTS|ASSESSMENT CONDITIONS)\b/i;
+
+export function isSectionHeading(text) {
+    const t = (text || '').trim();
+    return SECTION_HEADING_RE.test(t) ? t : null;
+}
+export function isAssessorMarker(text) {
+    return ASSESSOR_MARKER_RE.test(text || '');
+}
+export function isAdminHeading(text) {
+    const t = (text || '').trim();
+    return ADMIN_HEADING_RE.test(t) ? t : null;
+}
+
 export function escapeXml(s) {
     return (s || '')
         .replace(/&/g, '&amp;')
@@ -81,21 +103,64 @@ export function hasEmbeddedObject(pXml) {
     return /<w:drawing\b|<w:pict\b|<w:object\b/.test(pXml);
 }
 
-// Enumerate every <w:p> in document.xml → [{id, text, protected}].
+// Enumerate every <w:p> in document.xml → [{id, text, protected, section}].
 // id is the 1-based position among ALL <w:p>, identical to the index the
 // rewriter uses, so rewrite ids line up exactly with paragraphs.
+//
+// `protected` now also excludes assessor-only blocks (from TO BE COMPLETED BY
+// THE ASSESSOR / ASSESSOR USE ONLY / ADMIN USE ONLY / "Did the student…" /
+// "Satisfactory (S) / Not satisfactory (NS)" through to the next section
+// heading) and admin overview sections (Unit information / Evidence Guide /
+// About your assessments / Assessment conditions, through to the next section
+// heading). Section headings themselves are protected (structural labels).
+// `section` carries the current section label so the rewrite prompt can keep
+// sections independent.
 export function extractParagraphs(docXml) {
     const paragraphs = [];
     const re = newParagraphRegex();
     let id = 0;
     let m;
+    let currentSection = '';
+    let inAssessorBlock = false;
+    let inAdminBlock = false;
     while ((m = re.exec(docXml)) !== null) {
         id++;
         const pXml = m[0];
         const selfClosing = isSelfClosingParagraph(pXml);
         const text = selfClosing ? '' : paragraphText(pXml);
-        const protectedFlag = (!selfClosing) && (hasEmbeddedObject(pXml) || isProtectedText(text));
-        paragraphs.push({ id, text, protected: protectedFlag });
+
+        let protectedFlag = false;
+        let section = currentSection;
+
+        if (selfClosing) {
+            protectedFlag = true;
+        } else {
+            const heading = isSectionHeading(text);
+            const assessor = isAssessorMarker(text);
+            const admin = isAdminHeading(text);
+            if (heading) {
+                // A new student-facing section ends any assessor/admin block.
+                inAssessorBlock = false;
+                inAdminBlock = false;
+                currentSection = heading;
+                section = heading;
+                protectedFlag = true; // structural heading — never rewrite
+            } else if (assessor) {
+                inAssessorBlock = true;
+                inAdminBlock = false;
+                protectedFlag = true;
+            } else if (admin) {
+                inAdminBlock = true;
+                inAssessorBlock = false;
+                protectedFlag = true;
+            } else if (inAssessorBlock || inAdminBlock) {
+                protectedFlag = true; // inside a stripped block
+            } else {
+                protectedFlag = hasEmbeddedObject(pXml) || isProtectedText(text);
+            }
+        }
+
+        paragraphs.push({ id, text, protected: protectedFlag, section });
     }
     return paragraphs;
 }
