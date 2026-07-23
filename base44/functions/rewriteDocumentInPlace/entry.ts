@@ -81,11 +81,26 @@ Deno.serve(async (req) => {
         // ids aligned with extractParagraphs.
         let idx = 0;
         let replaced = 0;
+        let skippedProtected = 0;
         const re = newParagraphRegex();
         docXml = docXml.replace(re, (pXml) => {
             idx++;
             if (isSelfClosingParagraph(pXml)) return pXml;
             if (hasEmbeddedObject(pXml)) return pXml;
+            // The rewriter is the authority on what is safe to change. Never
+            // rewrite a paragraph that extractParagraphs flagged protected —
+            // this covers assessor-only blocks (TO BE COMPLETED BY THE ASSESSOR
+            // / ASSESSOR USE ONLY / ADMIN USE ONLY, through to the next section
+            // heading), admin overview sections (Unit information, Evidence
+            // Guide, etc.), section headings, S/NS markers and fillable-field
+            // boilerplate. This holds even when a rewrite for that id was
+            // supplied, so the output keeps the original structure, tables and
+            // formatting exactly — only student-facing text changes.
+            const para = docParagraphs[idx - 1];
+            if (para && para.protected) {
+                if (rewriteByIndex[idx]) skippedProtected++;
+                return pXml;
+            }
             const rewritten = rewriteByIndex[idx];
             if (!rewritten) return pXml;
             replaced++;
@@ -102,7 +117,7 @@ Deno.serve(async (req) => {
         });
 
         const outputFilename = filename.replace(/\.docx$/i, '') + '-rewritten.docx';
-        console.log(`[rewriteDocumentInPlace] SUMMARY: docxParagraphs=${docParagraphs.length} rewriteItems=${items.length} applied=${replaced}`);
+        console.log(`[rewriteDocumentInPlace] SUMMARY: docxParagraphs=${docParagraphs.length} rewriteItems=${items.length} applied=${replaced} skippedProtected=${skippedProtected}`);
 
         return Response.json({ file_base64: outB64, filename: outputFilename });
     } catch (error) {
