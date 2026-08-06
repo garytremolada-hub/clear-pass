@@ -9,6 +9,7 @@ import FeedbackButton from '@/components/feedback/FeedbackButton';
 import FeedbackModal from '@/components/feedback/FeedbackModal';
 import ThumbsRating from '@/components/feedback/ThumbsRating';
 import { extractMappingData } from '@/lib/extractMappingData';
+import { callWithRetry } from '@/lib/buildUtils';
 
 function isNewUocStructure(data) {
     return Array.isArray(data?.elements) && data.elements.length > 0;
@@ -694,7 +695,7 @@ function Screen3Structure({ unitInfo, cohortInfo, structureProposal, onBack, onB
 
 // ── Screen 4 — Building / Ready ───────────────────────────────────────────────
 
-function Screen4Loading({ onReset, progress, buildError }) {
+function Screen4Loading({ onReset, onRetry, progress, buildError, failedStep }) {
     const stage = [...BUILD_STAGES].reverse().find(s => progress >= s.pct) || BUILD_STAGES[0];
 
     if (buildError) {
@@ -720,6 +721,14 @@ function Screen4Loading({ onReset, progress, buildError }) {
                             {buildError}
                         </p>
                         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                            {failedStep && (
+                                <button
+                                    onClick={onRetry}
+                                    style={{ padding: '8px 18px', border: 'none', borderRadius: '6px', backgroundColor: '#c9a84c', color: '#0d2444', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
+                                >
+                                    ↻ Retry step {failedStep.step}
+                                </button>
+                            )}
                             <button
                                 onClick={onReset}
                                 style={{ padding: '8px 18px', border: '1px solid #0d2444', borderRadius: '6px', backgroundColor: 'transparent', color: '#0d2444', fontSize: '13px', cursor: 'pointer' }}
@@ -971,6 +980,8 @@ export default function Build() {
     const [validationError, setValidationError] = useState(null);
     const [studentBookletBase64, setStudentBookletBase64] = useState(null);
     const [studentBookletError, setStudentBookletError] = useState(false);
+    const buildStateRef = useRef({});
+    const [failedStep, setFailedStep] = useState(null);
 
     const buildCohortProfile = (ci) => {
         const learnerLabel = LEARNER_OPTIONS.find(o => o.value === ci.learner)?.label || ci.learner;
@@ -1110,10 +1121,13 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
     };
 
     const handleBuild = async (sections) => {
-        setActiveSections(sections);
+        const isResume = Object.keys(buildStateRef.current).length > 0;
+        const useSections = isResume ? (activeSections || sections) : sections;
+        if (!isResume) setActiveSections(useSections);
         setBuilding(true);
         setBuildProgress(0);
         setBuildError(null);
+        setFailedStep(null);
         setScreen(4);
 
         const cohortBlock = buildCohortProfile(cohortInfo);
@@ -1122,9 +1136,31 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
 
         // Determine if we have structured TGA data or legacy text
         const hasStructured = isNewUocStructure(unitInfo.uocData);
+        const totalSteps = hasStructured ? 6 : 7;
+        let stepNum = 0;
+
+        // Step wrapper: logs step number, retries on failure, caches for resume
+        const llmStep = async (name, prompt) => {
+            stepNum++;
+            const cacheKey = `step${stepNum}`;
+            if (buildStateRef.current[cacheKey] !== undefined) {
+                console.log(`Build step ${stepNum} of ${totalSteps} (${name}) — cached, skipping`);
+                return buildStateRef.current[cacheKey];
+            }
+            console.log(`Starting build step ${stepNum} of ${totalSteps}... (${name})`);
+            try {
+                const result = await callWithRetry(() => llmCall(prompt));
+                buildStateRef.current[cacheKey] = result;
+                return result;
+            } catch (err) {
+                console.error(`Build FAILED at step ${stepNum} of ${totalSteps} (${name}):`, err.message);
+                setFailedStep({ step: stepNum, name, total: totalSteps, error: err.message });
+                throw err;
+            }
+        };
 
         try {
-            // CALL 1 — Parse UoC structure (skip for new structured path)
+            // STEP 1 (legacy only) — Parse UoC structure
             setBuildProgress(10);
 
             let parsed;
@@ -1140,7 +1176,7 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
                 };
             } else {
                 const uoc = unitInfo.text || '';
-                const structure = await llmCall(
+                const structure = await llmStep('Parse UoC structure',
                     `You are an Australian VET assessment designer. Parse this Unit of Competency and return a JSON object only (no other text) with these fields:
 - unit_code: string
 - unit_title: string  
@@ -1164,7 +1200,7 @@ ${uoc.slice(0, 8000)}`
 
             // CALL 2 — Knowledge Questions
             setBuildProgress(30);
-            const knowledgeSection = await llmCall(
+            const knowledgeSection = await llmStep('Knowledge Questions',
                 `You are an Australian VET assessment writer. Write a Knowledge Questions section for an assessment instrument.
 
 ${levelNote}
@@ -1212,7 +1248,7 @@ Output format: Markdown. Start with: ## Part A — Knowledge Questions`
 
             // CALL 3 — Observation Checklist
             setBuildProgress(50);
-            const observationSection = await llmCall(
+            const observationSection = await llmStep('Observation Checklist',
                 `You are an Australian VET assessment writer. Write an Observation Checklist section for an assessment instrument.
 
 ${levelNote}
@@ -1235,7 +1271,7 @@ Start with: ## Part B — Observation Checklist`
 
             // CALL 4 — Workplace Project / Scenario
             setBuildProgress(65);
-            const projectSection = await llmCall(
+            const projectSection = await llmStep('Workplace Project',
                 `You are an Australian VET assessment writer. Write a Workplace Project task for an assessment instrument.
 
 ${levelNote}
@@ -1254,47 +1290,62 @@ Instructions:
 Output format: Markdown. Start with: ## Part C — Workplace Project`
             );
 
-            // CALL 5 — Marking Guide
-            setBuildProgress(80);
-            const markingGuide = await llmCall(
-                `You are an Australian VET assessment writer. Write a Marking Guide / Assessor Pack for the following assessment sections.
+            // Assemble text refs (needed by marking guide split + mapping index)
+            const kText = typeof knowledgeSection === 'string' ? knowledgeSection : JSON.stringify(knowledgeSection);
+            const oText = typeof observationSection === 'string' ? observationSection : JSON.stringify(observationSection);
+            const pText = typeof projectSection === 'string' ? projectSection : JSON.stringify(projectSection);
+
+            // STEP 5a — Marking Guide: Knowledge Questions (split to reduce token load)
+            setBuildProgress(75);
+            const markingKnowledge = await llmStep('Marking Guide (Knowledge)',
+                `You are an Australian VET assessment writer. Write the Knowledge Questions marking guide.
 
 ${levelNote}
 Unit: ${unitInfo.code} — ${unitInfo.title}
 
 KNOWLEDGE QUESTIONS (already written):
-${typeof knowledgeSection === 'string' ? knowledgeSection.slice(0, 3000) : ''}
-
-OBSERVATION CHECKLIST (already written):
-${typeof observationSection === 'string' ? observationSection.slice(0, 2000) : ''}
-
-WORKPLACE PROJECT (already written):
-${typeof projectSection === 'string' ? projectSection.slice(0, 2000) : ''}
+${kText.slice(0, 3000)}
 
 Instructions:
-- Write a complete Assessor Marking Guide
-- For knowledge questions: include model answers and acceptable variations
+- For each knowledge question: include the model answer and acceptable variations
+- Write at ${band} reading level (for assessor use)
+
+Output format: Markdown. Start with: ## Knowledge Questions — Marking Guide`
+            );
+
+            // STEP 5b — Marking Guide: Observation + Project (split to reduce token load)
+            setBuildProgress(80);
+            const markingRest = await llmStep('Marking Guide (Observation & Project)',
+                `You are an Australian VET assessment writer. Write the Observation and Project marking guide.
+
+${levelNote}
+Unit: ${unitInfo.code} — ${unitInfo.title}
+
+OBSERVATION CHECKLIST (already written):
+${oText.slice(0, 2000)}
+
+WORKPLACE PROJECT (already written):
+${pText.slice(0, 2000)}
+
+Instructions:
 - For observation: include specific observable indicators for each checklist item
 - For the project: include assessment criteria and evidence requirements
 - Include a Reasonable Adjustment note
 - Include a Judgement of Competence summary section
+- Write at ${band} reading level (for assessor use)
 
-Output format: Markdown. Start with: # Assessor Marking Guide — ${unitInfo.code}`
+Output format: Markdown. Start with: ## Observation & Project — Marking Guide`
             );
 
-            // CALL 6 — Assemble final text refs for mapping index
-            const kText = typeof knowledgeSection === 'string' ? knowledgeSection : JSON.stringify(knowledgeSection);
-            const oText = typeof observationSection === 'string' ? observationSection : JSON.stringify(observationSection);
-            const pText = typeof projectSection === 'string' ? projectSection : JSON.stringify(projectSection);
+            const markingGuide = `# Assessor Marking Guide — ${unitInfo.code}\n\n${typeof markingKnowledge === 'string' ? markingKnowledge : JSON.stringify(markingKnowledge)}\n\n---\n\n${typeof markingRest === 'string' ? markingRest : JSON.stringify(markingRest)}`;
 
-            // CALL 7 — Dedicated mapping index (runs after all content is built)
+            // STEP 6 — Mapping Index
             setBuildProgress(97);
-            // Build a summary of what was produced in each part for the AI
             const kSummary = kText.slice(0, 3000);
             const oSummary = oText.slice(0, 2000);
             const pSummary = pText.slice(0, 2000);
 
-            const mappingIndexRaw = await llmCall(
+            const mappingIndexRaw = await llmStep('Mapping Index',
                 `You have just built an assessment for ${unitInfo.code} — ${unitInfo.title}.
 
 The assessment contains the following sections:
@@ -1551,11 +1602,22 @@ ${mText}`;
                 setStudentBookletError(true);
             }
 
+            // Build succeeded — clear step cache
+            buildStateRef.current = {};
+
         } catch (e) {
-            setBuildError('One of the build steps timed out or failed. Please try again — each step is smaller now and should complete successfully.');
+            setBuildError(failedStep
+                ? `Step ${failedStep.step} (${failedStep.name}) could not complete. Click retry to try that step again without starting over.`
+                : 'One of the build steps timed out or failed.');
         } finally {
             setBuilding(false);
         }
+    };
+
+    const handleRetry = () => {
+        setBuildError(null);
+        setFailedStep(null);
+        handleBuild(activeSections);
     };
 
     const handleSave = async () => {
@@ -1577,6 +1639,7 @@ ${mText}`;
     };
 
     const handleReset = () => {
+        buildStateRef.current = {};
         setScreen(1);
         setUnitInfo(null);
         setCohortInfo(null);
@@ -1615,7 +1678,7 @@ ${mText}`;
                     />
                 )
             )}
-            {screen === 4 && (building || buildError) && <Screen4Loading onReset={handleReset} progress={buildProgress} buildError={buildError} />}
+            {screen === 4 && (building || buildError) && <Screen4Loading onReset={handleReset} onRetry={handleRetry} progress={buildProgress} buildError={buildError} failedStep={failedStep} />}
             {screen === 4 && !building && !buildError && (
                 <Screen4Ready
                     unitInfo={unitInfo}
