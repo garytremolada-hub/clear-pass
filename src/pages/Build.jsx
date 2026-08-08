@@ -1140,6 +1140,7 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
         let stepNum = 0;
 
         // Step wrapper: logs step number, retries on failure, caches for resume
+        let failedStepInfo = null;
         const llmStep = async (name, prompt) => {
             stepNum++;
             const cacheKey = `step${stepNum}`;
@@ -1154,7 +1155,8 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
                 return result;
             } catch (err) {
                 console.error(`Build FAILED at step ${stepNum} of ${totalSteps} (${name}):`, err.message);
-                setFailedStep({ step: stepNum, name, total: totalSteps, error: err.message });
+                failedStepInfo = { step: stepNum, name, total: totalSteps, error: err.message };
+                setFailedStep(failedStepInfo);
                 throw err;
             }
         };
@@ -1606,9 +1608,10 @@ ${mText}`;
             buildStateRef.current = {};
 
         } catch (e) {
-            setBuildError(failedStep
-                ? `Step ${failedStep.step} (${failedStep.name}) could not complete. Click retry to try that step again without starting over.`
-                : 'One of the build steps timed out or failed.');
+            const stepMsg = failedStepInfo
+                ? `Step ${failedStepInfo.step} of ${failedStepInfo.total} (${failedStepInfo.name}) could not complete. Click retry to try that step again without starting over.`
+                : 'One of the build steps timed out or failed.';
+            setBuildError(stepMsg);
         } finally {
             setBuilding(false);
         }
