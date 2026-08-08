@@ -990,7 +990,7 @@ export default function Build() {
 
     const NO_DASH_RULE = 'CRITICAL STYLE RULE: Never use em dashes (—) or en dashes (–) anywhere in your output. Rewrite sentences using correct grammar instead: use a colon (:) to introduce a list, a full stop to separate two complete thoughts, and a comma to join closely related ideas within a sentence. Restructure sentences as needed so they read naturally without dashes.\n\n';
 
-    const llmCall = (prompt) => base44.integrations.Core.InvokeLLM({ prompt: NO_DASH_RULE + prompt });
+    const llmCall = (prompt, model) => base44.integrations.Core.InvokeLLM({ prompt: NO_DASH_RULE + prompt, ...(model ? { model } : {}) });
 
     const handleScreen1Confirm = (info) => {
         setUnitInfo(info);
@@ -1141,7 +1141,7 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
 
         // Step wrapper: logs step number, retries on failure, caches for resume
         let failedStepInfo = null;
-        const llmStep = async (name, prompt) => {
+        const llmStep = async (name, prompt, model) => {
             stepNum++;
             const cacheKey = `step${stepNum}`;
             if (buildStateRef.current[cacheKey] !== undefined) {
@@ -1150,7 +1150,7 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
             }
             console.log(`Starting build step ${stepNum} of ${totalSteps}... (${name})`);
             try {
-                const result = await callWithRetry(() => llmCall(prompt));
+                const result = await callWithRetry(() => llmCall(prompt, model));
                 buildStateRef.current[cacheKey] = result;
                 return result;
             } catch (err) {
@@ -1245,7 +1245,8 @@ Q5. Think about a time when a workplace relationship was difficult. What steps c
 
 This replacement Q5 covers the impact of relationships on planned outcomes at a deeper applied level.
 
-Output format: Markdown. Start with: ## Part A — Knowledge Questions`
+Output format: Markdown. Start with: ## Part A — Knowledge Questions`,
+                'gpt_5_mini'
             );
 
             // CALL 3 — Observation Checklist
@@ -1611,7 +1612,7 @@ ${mText}`;
             const stepMsg = failedStepInfo
                 ? `Step ${failedStepInfo.step} of ${failedStepInfo.total} (${failedStepInfo.name}) could not complete. Click retry to try that step again without starting over.`
                 : 'One of the build steps timed out or failed.';
-            setBuildError(stepMsg);
+            setBuildError(failedStepInfo?.error ? `${stepMsg}\n\nError: ${failedStepInfo.error}` : stepMsg);
         } finally {
             setBuilding(false);
         }
