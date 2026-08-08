@@ -1246,7 +1246,7 @@ Q5. Think about a time when a workplace relationship was difficult. What steps c
 This replacement Q5 covers the impact of relationships on planned outcomes at a deeper applied level.
 
 Output format: Markdown. Start with: ## Part A — Knowledge Questions`,
-                'gpt_5_mini'
+                
             );
 
             // CALL 3 — Observation Checklist
