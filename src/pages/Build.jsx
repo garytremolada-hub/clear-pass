@@ -1517,7 +1517,7 @@ ${mText}`;
             setBuildProgress(100);
 
             // ── Generate compliance documents ──────────────────────────────
-            const mappingData = extractMappingData(parsed, unitInfo, cohortInfo, sections, mappingIndex);
+            const mappingData = extractMappingData(parsed, unitInfo, cohortInfo, useSections, mappingIndex);
 
             // Extract question strings from knowledgeSection
             // Matches lines like: "Q1. text", "**Q1. text**", "**Q1.** text", "Q1. **text**"
