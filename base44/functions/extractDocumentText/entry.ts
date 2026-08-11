@@ -32,21 +32,48 @@ Deno.serve(async (req) => {
             }
             const arrayBuffer = await fileRes.arrayBuffer();
             const buffer = new Uint8Array(arrayBuffer);
-            const result = await mammoth.extractRawText({ buffer });
-            text = result.value || '';
+            let result;
+            try {
+                result = await mammoth.extractRawText({ buffer });
+                text = result.value || '';
+            } catch (mammothErr) {
+                console.log('[extractDocumentText] mammoth failed: ' + mammothErr.message);
+                text = '';
+            }
 
             // Also extract docx-accurate paragraphs (id + text + protected)
             // directly from document.xml, so the in-place rewrite can match
             // paragraphs by their exact index instead of fragile text matching.
+            let docXml = '';
             try {
                 const zip = await JSZip.loadAsync(buffer);
                 const docFile = zip.file('word/document.xml');
                 if (docFile) {
-                    const docXml = await docFile.async('string');
+                    docXml = await docFile.async('string');
                     paragraphs = extractParagraphs(docXml);
                 }
             } catch (e) {
                 console.log('[extractDocumentText] paragraph extraction failed: ' + e.message);
+            }
+
+            // Fallback: if mammoth returned empty text, extract directly from XML
+            if (!text.trim() && docXml) {
+                console.log('[extractDocumentText] mammoth returned empty text, falling back to XML extraction');
+                // Strip XML tags, decode common entities, preserve paragraph breaks
+                const xmlText = docXml
+                    .replace(/<w:p[ >]/g, '\n<w:p ')
+                    .replace(/<[^>]+>/g, '')
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&apos;/g, "'")
+                    .replace(/&#\d+;/g, ' ')
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(Boolean)
+                    .join('\n');
+                text = xmlText;
             }
         } else {
             // PDF: use InvokeLLM with file_urls (vision model handles PDFs well)
