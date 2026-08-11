@@ -26,16 +26,21 @@ Deno.serve(async (req) => {
 
         if (isDocx) {
             // Fetch the file bytes and extract text with mammoth (for scoring).
+            console.log('[extractDocumentText] fetching file from url...');
             const fileRes = await fetch(file_url);
             if (!fileRes.ok) {
+                console.log('[extractDocumentText] fetch failed: ' + fileRes.status);
                 return Response.json({ error: `Failed to fetch file: ${fileRes.status}` }, { status: 500 });
             }
             const arrayBuffer = await fileRes.arrayBuffer();
             const buffer = new Uint8Array(arrayBuffer);
+            console.log('[extractDocumentText] fetched ' + buffer.length + ' bytes');
+
             let result;
             try {
                 result = await mammoth.extractRawText({ buffer });
                 text = result.value || '';
+                console.log('[extractDocumentText] mammoth extracted ' + text.length + ' chars');
             } catch (mammothErr) {
                 console.log('[extractDocumentText] mammoth failed: ' + mammothErr.message);
                 text = '';
@@ -51,15 +56,15 @@ Deno.serve(async (req) => {
                 if (docFile) {
                     docXml = await docFile.async('string');
                     paragraphs = extractParagraphs(docXml);
+                    console.log('[extractDocumentText] JSZip extracted ' + paragraphs.length + ' paragraphs');
                 }
             } catch (e) {
                 console.log('[extractDocumentText] paragraph extraction failed: ' + e.message);
             }
 
-            // Fallback: if mammoth returned empty text, extract directly from XML
+            // Fallback 1: if mammoth returned empty text, extract directly from XML
             if (!text.trim() && docXml) {
                 console.log('[extractDocumentText] mammoth returned empty text, falling back to XML extraction');
-                // Strip XML tags, decode common entities, preserve paragraph breaks
                 const xmlText = docXml
                     .replace(/<w:p[ >]/g, '\n<w:p ')
                     .replace(/<[^>]+>/g, '')
@@ -74,6 +79,32 @@ Deno.serve(async (req) => {
                     .filter(Boolean)
                     .join('\n');
                 text = xmlText;
+                console.log('[extractDocumentText] XML fallback extracted ' + text.length + ' chars');
+            }
+
+            // Fallback 2: if still empty, use LLM vision model (handles .doc, corrupted .docx, etc.)
+            if (!text.trim()) {
+                console.log('[extractDocumentText] all local extraction failed, falling back to LLM vision');
+                try {
+                    const llmResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
+                        prompt: `Extract the complete plain text content from this document. Output ONLY the raw text — no commentary, no summary, no extra formatting. Preserve all headings, paragraphs, numbered lists, bullet points, and table content as plain text. Do not omit or paraphrase anything.`,
+                        file_urls: [file_url],
+                        response_json_schema: {
+                            type: 'object',
+                            properties: {
+                                text: {
+                                    type: 'string',
+                                    description: 'The complete verbatim plain text content of the document'
+                                }
+                            },
+                            required: ['text']
+                        }
+                    });
+                    text = llmResult?.text || '';
+                    console.log('[extractDocumentText] LLM fallback extracted ' + text.length + ' chars');
+                } catch (llmErr) {
+                    console.log('[extractDocumentText] LLM fallback failed: ' + llmErr.message);
+                }
             }
         } else {
             // PDF: use InvokeLLM with file_urls (vision model handles PDFs well)
