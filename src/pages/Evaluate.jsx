@@ -368,10 +368,13 @@ function Screen2({ unitInfo, onBack, onConfirm, previousEvaluation, showComparis
             setExtractedText(text);
             setWordCount(wc);
             if (wc < 100) {
-                setError('This document appears to be very short or could not be read properly. Try uploading a different file or paste the text directly.');
+                setError('This document could not be read. Try saving it as a new Word file and uploading again, or paste the text directly below.');
+                setShowPaste(true);
             }
         } catch (err) {
-            setError('Could not read this file. Try a different file or paste the text below.');
+            console.error('Evaluate file extraction failed:', err?.response?.data?.error || err.message);
+            setError('This document could not be read. Try saving it as a new Word file and uploading again, or paste the text directly below.');
+            setShowPaste(true);
         } finally {
             setExtracting(false);
         }
