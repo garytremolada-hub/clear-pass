@@ -2,9 +2,14 @@ import { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { X, Upload, CheckCircle, Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { extractDocxText } from '@/lib/extractDocxText';
 
-// Extracts text from a single file via backend
+// Extracts text from a single file — .docx in browser, PDF via backend
 async function extractText(file) {
+    if (file.name.toLowerCase().endsWith('.docx')) {
+        const result = await extractDocxText(file);
+        return result.text;
+    }
     const uploadResult = await base44.integrations.Core.UploadFile({ file });
     const res = await base44.functions.invoke('extractDocumentText', {
         file_url: uploadResult.file_url,

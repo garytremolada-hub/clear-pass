@@ -5,6 +5,7 @@ import { CheckCircle, Upload, AlertCircle, Loader2, Search, ClipboardCheck, Down
 import FeedbackButton from '@/components/feedback/FeedbackButton';
 import FeedbackModal from '@/components/feedback/FeedbackModal';
 import { calculateReadability } from '@/lib/calculateReadability';
+import { extractDocxText } from '@/lib/extractDocxText';
 
 // ── Shared constants (mirrored from Build) ────────────────────────────────────
 
@@ -361,9 +362,17 @@ function Screen2({ unitInfo, onBack, onConfirm, previousEvaluation, showComparis
         setError('');
         setExtracting(true);
         try {
-            const up = await base44.integrations.Core.UploadFile({ file: f });
-            const res = await base44.functions.invoke('extractDocumentText', { file_url: up.file_url, file_name: f.name, label: 'Assessment' });
-            const text = res?.data?.text || '';
+            let text = '';
+            if (f.name.toLowerCase().endsWith('.docx')) {
+                // Extract .docx text directly in the browser — no backend, no credits
+                const result = await extractDocxText(f);
+                text = result.text;
+            } else {
+                // PDF: upload + backend LLM extraction
+                const up = await base44.integrations.Core.UploadFile({ file: f });
+                const res = await base44.functions.invoke('extractDocumentText', { file_url: up.file_url, file_name: f.name, label: 'Assessment' });
+                text = res?.data?.text || '';
+            }
             const wc = text.split(/\s+/).filter(Boolean).length;
             setExtractedText(text);
             setWordCount(wc);
@@ -372,9 +381,8 @@ function Screen2({ unitInfo, onBack, onConfirm, previousEvaluation, showComparis
                 setShowPaste(true);
             }
         } catch (err) {
-            console.error('Evaluate file extraction failed:', err?.response?.data?.error || err.message);
-            const backendError = err?.response?.data?.error || err.message || '';
-            setError(`This document could not be read (${backendError}). Try saving it as a new Word file and uploading again, or paste the text directly below.`);
+            console.error('Evaluate file extraction failed:', err?.message);
+            setError(`This document could not be read (${err.message}). Try saving it as a new Word file and uploading again, or paste the text directly below.`);
             setShowPaste(true);
         } finally {
             setExtracting(false);

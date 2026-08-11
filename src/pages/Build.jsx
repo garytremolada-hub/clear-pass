@@ -10,6 +10,7 @@ import FeedbackModal from '@/components/feedback/FeedbackModal';
 import ThumbsRating from '@/components/feedback/ThumbsRating';
 import { extractMappingData } from '@/lib/extractMappingData';
 import { callWithRetry } from '@/lib/buildUtils';
+import { extractDocxText } from '@/lib/extractDocxText';
 
 function isNewUocStructure(data) {
     return Array.isArray(data?.elements) && data.elements.length > 0;
@@ -192,9 +193,14 @@ function Screen1({ onConfirm }) {
         try {
             let extractedText = text;
             if (f) {
-                const up = await base44.integrations.Core.UploadFile({ file: f });
-                const res = await base44.functions.invoke('extractDocumentText', { file_url: up.file_url, file_name: f.name, label: 'Unit of Competency' });
-                extractedText = res?.data?.text || '';
+                if (f.name.toLowerCase().endsWith('.docx')) {
+                    const result = await extractDocxText(f);
+                    extractedText = result.text;
+                } else {
+                    const up = await base44.integrations.Core.UploadFile({ file: f });
+                    const res = await base44.functions.invoke('extractDocumentText', { file_url: up.file_url, file_name: f.name, label: 'Unit of Competency' });
+                    extractedText = res?.data?.text || '';
+                }
             }
             if (!extractedText) throw new Error('empty');
             const parseResult = await base44.integrations.Core.InvokeLLM({

@@ -9,6 +9,7 @@ import { getBandForFkgl } from '@/lib/parseReadabilityResult';
 import { calculateReadability } from '@/lib/calculateReadability';
 import { useNavigate } from 'react-router-dom';
 import RewriteModal from '@/components/levelcheck/RewriteModal';
+import { extractDocxText } from '@/lib/extractDocxText';
 
 // ── Paragraph helpers (Step 2 from spec) ─────────────────────────────────────
 
@@ -127,11 +128,20 @@ export default function LevelCheck() {
         setLoading(true);
         setError(null);
         try {
-            const uploadResult = await base44.integrations.Core.UploadFile({ file: f });
-            const fileUrl = uploadResult.file_url;
-            const payload = { file_url: fileUrl, file_name: f.name, label: 'Level Check document' };
-            const res = await base44.functions.invoke('extractDocumentText', payload);
-            const text = res?.data?.text || '';
+            let text = '';
+            let fileUrl = null;
+            let backendParagraphs = null;
+            if (f.name.toLowerCase().endsWith('.docx')) {
+                const result = await extractDocxText(f);
+                text = result.text;
+            } else {
+                const uploadResult = await base44.integrations.Core.UploadFile({ file: f });
+                fileUrl = uploadResult.file_url;
+                const payload = { file_url: fileUrl, file_name: f.name, label: 'Level Check document' };
+                const res = await base44.functions.invoke('extractDocumentText', payload);
+                text = res?.data?.text || '';
+                backendParagraphs = res?.data?.paragraphs;
+            }
             if (!text) throw new Error('Could not extract text from this document.');
             
             // Use JavaScript calculator instead of AI
@@ -166,7 +176,7 @@ export default function LevelCheck() {
                 trafficLight: null,
             };
             
-            const paragraphs = (res?.data?.paragraphs && res.data.paragraphs.length) ? res.data.paragraphs : extractAndNumberParagraphs(text);
+            const paragraphs = (backendParagraphs && backendParagraphs.length) ? backendParagraphs : extractAndNumberParagraphs(text);
             setNumberedParagraphs(paragraphs);
             setResult(parsed);
             setFileName(f.name);
