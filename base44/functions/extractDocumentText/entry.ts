@@ -1,5 +1,4 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
-import mammoth from 'npm:mammoth@1.9.0';
 import JSZip from 'npm:jszip@3.10.1';
 import { extractParagraphs } from '../../shared/paragraphUtils.js';
 
@@ -25,66 +24,55 @@ Deno.serve(async (req) => {
         let paragraphs = [];
 
         if (isDocx) {
-            // Fetch the file bytes and extract text with mammoth (for scoring).
-            console.log('[extractDocumentText] fetching file from url...');
-            const fileRes = await fetch(file_url);
-            if (!fileRes.ok) {
-                console.log('[extractDocumentText] fetch failed: ' + fileRes.status);
-                return Response.json({ error: `Failed to fetch file: ${fileRes.status}` }, { status: 500 });
-            }
-            const arrayBuffer = await fileRes.arrayBuffer();
-            const buffer = new Uint8Array(arrayBuffer);
-            console.log('[extractDocumentText] fetched ' + buffer.length + ' bytes');
-
-            let result;
+            // ── Attempt 1: Fetch + JSZip + XML extraction ──
             try {
-                result = await mammoth.extractRawText({ buffer });
-                text = result.value || '';
-                console.log('[extractDocumentText] mammoth extracted ' + text.length + ' chars');
-            } catch (mammothErr) {
-                console.log('[extractDocumentText] mammoth failed: ' + mammothErr.message);
-                text = '';
-            }
+                console.log('[extractDocumentText] fetching file...');
+                const fileRes = await fetch(file_url);
+                if (fileRes.ok) {
+                    const arrayBuffer = await fileRes.arrayBuffer();
+                    const buffer = new Uint8Array(arrayBuffer);
+                    console.log('[extractDocumentText] fetched ' + buffer.length + ' bytes');
 
-            // Also extract docx-accurate paragraphs (id + text + protected)
-            // directly from document.xml, so the in-place rewrite can match
-            // paragraphs by their exact index instead of fragile text matching.
-            let docXml = '';
-            try {
-                const zip = await JSZip.loadAsync(buffer);
-                const docFile = zip.file('word/document.xml');
-                if (docFile) {
-                    docXml = await docFile.async('string');
-                    paragraphs = extractParagraphs(docXml);
-                    console.log('[extractDocumentText] JSZip extracted ' + paragraphs.length + ' paragraphs');
+                    let docXml = '';
+                    try {
+                        const zip = await JSZip.loadAsync(buffer);
+                        const docFile = zip.file('word/document.xml');
+                        if (docFile) {
+                            docXml = await docFile.async('string');
+                            paragraphs = extractParagraphs(docXml);
+                            console.log('[extractDocumentText] JSZip OK: ' + paragraphs.length + ' paragraphs');
+                        }
+                    } catch (zipErr) {
+                        console.log('[extractDocumentText] JSZip failed: ' + zipErr.message);
+                    }
+
+                    if (docXml) {
+                        // Extract text from XML by stripping tags, preserving paragraph breaks
+                        text = docXml
+                            .replace(/<w:p[ >]/g, '\n<w:p ')
+                            .replace(/<[^>]+>/g, '')
+                            .replace(/&amp;/g, '&')
+                            .replace(/&lt;/g, '<')
+                            .replace(/&gt;/g, '>')
+                            .replace(/&quot;/g, '"')
+                            .replace(/&apos;/g, "'")
+                            .replace(/&#\d+;/g, ' ')
+                            .split('\n')
+                            .map(line => line.trim())
+                            .filter(Boolean)
+                            .join('\n');
+                        console.log('[extractDocumentText] XML text: ' + text.length + ' chars');
+                    }
+                } else {
+                    console.log('[extractDocumentText] fetch returned ' + fileRes.status);
                 }
-            } catch (e) {
-                console.log('[extractDocumentText] paragraph extraction failed: ' + e.message);
+            } catch (fetchErr) {
+                console.log('[extractDocumentText] fetch/extract failed: ' + fetchErr.message);
             }
 
-            // Fallback 1: if mammoth returned empty text, extract directly from XML
-            if (!text.trim() && docXml) {
-                console.log('[extractDocumentText] mammoth returned empty text, falling back to XML extraction');
-                const xmlText = docXml
-                    .replace(/<w:p[ >]/g, '\n<w:p ')
-                    .replace(/<[^>]+>/g, '')
-                    .replace(/&amp;/g, '&')
-                    .replace(/&lt;/g, '<')
-                    .replace(/&gt;/g, '>')
-                    .replace(/&quot;/g, '"')
-                    .replace(/&apos;/g, "'")
-                    .replace(/&#\d+;/g, ' ')
-                    .split('\n')
-                    .map(line => line.trim())
-                    .filter(Boolean)
-                    .join('\n');
-                text = xmlText;
-                console.log('[extractDocumentText] XML fallback extracted ' + text.length + ' chars');
-            }
-
-            // Fallback 2: if still empty, use LLM vision model (handles .doc, corrupted .docx, etc.)
+            // ── Attempt 2: LLM with file_urls (works even if fetch failed) ──
             if (!text.trim()) {
-                console.log('[extractDocumentText] all local extraction failed, falling back to LLM vision');
+                console.log('[extractDocumentText] falling back to LLM');
                 try {
                     const llmResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
                         prompt: `Extract the complete plain text content from this document. Output ONLY the raw text — no commentary, no summary, no extra formatting. Preserve all headings, paragraphs, numbered lists, bullet points, and table content as plain text. Do not omit or paraphrase anything.`,
@@ -101,13 +89,13 @@ Deno.serve(async (req) => {
                         }
                     });
                     text = llmResult?.text || '';
-                    console.log('[extractDocumentText] LLM fallback extracted ' + text.length + ' chars');
+                    console.log('[extractDocumentText] LLM extracted ' + text.length + ' chars');
                 } catch (llmErr) {
-                    console.log('[extractDocumentText] LLM fallback failed: ' + llmErr.message);
+                    console.log('[extractDocumentText] LLM failed: ' + llmErr.message);
                 }
             }
         } else {
-            // PDF: use InvokeLLM with file_urls (vision model handles PDFs well)
+            // PDF: use InvokeLLM with file_urls
             const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
                 prompt: `Extract the complete plain text content from this PDF document. Output ONLY the raw text — no commentary, no summary, no extra formatting. Preserve all headings, paragraphs, numbered lists, bullet points, and table content as plain text. Do not omit or paraphrase anything.`,
                 file_urls: [file_url],
@@ -133,6 +121,7 @@ Deno.serve(async (req) => {
 
         return Response.json({ text, paragraphs, label: label || 'document' });
     } catch (error) {
+        console.error('[extractDocumentText] FATAL:', error.message);
         return Response.json({ error: error.message }, { status: 500 });
     }
 });

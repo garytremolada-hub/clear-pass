@@ -373,7 +373,8 @@ function Screen2({ unitInfo, onBack, onConfirm, previousEvaluation, showComparis
             }
         } catch (err) {
             console.error('Evaluate file extraction failed:', err?.response?.data?.error || err.message);
-            setError('This document could not be read. Try saving it as a new Word file and uploading again, or paste the text directly below.');
+            const backendError = err?.response?.data?.error || err.message || '';
+            setError(`This document could not be read (${backendError}). Try saving it as a new Word file and uploading again, or paste the text directly below.`);
             setShowPaste(true);
         } finally {
             setExtracting(false);
