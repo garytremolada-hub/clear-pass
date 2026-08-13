@@ -116,10 +116,8 @@ function getBand(learner, support) {
 const BUILD_STAGES = [
     { pct: 0,   label: 'Starting...' },
     { pct: 10,  label: 'Reading your UoC...' },
-    { pct: 30,  label: 'Writing knowledge questions...' },
-    { pct: 50,  label: 'Building observation checklist...' },
-    { pct: 65,  label: 'Writing project tasks...' },
-    { pct: 80,  label: 'Creating marking guides...' },
+    { pct: 40,  label: 'Writing assessment sections...' },
+    { pct: 75,  label: 'Creating marking guides...' },
     { pct: 97,  label: 'Mapping requirements to questions...' },
     { pct: 100, label: 'Done ✓' },
 ];
@@ -1142,7 +1140,7 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
 
         // Determine if we have structured TGA data or legacy text
         const hasStructured = isNewUocStructure(unitInfo.uocData);
-        const totalSteps = hasStructured ? 6 : 7;
+        const totalSteps = hasStructured ? 3 : 4;
         let stepNum = 0;
 
         // Step wrapper: logs step number, retries on failure, caches for resume
@@ -1206,10 +1204,10 @@ ${uoc.slice(0, 8000)}`
             const keList = (parsed.ke_items || []).join('\n');
             const peList = (parsed.pe_items || []).join('\n');
 
-            // CALL 2 — Knowledge Questions
-            setBuildProgress(30);
-            const knowledgeSection = await llmStep('Knowledge Questions',
-                `You are an Australian VET assessment writer. Write a Knowledge Questions section for an assessment instrument.
+            // STEP 1 — Assessment Sections (combined: Knowledge Questions + Observation Checklist + Workplace Project)
+            setBuildProgress(40);
+            const assessmentCombined = await llmStep('Assessment Sections',
+                `You are an Australian VET assessment writer. Write three sections for an assessment instrument in a single response.
 
 ${levelNote}
 Unit: ${unitInfo.code} — ${unitInfo.title}
@@ -1217,14 +1215,17 @@ Unit: ${unitInfo.code} — ${unitInfo.title}
 KNOWLEDGE EVIDENCE ITEMS TO COVER:
 ${keList || (unitInfo.text || '').slice(0, 3000)}
 
-Instructions:
+PERFORMANCE EVIDENCE AND CRITERIA TO COVER:
+${peList || ''}
+${parsed.pc_items?.join('\n') || ''}
+
+Instructions for Part A — Knowledge Questions:
 - Write 8–12 questions that cover all knowledge evidence items
 - Use short-answer format (2–4 sentences expected per answer)
 - Write at ${band} reading level
 - Number each question (Q1, Q2, etc.)
 - Include a "Model Answer" for each question in italics below the question
 - Use plain, clear language appropriate for the cohort
-- Do NOT include any other sections
 
 MANDATORY Q4 REQUIREMENT: Q4 must be written exactly as follows (do not change any wording):
 
@@ -1243,92 +1244,52 @@ Networking (how you build connections)
 *4. Cultural and social sensitivity: Being aware that people have different backgrounds and values. For example, making sure team activities are inclusive and respectful of different cultural practices.*
 *5. Networking: Building working relationships inside and outside the organisation. For example, introducing yourself to people in other teams and staying in contact with industry contacts.*
 
-Q5 REQUIREMENT: After writing Q4 as above, check whether Q5 would be redundant (i.e. it would cover communication or consultation already fully covered by Q4). If it is redundant, replace Q5 with the following question instead:
+Q5 REQUIREMENT: After writing Q4 as above, check whether Q5 would be redundant. If it is redundant, replace Q5 with:
 
 Q5. Think about a time when a workplace relationship was difficult. What steps could a leader take to repair trust and improve the relationship?
 
 *Model Answer: A leader could start by having a private, respectful conversation to understand the other person's perspective. They could acknowledge any misunderstandings, agree on clear expectations going forward, and follow up regularly to make sure the relationship continues to improve. Seeking support from HR or a mentor may also help.*
 
-This replacement Q5 covers the impact of relationships on planned outcomes at a deeper applied level.
-
-Output format: Markdown. Start with: ## Part A — Knowledge Questions`,
-                
-            );
-
-            // CALL 3 — Observation Checklist
-            setBuildProgress(50);
-            const observationSection = await llmStep('Observation Checklist',
-                `You are an Australian VET assessment writer. Write an Observation Checklist section for an assessment instrument.
-
-${levelNote}
-Unit: ${unitInfo.code} — ${unitInfo.title}
-
-PERFORMANCE EVIDENCE AND CRITERIA TO COVER:
-${peList || ''}
-${parsed.pc_items?.join('\n') || ''}
-
-Instructions:
+Instructions for Part B — Observation Checklist:
 - Write a checklist of 10–15 observable behaviours/tasks the assessor will observe
 - Each item should be a clear, observable action (Satisfactory / Not Yet Satisfactory checkboxes)
 - Cover all performance evidence and key performance criteria
 - Write at ${band} reading level
 - Include an "Assessor Notes" field at the end
+- Output as a Markdown table with columns: Item | Observable Behaviour | S | NYS | Comments
 
-Output format: Markdown table with columns: Item | Observable Behaviour | S | NYS | Comments
-Start with: ## Part B — Observation Checklist`
-            );
-
-            // CALL 4 — Workplace Project / Scenario
-            setBuildProgress(65);
-            const projectSection = await llmStep('Workplace Project',
-                `You are an Australian VET assessment writer. Write a Workplace Project task for an assessment instrument.
-
-${levelNote}
-Unit: ${unitInfo.code} — ${unitInfo.title}
-
-PERFORMANCE EVIDENCE TO COVER:
-${peList || (unitInfo.text || '').slice(0, 2000)}
-
-Instructions:
+Instructions for Part C — Workplace Project:
 - Write one practical workplace project task that covers all performance evidence
 - Include: scenario context, task instructions (numbered steps), resources required, submission requirements
 - Write at ${band} reading level
 - The task should produce a physical or digital work product as evidence
 - Include word count guidance for any written components
 
-Output format: Markdown. Start with: ## Part C — Workplace Project`
+Output format: Markdown with three sections. Start each section with its header:
+## Part A — Knowledge Questions
+## Part B — Observation Checklist
+## Part C — Workplace Project`
             );
 
-            // Assemble text refs (needed by marking guide split + mapping index)
-            const kText = typeof knowledgeSection === 'string' ? knowledgeSection : JSON.stringify(knowledgeSection);
-            const oText = typeof observationSection === 'string' ? observationSection : JSON.stringify(observationSection);
-            const pText = typeof projectSection === 'string' ? projectSection : JSON.stringify(projectSection);
+            // Split combined output into individual sections
+            const combinedText = typeof assessmentCombined === 'string' ? assessmentCombined : JSON.stringify(assessmentCombined);
+            const partAIdx = combinedText.indexOf('## Part A');
+            const partBIdx = combinedText.indexOf('## Part B');
+            const partCIdx = combinedText.indexOf('## Part C');
+            const kText = partAIdx !== -1 ? (partBIdx !== -1 ? combinedText.substring(partAIdx, partBIdx) : combinedText.substring(partAIdx)).trim() : combinedText.trim();
+            const oText = partBIdx !== -1 ? (partCIdx !== -1 ? combinedText.substring(partBIdx, partCIdx) : combinedText.substring(partBIdx)).trim() : '';
+            const pText = partCIdx !== -1 ? combinedText.substring(partCIdx).trim() : '';
 
-            // STEP 5a — Marking Guide: Knowledge Questions (split to reduce token load)
+            // STEP 2 — Marking Guides (combined)
             setBuildProgress(75);
-            const markingKnowledge = await llmStep('Marking Guide (Knowledge)',
-                `You are an Australian VET assessment writer. Write the Knowledge Questions marking guide.
+            const markingGuideRaw = await llmStep('Marking Guides',
+                `You are an Australian VET assessment writer. Write the complete marking guide for this assessment.
 
 ${levelNote}
 Unit: ${unitInfo.code} — ${unitInfo.title}
 
 KNOWLEDGE QUESTIONS (already written):
 ${kText.slice(0, 3000)}
-
-Instructions:
-- For each knowledge question: include the model answer and acceptable variations
-- Write at ${band} reading level (for assessor use)
-
-Output format: Markdown. Start with: ## Knowledge Questions — Marking Guide`
-            );
-
-            // STEP 5b — Marking Guide: Observation + Project (split to reduce token load)
-            setBuildProgress(80);
-            const markingRest = await llmStep('Marking Guide (Observation & Project)',
-                `You are an Australian VET assessment writer. Write the Observation and Project marking guide.
-
-${levelNote}
-Unit: ${unitInfo.code} — ${unitInfo.title}
 
 OBSERVATION CHECKLIST (already written):
 ${oText.slice(0, 2000)}
@@ -1337,18 +1298,20 @@ WORKPLACE PROJECT (already written):
 ${pText.slice(0, 2000)}
 
 Instructions:
+- For each knowledge question: include the model answer and acceptable variations
 - For observation: include specific observable indicators for each checklist item
 - For the project: include assessment criteria and evidence requirements
 - Include a Reasonable Adjustment note
 - Include a Judgement of Competence summary section
 - Write at ${band} reading level (for assessor use)
 
-Output format: Markdown. Start with: ## Observation & Project — Marking Guide`
+Output format: Markdown. Start with: ## Knowledge Questions — Marking Guide
+Then continue with: ## Observation & Project — Marking Guide`
             );
 
-            const markingGuide = `# Assessor Marking Guide — ${unitInfo.code}\n\n${typeof markingKnowledge === 'string' ? markingKnowledge : JSON.stringify(markingKnowledge)}\n\n---\n\n${typeof markingRest === 'string' ? markingRest : JSON.stringify(markingRest)}`;
+            const markingGuide = `# Assessor Marking Guide — ${unitInfo.code}\n\n${typeof markingGuideRaw === 'string' ? markingGuideRaw : JSON.stringify(markingGuideRaw)}`;
 
-            // STEP 6 — Mapping Index
+            // STEP 3 — Mapping Index
             setBuildProgress(97);
             const kSummary = kText.slice(0, 3000);
             const oSummary = oText.slice(0, 2000);
