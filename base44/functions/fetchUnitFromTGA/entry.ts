@@ -42,13 +42,29 @@ function parseAuthorITXml(xmlText) {
     const elements = [];
     if (elementsXml) {
         const skipTexts = new Set([
-            'ELEMENT', 'PERFORMANCE CRITERIA',
+            'ELEMENT', 'ELEMENTS', 'PERFORMANCE CRITERIA',
             'Elements describe the essential outcomes.',
             'Performance criteria describe the performance needed to demonstrate achievement of the element.'
         ]);
+        // Extract paragraphs and merge split number+text pairs (table cell format)
+        const rawParas = extractParagraphs(elementsXml).filter(text => !skipTexts.has(text));
+        const merged = [];
+        for (let i = 0; i < rawParas.length; i++) {
+            const text = rawParas[i];
+            if (text.match(/^\d+$/) && i + 1 < rawParas.length) {
+                // Element number in separate cell — merge with next paragraph
+                merged.push(`${text}. ${rawParas[i + 1]}`);
+                i++;
+            } else if (text.match(/^\d+\.\d+$/) && i + 1 < rawParas.length) {
+                // PC number in separate cell — merge with next paragraph
+                merged.push(`${text} ${rawParas[i + 1]}`);
+                i++;
+            } else {
+                merged.push(text);
+            }
+        }
         let currentElement = null;
-        extractParagraphs(elementsXml).forEach(text => {
-            if (skipTexts.has(text)) return;
+        merged.forEach(text => {
             const elemMatch = text.match(/^(\d+)\.\s+(.+)$/);
             if (elemMatch && !text.match(/^\d+\.\d+/)) {
                 currentElement = { number: parseInt(elemMatch[1]), title: elemMatch[2].trim(), performanceCriteria: [] };
