@@ -1089,7 +1089,7 @@ For Verbal Questions (as optional) use id "verbal_questions", name "Verbal Quest
 Each required section needs: id, name, description, justification, uocRequirement.
 Each optional section needs: id, name, description, reason (plain English reason why it may be useful).
 Do not include a section unless its rule is satisfied. State the justification clearly.
-IMPORTANT: uocRequirement must always be populated for required sections. Use exact UoC language. Fallback if nothing specific: "UoC requires: [section type] to assess [KE/PE category]".`
+IMPORTANT: uocRequirement must always be populated for required sections. Use exact UoC language. Fallback if nothing specific: "UoC requires: [section type] to assess [KE/PE category]".`, 'claude_sonnet_4_6'
             );
 
             let proposal;
@@ -1191,7 +1191,7 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
 - pc_items: array of strings (each Performance Criteria item, formatted as "X.X — description")
 
 UoC TEXT:
-${uoc.slice(0, 8000)}`
+${uoc.slice(0, 8000)}`, 'claude_sonnet_4_6'
                 );
                 try {
                     const jsonStr = typeof structure === 'string' ? structure.replace(/```json|```/g, '').trim() : JSON.stringify(structure);
@@ -1268,7 +1268,7 @@ Instructions for Part C — Workplace Project:
 Output format: Markdown with three sections. Start each section with its header:
 ## Part A — Knowledge Questions
 ## Part B — Observation Checklist
-## Part C — Workplace Project`
+## Part C — Workplace Project`, 'claude_sonnet_4_6'
             );
 
             // Split combined output into individual sections
@@ -1306,7 +1306,7 @@ Instructions:
 - Write at ${band} reading level (for assessor use)
 
 Output format: Markdown. Start with: ## Knowledge Questions — Marking Guide
-Then continue with: ## Observation & Project — Marking Guide`
+Then continue with: ## Observation & Project — Marking Guide`, 'claude_sonnet_4_6'
             );
 
             const markingGuide = `# Assessor Marking Guide — ${unitInfo.code}\n\n${typeof markingGuideRaw === 'string' ? markingGuideRaw : JSON.stringify(markingGuideRaw)}`;
@@ -1414,7 +1414,7 @@ Rules:
 - foundationSkills must include all skills listed in the UoC
 - Return ONLY the JSON object. Nothing else.
 
-Important: map every single question to its KE requirement. Do not stop before you have mapped all questions. The second-to-last knowledge question covers conflict resolution methods. Map it to KE7. The third-to-last knowledge question covers poor work performance management methods. Map it to KE8. The last knowledge question covers methods to monitor and improve work relationships. Map it to KE9. Count your knowledgeQuestions array entries when done. The count must equal the total number of questions built. If it does not, you have missed some questions. Go back and add them.`
+Important: map every single question to its KE requirement. Do not stop before you have mapped all questions. The second-to-last knowledge question covers conflict resolution methods. Map it to KE7. The third-to-last knowledge question covers poor work performance management methods. Map it to KE8. The last knowledge question covers methods to monitor and improve work relationships. Map it to KE9. Count your knowledgeQuestions array entries when done. The count must equal the total number of questions built. If it does not, you have missed some questions. Go back and add them.`, 'claude_sonnet_4_6'
             );
 
             // Parse mapping index
