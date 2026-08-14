@@ -1,0 +1,60 @@
+{
+  "name": "BuildUsage",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "ID of the user who ran the build"
+    },
+    "period": {
+      "type": "string",
+      "description": "Billing period in YYYY-MM format"
+    },
+    "count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of builds in this period"
+    },
+    "charged_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of builds reported to Stripe metered billing (beyond allowance)"
+    }
+  },
+  "required": [
+    "user_id",
+    "period"
+  ],
+  "rls": {
+    "create": null,
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

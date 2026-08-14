@@ -775,7 +775,7 @@ function Screen4Loading({ onReset, onRetry, progress, buildError, failedStep }) 
     );
 }
 
-function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, validationResult, mappingError, validationError, studentBookletBase64, studentBookletError, onBack, onReset, onSave }) {
+function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, validationResult, mappingError, validationError, studentBookletBase64, studentBookletError, usageInfo, onBack, onReset, onSave }) {
     const navigate = useNavigate();
     const [showFeedback, setShowFeedback] = useState(false);
     const hasGaps = assessmentText?.includes('⚠') || assessmentText?.includes('NOT COVERED');
@@ -850,6 +850,24 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, val
                         )}
                     </div>
                 </div>
+
+                {/* Usage info */}
+                {usageInfo && (
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', backgroundColor: '#f9fafb' }}>
+                        <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>
+                            Builds this month: {usageInfo.count} / {usageInfo.allowance} included
+                        </p>
+                        {usageInfo.overage > 0 ? (
+                            <p style={{ color: '#6b7280', fontSize: '12px' }}>
+                                {usageInfo.overage} additional build{usageInfo.overage !== 1 ? 's' : ''} at $15 each — billed to your subscription
+                            </p>
+                        ) : (
+                            <p style={{ color: '#6b7280', fontSize: '12px' }}>
+                                {usageInfo.remaining} build{usageInfo.remaining !== 1 ? 's' : ''} remaining this month
+                            </p>
+                        )}
+                    </div>
+                )}
 
                 {/* Action buttons */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
@@ -984,6 +1002,7 @@ export default function Build() {
     const [validationError, setValidationError] = useState(null);
     const [studentBookletBase64, setStudentBookletBase64] = useState(null);
     const [studentBookletError, setStudentBookletError] = useState(false);
+    const [usageInfo, setUsageInfo] = useState(null);
     const buildStateRef = useRef({});
     const [failedStep, setFailedStep] = useState(null);
 
@@ -1574,6 +1593,14 @@ ${mText}`;
                 setStudentBookletError(true);
             }
 
+            // Report build usage for metered billing
+            try {
+                const usageRes = await base44.functions.invoke('reportBuildUsage', {});
+                setUsageInfo(usageRes.data);
+            } catch (_) {
+                // Non-blocking
+            }
+
             // Build succeeded — clear step cache
             buildStateRef.current = {};
 
@@ -1625,6 +1652,7 @@ ${mText}`;
         setValidationError(null);
         setStudentBookletBase64(null);
         setStudentBookletError(false);
+        setUsageInfo(null);
         setBuilding(false);
     };
 
@@ -1663,6 +1691,7 @@ ${mText}`;
                     validationError={validationError}
                     studentBookletBase64={studentBookletBase64}
                     studentBookletError={studentBookletError}
+                    usageInfo={usageInfo}
                     onBack={() => setScreen(2)}
                     onReset={handleReset}
                     onSave={handleSave}

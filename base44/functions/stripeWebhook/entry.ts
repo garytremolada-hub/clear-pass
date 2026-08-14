@@ -27,10 +27,17 @@ Deno.serve(async (req) => {
             if (userId && subscriptionId) {
                 // Fetch subscription details
                 const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-                const priceId = subscription.items.data[0]?.price?.id;
-                const productId = subscription.items.data[0]?.price?.product;
+                const flatItem = subscription.items.data.find(
+                    item => item.price.recurring?.usage_type !== 'metered'
+                );
+                const meteredItem = subscription.items.data.find(
+                    item => item.price.recurring?.usage_type === 'metered'
+                );
+                const priceId = flatItem?.price?.id;
+                const productId = flatItem?.price?.product;
+                const meteredItemId = meteredItem?.id;
 
-                console.log(`Subscription created for user ${userId}: ${subscriptionId}, price: ${priceId}`);
+                console.log(`Subscription created for user ${userId}: ${subscriptionId}, price: ${priceId}, meteredItem: ${meteredItemId}`);
 
                 // Update user with subscription info
                 await base44.asServiceRole.entities.User.update(userId, {
@@ -38,6 +45,7 @@ Deno.serve(async (req) => {
                     subscription_id: subscriptionId,
                     subscription_price_id: priceId,
                     subscription_product_id: productId,
+                    metered_item_id: meteredItemId,
                 });
             }
         }

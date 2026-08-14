@@ -31,6 +31,10 @@
     "subscription_product_id": {
       "type": "string",
       "description": "Stripe product ID of the subscribed plan"
+    },
+    "metered_item_id": {
+      "type": "string",
+      "description": "Stripe subscription item ID for the metered per-build price"
     }
   }
 }

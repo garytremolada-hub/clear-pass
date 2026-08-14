@@ -9,7 +9,7 @@ const FEATURES = [
     'Readability scoring (Grade Level & Reading Ease)',
     'Text rewriting to any AQF target level',
     'Assessment audit against Unit of Competency',
-    'Assessment builder from UoC',
+    'Assessment builder from UoC (10 builds/month included)',
     'Work library — save and revisit results',
     'AQF level 1–10 mapping',
     'Cohort profile customisation',
@@ -102,6 +102,7 @@ export default function Pricing() {
                                 <span className="text-muted-foreground mb-1.5 text-lg">AUD / month</span>
                             </div>
                             <p className="text-sm text-muted-foreground mt-1">Cancel anytime</p>
+                            <p className="text-xs text-muted-foreground mt-2">$15 per additional build beyond 10</p>
                         </div>
 
                         {/* Features */}

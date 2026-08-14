@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import Stripe from 'npm:stripe@14.21.0';
+import { METERED_PRICE_ID } from '../../shared/billingConfig.js';
 
 Deno.serve(async (req) => {
     try {
@@ -19,7 +20,10 @@ Deno.serve(async (req) => {
         const session = await stripe.checkout.sessions.create({
             mode: 'subscription',
             payment_method_types: ['card'],
-            line_items: [{ price: priceId, quantity: 1 }],
+            line_items: [
+                { price: priceId, quantity: 1 },
+                { price: METERED_PRICE_ID },
+            ],
             customer_email: user.email,
             success_url: successUrl || `${req.headers.get('origin')}/subscription-success?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: cancelUrl || `${req.headers.get('origin')}/pricing`,
