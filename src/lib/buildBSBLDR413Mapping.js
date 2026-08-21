@@ -7,7 +7,7 @@
 import {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
     HeadingLevel, AlignmentType, WidthType, BorderStyle, PageBreak,
-    ShadingType, Footer, PageNumber, Header,
+    Footer, PageNumber, Header,
 } from 'docx';
 import { saveAs } from 'file-saver';
 
@@ -100,7 +100,7 @@ function assessorNote(lines) {
     );
     return new Paragraph({
         children,
-        shading: { type: ShadingType.CLEAR, color: 'auto', fill: AMBER_BG },
+        shading: { type: 'clear', color: 'auto', fill: AMBER_BG },
         border: { left: { style: BorderStyle.SINGLE, size: 12, color: AMBER_BORDER } },
         spacing: { before: 80, after: 160 },
         indent: { left: 360 },
@@ -135,7 +135,7 @@ function makeTable(headers, rows, colWidths) {
                 spacing: { before: 80, after: 80 },
             })],
             width: { size: colWidths[i], type: WidthType.DXA },
-            shading: { type: ShadingType.CLEAR, color: 'auto', fill: NAVY },
+            shading: { type: 'clear', color: 'auto', fill: NAVY },
             borders: allBorders,
         })),
     });
@@ -154,7 +154,7 @@ function makeTable(headers, rows, colWidths) {
                     spacing: { before: 60, after: 60 },
                 })],
                 width: { size: colWidths[ci], type: WidthType.DXA },
-                shading: { type: ShadingType.CLEAR, color: 'auto', fill: ri % 2 === 0 ? WHITE : LIGHT_GREY },
+                shading: { type: 'clear', color: 'auto', fill: ri % 2 === 0 ? WHITE : LIGHT_GREY },
                 borders: allBorders,
             });
         }),
