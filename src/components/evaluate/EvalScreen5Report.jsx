@@ -57,7 +57,10 @@ export default function EvalScreen5Report({ units, cohortProfile, results, repor
                     <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
                         <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>Readability</p>
                         <p style={{ color: '#0d2444', fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>{withinRange} / {sections.length}</p>
-                        <p style={{ color: '#6b7280', fontSize: '12px' }}>sections at target level</p>
+                        <p style={{ color: '#6b7280', fontSize: '12px', lineHeight: 1.4 }}>
+                            {withinRange} of {sections.length} section{sections.length !== 1 ? 's' : ''} sit within the target reading level
+                            {cohortProfile?.band ? ` (${cohortProfile.band})` : ''} for your learners.
+                        </p>
                     </div>
                     <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
                         <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>Recommendations</p>
