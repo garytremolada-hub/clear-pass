@@ -46,8 +46,11 @@ export default function EvalScreen1Units({ onConfirm }) {
                 <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
                     Which units is this assessment for?
                 </h2>
-                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
-                    Enter each unit code to load it from training.gov.au. Add as many as you need.
+                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>
+                    Enter each unit code to load it from training.gov.au. Add as many as you need for your cluster.
+                </p>
+                <p style={{ color: '#c9a84c', fontSize: '12px', fontWeight: 500, marginBottom: '24px' }}>
+                    + Add units one at a time below
                 </p>
 
                 <form onSubmit={handleFindUnit} style={{ marginBottom: '16px' }}>
