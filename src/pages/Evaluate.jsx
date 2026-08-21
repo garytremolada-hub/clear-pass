@@ -1,1257 +1,38 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { CheckCircle, Upload, AlertCircle, Loader2, Search, ClipboardCheck, Download, XCircle, TriangleAlert, Info } from 'lucide-react';
-import FeedbackButton from '@/components/feedback/FeedbackButton';
-import FeedbackModal from '@/components/feedback/FeedbackModal';
-import { calculateReadability } from '@/lib/calculateReadability';
-import { extractDocxText } from '@/lib/extractDocxText';
-
-// ── Shared constants (mirrored from Build) ────────────────────────────────────
-
-const LEARNER_OPTIONS = [
-    { value: 'high_school', label: 'High school students', feedback: "High school students: we'll use a junior secondary reading level." },
-    { value: 'apprentices', label: 'Apprentices and trainees', feedback: "Apprentices and trainees: standard working adult literacy assumed." },
-    { value: 'working_adults', label: 'Working adults', feedback: "Working adults: standard adult literacy assumed." },
-    { value: 'university', label: 'University students', feedback: "University students: we'll use a higher academic reading level." },
-];
-
-const SUPPORT_OPTIONS = [
-    { value: 'none', label: 'No — most learners read English comfortably' },
-    { value: 'esl', label: 'Yes — some learners speak English as a second language (ESL)' },
-    { value: 'literacy', label: 'Yes — some learners need extra literacy support' },
-    { value: 'both', label: 'Yes — ESL and literacy support needed' },
-];
-
-const BAND_FKGL = {
-    'Very Easy': 3, 'Easy': 4.5, 'Fairly Easy': 6.5, 'Cert I/II · Yr 10': 8.5,
-    'Cert III/IV': 10.5, 'Diploma': 12.5, 'Degree / Grad Dip': 15, 'Very Difficult': 18,
-};
-
-const BAND_MAP = {
-    high_school:    { none: 'Cert I/II · Yr 10', esl: 'Easy', literacy: 'Easy', both: 'Very Easy' },
-    apprentices:    { none: 'Cert III/IV', esl: 'Cert I/II · Yr 10', literacy: 'Cert I/II · Yr 10', both: 'Fairly Easy' },
-    working_adults: { none: 'Cert III/IV', esl: 'Cert I/II · Yr 10', literacy: 'Cert I/II · Yr 10', both: 'Fairly Easy' },
-    university:     { none: 'Diploma', esl: 'Cert III/IV', literacy: 'Cert III/IV', both: 'Cert I/II · Yr 10' },
-};
-
-function getBand(learner, support) {
-    return (BAND_MAP[learner] || {})[support] || 'Cert III/IV';
-}
-
-const EVAL_STAGES = [
-    { pct: 0,   label: 'Starting...' },
-    { pct: 10,  label: 'Reading your assessment...' },
-    { pct: 25,  label: 'Identifying sections...' },
-    { pct: 45,  label: 'Checking performance evidence...' },
-    { pct: 60,  label: 'Checking knowledge evidence...' },
-    { pct: 75,  label: 'Mapping performance criteria...' },
-    { pct: 88,  label: 'Writing recommendations...' },
-    { pct: 95,  label: 'Writing report...' },
-    { pct: 100, label: 'Done' },
-];
-
-const NO_DASH = 'CRITICAL STYLE RULE: Never use em dashes or en dashes anywhere in your output. Use a colon to introduce a list, a full stop to separate two complete thoughts, and a comma to join closely related ideas. Do not use dashes.\n\n';
-
-function llmCall(prompt) {
-    return base44.integrations.Core.InvokeLLM({ prompt: NO_DASH + prompt, model: 'claude_sonnet_4_6' });
-}
-
-function parseAIJson(response) {
-    let clean = (typeof response === 'string' ? response : JSON.stringify(response)).trim();
-    clean = clean.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-    const start = clean.indexOf('{');
-    const end = clean.lastIndexOf('}');
-    if (start === -1 || end === -1) throw new Error('AI response did not contain valid JSON');
-    return JSON.parse(clean.substring(start, end + 1));
-}
-
-// ── Step progress bar ─────────────────────────────────────────────────────────
-
-const EP_STEPS = ['Find Unit', 'Upload', 'Learners', 'Evaluate', 'Report'];
-
-function EvalProgress({ step }) {
-    return (
-        <div style={{ marginBottom: '28px' }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-                {EP_STEPS.map((label, i) => {
-                    const idx = i + 1;
-                    const done = idx < step;
-                    const active = idx === step;
-                    return (
-                        <div key={label} style={{ display: 'flex', alignItems: 'center', flex: i < EP_STEPS.length - 1 ? 1 : 'none' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                <div style={{
-                                    width: '28px', height: '28px', borderRadius: '50%',
-                                    backgroundColor: done ? '#0d2444' : active ? '#c9a84c' : '#e5e7eb',
-                                    color: done ? '#c9a84c' : active ? '#0d2444' : '#9ca3af',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontSize: '12px', fontWeight: 600, flexShrink: 0,
-                                }}>
-                                    {done ? '✓' : idx}
-                                </div>
-                                <span style={{ fontSize: '10px', color: active ? '#0d2444' : '#9ca3af', fontWeight: active ? 500 : 400, marginTop: '4px', whiteSpace: 'nowrap' }}>
-                                    {label}
-                                </span>
-                            </div>
-                            {i < EP_STEPS.length - 1 && (
-                                <div style={{ flex: 1, height: '2px', backgroundColor: done ? '#0d2444' : '#e5e7eb', margin: '0 4px', marginBottom: '18px' }} />
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-// ── Screen 1: Find the unit ───────────────────────────────────────────────────
-
-function Screen1({ onConfirm }) {
-    const [unitCode, setUnitCode] = useState('');
-    const [searchState, setSearchState] = useState('idle');
-    const [searchError, setSearchError] = useState('');
-    const [uocData, setUocData] = useState(null);
-
-    const handleFindUnit = async (e) => {
-        e.preventDefault();
-        if (!unitCode.trim()) return;
-        setSearchState('loading');
-        setSearchError('');
-        setUocData(null);
-        try {
-            const result = await base44.functions.invoke('fetchUnitFromTGA', { unitCode: unitCode.trim() });
-            setUocData(result.data);
-            setSearchState('confirmed');
-        } catch (err) {
-            setSearchError(err?.response?.data?.error || err.message || 'Could not load unit. Try again.');
-            setSearchState('error');
-        }
-    };
-
-    const infoRow = (label, value) => (
-        <tr key={label}>
-            <td style={{ padding: '7px 12px', color: '#6b7280', fontSize: '13px', fontWeight: 500, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f4f6' }}>{label}</td>
-            <td style={{ padding: '7px 12px', color: '#0d2444', fontSize: '13px', borderBottom: '1px solid #f3f4f6' }}>{value}</td>
-        </tr>
-    );
-
-    return (
-        <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 56px' }}>
-                <EvalProgress step={1} />
-                <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
-                    Which unit is this assessment for?
-                </h2>
-                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
-                    Enter the unit code to load it from training.gov.au
-                </p>
-
-                {searchState !== 'confirmed' && (
-                    <form onSubmit={handleFindUnit} style={{ marginBottom: '16px' }}>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <input
-                                type="text"
-                                value={unitCode}
-                                onChange={e => { setUnitCode(e.target.value.toUpperCase()); setSearchState('idle'); }}
-                                placeholder="e.g. BSBLDR413"
-                                style={{
-                                    flex: 1, height: '48px',
-                                    border: '1px solid #e5e7eb', borderRadius: '8px',
-                                    padding: '0 14px', fontSize: '16px',
-                                    outline: 'none', boxSizing: 'border-box', letterSpacing: '0.5px',
-                                }}
-                                onFocus={e => e.target.style.borderColor = '#c9a84c'}
-                                onBlur={e => e.target.style.borderColor = '#e5e7eb'}
-                                disabled={searchState === 'loading'}
-                            />
-                            <button
-                                type="submit"
-                                disabled={searchState === 'loading' || !unitCode.trim()}
-                                style={{
-                                    height: '48px', padding: '0 20px',
-                                    backgroundColor: (searchState === 'loading' || !unitCode.trim()) ? '#e5e7eb' : '#c9a84c',
-                                    color: (searchState === 'loading' || !unitCode.trim()) ? '#9ca3af' : '#0d2444',
-                                    border: 'none', borderRadius: '8px',
-                                    fontSize: '14px', fontWeight: 600, flexShrink: 0,
-                                    cursor: (searchState === 'loading' || !unitCode.trim()) ? 'not-allowed' : 'pointer',
-                                    display: 'flex', alignItems: 'center', gap: '8px',
-                                }}
-                            >
-                                {searchState === 'loading'
-                                    ? <><Loader2 style={{ width: '16px', height: '16px', animation: 'spin 1s linear infinite' }} /> Loading...</>
-                                    : <><Search style={{ width: '16px', height: '16px' }} /> Find unit</>
-                                }
-                            </button>
-                        </div>
-                        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-                        {searchState === 'loading' && (
-                            <p style={{ color: '#6b7280', fontSize: '12px', marginTop: '8px' }}>Loading from training.gov.au...</p>
-                        )}
-                    </form>
-                )}
-
-                {searchState === 'error' && (
-                    <div style={{ border: '1px solid #ef4444', borderRadius: '8px', padding: '14px 16px', backgroundColor: '#fef2f2', marginBottom: '16px' }}>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '12px' }}>
-                            <AlertCircle style={{ color: '#ef4444', width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
-                            <p style={{ color: '#dc2626', fontSize: '13px', margin: 0 }}>{searchError}</p>
-                        </div>
-                        <button onClick={() => setSearchState('idle')} style={{ padding: '5px 12px', border: '1px solid #ef4444', borderRadius: '6px', backgroundColor: 'transparent', color: '#dc2626', fontSize: '12px', cursor: 'pointer' }}>
-                            Try again
-                        </button>
-                    </div>
-                )}
-
-                {searchState === 'confirmed' && uocData && (
-                    <div style={{ border: '1px solid #22c55e', borderRadius: '10px', backgroundColor: '#f0fdf4', overflow: 'hidden', marginBottom: '16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 16px', borderBottom: '1px solid #dcfce7' }}>
-                            <CheckCircle style={{ color: '#22c55e', width: '20px', height: '20px', flexShrink: 0 }} />
-                            <span style={{ color: '#166534', fontSize: '14px', fontWeight: 600 }}>Unit found on training.gov.au</span>
-                        </div>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#fff' }}>
-                            <tbody>
-                                {infoRow('Unit Code', uocData.unitCode)}
-                                {infoRow('Title', uocData.unitTitle)}
-                                {infoRow('Release', uocData.releaseNumber)}
-                                {infoRow('Elements', uocData.summary?.elementCount ?? '—')}
-                                {infoRow('Performance Criteria', uocData.summary?.pcCount ?? '—')}
-                                {infoRow('Knowledge Evidence', uocData.summary?.keCount ?? '—')}
-                                {infoRow('Performance Evidence', uocData.summary?.peCount ?? '—')}
-                            </tbody>
-                        </table>
-                        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <button
-                                onClick={() => onConfirm({ code: uocData.unitCode, title: uocData.unitTitle, uocData })}
-                                style={{ width: '100%', height: '44px', backgroundColor: '#c9a84c', color: '#0d2444', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-                            >
-                                Next: Upload assessment →
-                            </button>
-                            <button
-                                onClick={() => { setSearchState('idle'); setUocData(null); setUnitCode(''); }}
-                                style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer' }}
-                            >
-                                Not the right unit? Search again
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
-
-// ── Strip admin text before AI calls ─────────────────────────────────────────
-
-function extractAssessableContent(fullText) {
-
-    // ── FIND START OF ASSESSABLE CONTENT ─────────────────────────────
-    let startIdx = -1;
-
-    // Strategy 1: Find S/NS or S/NYS marker (most reliable)
-    const snsRegex = /\bS\s*\/\s*N\s*Y?\s*S\b|\bNYS\b/;
-    const snsMatch = fullText.match(snsRegex);
-    if (snsMatch) {
-        const lookback = Math.max(0, snsMatch.index - 600);
-        const before = fullText.substring(lookback, snsMatch.index);
-        const lastBreak = Math.max(before.lastIndexOf('\n\n'), before.lastIndexOf('\r\n\r\n'));
-        startIdx = lastBreak > 0 ? lookback + lastBreak : lookback;
-    }
-
-    // Strategy 2: Specific written questions headings
-    if (startIdx === -1) {
-        const headings = [
-            'ASSESSMENT 1: WRITTEN QUESTIONS',
-            'ASSESSMENT TASK 1: WRITTEN QUESTIONS',
-            'Assessment 1: Written Questions',
-            'Assessment Task 1: Written Questions',
-            'WRITTEN QUESTIONS\n',
-            'Written Questions\n',
-        ];
-        for (const heading of headings) {
-            const idx = fullText.indexOf(heading);
-            if (idx !== -1) { startIdx = idx; break; }
-        }
-    }
-
-    // Strategy 3: First Q1 pattern
-    if (startIdx === -1) {
-        const q1Match = fullText.match(/(?:^|\n)(?:Q1\b|Question 1\b|\b1\.\s+[A-Z])/m);
-        if (q1Match) startIdx = q1Match.index;
-    }
-
-    // Strategy 4: Last occurrence of ASSESSMENT 1: (any subtype)
-    if (startIdx === -1) {
-        const assessmentMarkers = [
-            'ASSESSMENT 1:', 'Assessment 1:',
-            'ASSESSMENT TASK 1:', 'Assessment Task 1:',
-        ];
-        for (const marker of assessmentMarkers) {
-            let searchFrom = 0, lastFound = -1;
-            while (true) {
-                const idx = fullText.indexOf(marker, searchFrom);
-                if (idx === -1) break;
-                lastFound = idx; searchFrom = idx + 1;
-            }
-            if (lastFound !== -1) { startIdx = lastFound; break; }
-        }
-    }
-
-    if (startIdx === -1) return fullText;
-
-    let assessable = fullText.substring(startIdx);
-
-    // ── FIND END OF ASSESSABLE CONTENT ───────────────────────────────
-    // Use lastIndexOf to preserve all student-facing sections
-    const endMarkers = [
-        'TO BE COMPLETED BY THE ASSESSOR',
-        'ASSESSOR DECLARATION',
-        'RECORD OF ASSESSMENT OUTCOMES',
-        'ASSESSOR USE ONLY',
-        'ADMIN USE ONLY',
-        'Version control',
-    ];
-
-    let endIdx = -1;
-    for (const marker of endMarkers) {
-        let searchFrom = 0, lastFound = -1;
-        while (true) {
-            const idx = assessable.indexOf(marker, searchFrom);
-            if (idx === -1) break;
-            lastFound = idx; searchFrom = idx + 1;
-        }
-        if (lastFound !== -1 && (endIdx === -1 || lastFound < endIdx)) {
-            endIdx = lastFound;
-        }
-    }
-
-    if (endIdx !== -1) assessable = assessable.substring(0, endIdx);
-
-    const result = assessable.trim();
-
-    // Quality check: if too short, extraction probably failed
-    if (result.length < 200) {
-        console.warn('extractAssessableContent: result too short (' + result.length + ' chars). Returning full text.');
-        return fullText;
-    }
-
-    return result;
-}
-
-// ── Screen 2: Upload the assessment ──────────────────────────────────────────
-
-function Screen2({ unitInfo, onBack, onConfirm, previousEvaluation, showComparison, onSetShowComparison }) {
-    const [file, setFile] = useState(null);
-    const [fileName, setFileName] = useState('');
-    const [extracting, setExtracting] = useState(false);
-    const [extractedText, setExtractedText] = useState('');
-    const [wordCount, setWordCount] = useState(0);
-    const [error, setError] = useState('');
-    const [showPaste, setShowPaste] = useState(false);
-    const [pasteText, setPasteText] = useState('');
-    const inputRef = useRef();
-
-    const handleFile = async (f) => {
-        if (!f) return;
-        if (!f.name.match(/\.(pdf|docx)$/i)) { setError('Only .docx and .pdf files are supported.'); return; }
-        if (f.size > 10 * 1024 * 1024) { setError('File is too large. Try a smaller file or paste the text below.'); return; }
-        setFile(f);
-        setFileName(f.name);
-        setExtractedText('');
-        setWordCount(0);
-        setError('');
-        setExtracting(true);
-        try {
-            let text = '';
-            if (f.name.toLowerCase().endsWith('.docx')) {
-                // Extract .docx text directly in the browser — no backend, no credits
-                const result = await extractDocxText(f);
-                text = result.text;
-            } else {
-                // PDF: upload + backend LLM extraction
-                const up = await base44.integrations.Core.UploadFile({ file: f });
-                const res = await base44.functions.invoke('extractDocumentText', { file_url: up.file_url, file_name: f.name, label: 'Assessment' });
-                text = res?.data?.text || '';
-            }
-            const wc = text.split(/\s+/).filter(Boolean).length;
-            setExtractedText(text);
-            setWordCount(wc);
-            if (wc < 100) {
-                setError('This document could not be read. Try saving it as a new Word file and uploading again, or paste the text directly below.');
-                setShowPaste(true);
-            }
-        } catch (err) {
-            console.error('Evaluate file extraction failed:', err?.message);
-            setError(`This document could not be read (${err.message}). Try saving it as a new Word file and uploading again, or paste the text directly below.`);
-            setShowPaste(true);
-        } finally {
-            setExtracting(false);
-        }
-    };
-
-    const handlePasteChange = (val) => {
-        setPasteText(val);
-        const wc = val.split(/\s+/).filter(Boolean).length;
-        setWordCount(wc);
-        setExtractedText(val);
-        setFileName('Pasted text');
-        setError('');
-    };
-
-    const handleDrop = (e) => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]); };
-
-    const activeText = extractedText || pasteText;
-    const activeWc = activeText.split(/\s+/).filter(Boolean).length;
-    const canContinue = activeWc >= 100 && !extracting;
-
-    return (
-        <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 56px' }}>
-                <EvalProgress step={2} />
-                <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
-                    Upload the assessment to evaluate
-                </h2>
-                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
-                    Upload the existing assessment you want to check against {unitInfo.code}
-                </p>
-
-                {/* Drop zone */}
-                {!extractedText && !extracting && (
-                    <div
-                        onDrop={handleDrop} onDragOver={e => e.preventDefault()} onClick={() => inputRef.current?.click()}
-                        style={{ border: '2px dashed #e5e7eb', borderRadius: '12px', padding: '40px', textAlign: 'center', backgroundColor: '#f9fafb', cursor: 'pointer', marginBottom: '16px' }}
-                        onMouseEnter={e => e.currentTarget.style.borderColor = '#c9a84c'}
-                        onMouseLeave={e => e.currentTarget.style.borderColor = '#e5e7eb'}
-                    >
-                        <input ref={inputRef} type="file" accept=".pdf,.docx" className="hidden" onChange={e => handleFile(e.target.files?.[0])} />
-                        <Upload style={{ color: '#c9a84c', width: '32px', height: '32px', margin: '0 auto 12px' }} />
-                        <p style={{ color: '#0d2444', fontSize: '14px', marginBottom: '6px' }}>Drop your assessment here or click to browse</p>
-                        <p style={{ color: '#9ca3af', fontSize: '12px' }}>Accepts .docx and .pdf files</p>
-                    </div>
-                )}
-
-                {extracting && (
-                    <div style={{ textAlign: 'center', padding: '40px', border: '2px dashed #e5e7eb', borderRadius: '12px', marginBottom: '16px' }}>
-                        <Loader2 style={{ color: '#c9a84c', width: '28px', height: '28px', margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
-                        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-                        <p style={{ color: '#6b7280', fontSize: '14px' }}>Reading your assessment...</p>
-                    </div>
-                )}
-
-                {extractedText && !extracting && (
-                    <div style={{ border: '1px solid #22c55e', borderRadius: '8px', padding: '16px', backgroundColor: '#f0fdf4', marginBottom: '16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                            <CheckCircle style={{ color: '#22c55e', width: '18px', height: '18px', flexShrink: 0 }} />
-                            <span style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500 }}>Document loaded: {fileName}</span>
-                        </div>
-                        <p style={{ color: '#6b7280', fontSize: '12px', marginLeft: '28px', marginBottom: '8px' }}>{activeWc} words detected</p>
-                        <button
-                            onClick={() => { setExtractedText(''); setFile(null); setFileName(''); setWordCount(0); setError(''); }}
-                            style={{ marginLeft: '28px', background: 'none', border: 'none', color: '#c9a84c', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
-                        >
-                            Upload a different file
-                        </button>
-                    </div>
-                )}
-
-                {error && (
-                    <div style={{ border: '1px solid #f59e0b', borderRadius: '8px', padding: '12px 16px', backgroundColor: '#fffbeb', marginBottom: '16px', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                        <AlertCircle style={{ color: '#f59e0b', width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
-                        <p style={{ color: '#92400e', fontSize: '13px' }}>{error}</p>
-                    </div>
-                )}
-
-                {/* Paste option */}
-                <div style={{ margin: '16px 0 8px' }}>
-                    <button
-                        onClick={() => setShowPaste(p => !p)}
-                        style={{ background: 'none', border: 'none', color: '#c9a84c', fontSize: '13px', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
-                    >
-                        {showPaste ? 'Hide text paste' : 'Or paste the assessment text directly'}
-                    </button>
-                </div>
-                {showPaste && (
-                    <textarea
-                        value={pasteText}
-                        onChange={e => handlePasteChange(e.target.value)}
-                        placeholder="Paste your assessment text here..."
-                        style={{ width: '100%', height: '180px', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', fontFamily: 'Arial', fontSize: '12px', resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: '8px' }}
-                    />
-                )}
-
-                {/* Previous evaluation banner */}
-                {previousEvaluation && (() => {
-                    const rd = previousEvaluation.richData;
-                    const prevDate = previousEvaluation.created_date
-                        ? new Date(previousEvaluation.created_date).toLocaleDateString('en-AU')
-                        : 'previously';
-                    const keStr = rd?.ke ? `KE: ${rd.ke.covered}/${rd.ke.total}` : null;
-                    const peStr = rd?.pe ? `PE: ${rd.pe.covered}/${rd.pe.total}` : null;
-                    const pcStr = rd?.pc ? `PC: ${rd.pc.mapped}/${rd.pc.total}` : null;
-                    const statsLine = [keStr, peStr, pcStr].filter(Boolean).join(' | ');
-                    return (
-                        <div style={{ border: '1px solid #c9a84c', borderRadius: '8px', padding: '14px 16px', backgroundColor: '#fefce8', marginBottom: '16px' }}>
-                            <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
-                                Previous evaluation found: {previousEvaluation.unit_code} evaluated {prevDate}
-                            </p>
-                            {statsLine && <p style={{ color: '#6b7280', fontSize: '12px', marginBottom: '10px' }}>{statsLine}</p>}
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button
-                                    onClick={() => onSetShowComparison(true)}
-                                    style={{ padding: '5px 12px', border: 'none', borderRadius: '6px', backgroundColor: showComparison ? '#0d2444' : '#c9a84c', color: showComparison ? '#ffffff' : '#0d2444', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}
-                                >
-                                    {showComparison ? 'Comparison on' : 'Yes, show comparison'}
-                                </button>
-                                <button
-                                    onClick={() => onSetShowComparison(false)}
-                                    style={{ padding: '5px 12px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: 'transparent', color: '#6b7280', fontSize: '12px', cursor: 'pointer' }}
-                                >
-                                    No, new report only
-                                </button>
-                            </div>
-                        </div>
-                    );
-                })()}
-
-                <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                    <button onClick={onBack} style={{ flex: 1, height: '44px', border: '1px solid #0d2444', borderRadius: '8px', backgroundColor: 'transparent', color: '#0d2444', fontSize: '14px', cursor: 'pointer' }}>
-                        ← Back
-                    </button>
-                    <button
-                        onClick={() => onConfirm({ text: activeText, assessableText: extractAssessableContent(activeText), fileName, wordCount: activeWc })}
-                        disabled={!canContinue}
-                        style={{
-                            flex: 1, height: '44px', borderRadius: '8px',
-                            backgroundColor: canContinue ? '#c9a84c' : '#e5e7eb',
-                            color: canContinue ? '#0d2444' : '#9ca3af',
-                            fontSize: '14px', fontWeight: 500, border: 'none',
-                            cursor: canContinue ? 'pointer' : 'not-allowed',
-                        }}
-                    >
-                        Next: Learner profile →
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ── Screen 3: Learner profile ─────────────────────────────────────────────────
-
-function Screen3({ unitInfo, onBack, onConfirm }) {
-    const [learner, setLearner] = useState('');
-    const [support, setSupport] = useState('');
-
-    const selectedLearner = LEARNER_OPTIONS.find(o => o.value === learner);
-    const canContinue = learner && support;
-    const band = canContinue ? getBand(learner, support) : null;
-    const targetFKGL = band ? (BAND_FKGL[band] || 10.5) : null;
-
-    return (
-        <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 56px' }}>
-                <EvalProgress step={3} />
-                <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
-                    Who was this assessment written for?
-                </h2>
-                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
-                    This sets the reading level we compare the assessment against
-                </p>
-
-                <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', color: '#0d2444', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>
-                        Who are the learners?
-                    </label>
-                    <select
-                        value={learner}
-                        onChange={e => { setLearner(e.target.value); setSupport(''); }}
-                        style={{ width: '100%', height: '44px', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '0 12px', fontSize: '14px', backgroundColor: '#ffffff', outline: 'none', cursor: 'pointer' }}
-                    >
-                        <option value="" disabled>Select your learners...</option>
-                        {LEARNER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
-                    {selectedLearner && (
-                        <p style={{ color: '#6b7280', fontSize: '12px', fontStyle: 'italic', marginTop: '6px' }}>{selectedLearner.feedback}</p>
-                    )}
-                </div>
-
-                {learner && (
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', color: '#0d2444', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>
-                            Do any learners need extra support?
-                        </label>
-                        <select
-                            value={support}
-                            onChange={e => setSupport(e.target.value)}
-                            style={{ width: '100%', height: '44px', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '0 12px', fontSize: '14px', backgroundColor: '#ffffff', outline: 'none', cursor: 'pointer' }}
-                        >
-                            <option value="" disabled>Select support needs...</option>
-                            {SUPPORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-                    </div>
-                )}
-
-                {canContinue && (
-                    <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #22c55e', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                        <CheckCircle style={{ color: '#22c55e', width: '18px', height: '18px', flexShrink: 0, marginTop: '1px' }} />
-                        <div>
-                            <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 500, marginBottom: '2px' }}>
-                                Target readability: {band}
-                            </p>
-                            <p style={{ color: '#6b7280', fontSize: '12px' }}>
-                                We'll compare the assessment against this reading level.
-                            </p>
-                        </div>
-                    </div>
-                )}
-
-                <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                    <button onClick={onBack} style={{ flex: 1, height: '44px', border: '1px solid #0d2444', borderRadius: '8px', backgroundColor: 'transparent', color: '#0d2444', fontSize: '14px', cursor: 'pointer' }}>
-                        ← Back
-                    </button>
-                    <button
-                        onClick={() => onConfirm({ learner, support, band, targetFKGL })}
-                        disabled={!canContinue}
-                        style={{
-                            flex: 1, height: '44px', borderRadius: '8px',
-                            backgroundColor: canContinue ? '#c9a84c' : '#e5e7eb',
-                            color: canContinue ? '#0d2444' : '#9ca3af',
-                            fontSize: '14px', fontWeight: 500, border: 'none',
-                            cursor: canContinue ? 'pointer' : 'not-allowed',
-                        }}
-                    >
-                        Start evaluation →
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ── Screen 4: Evaluation in progress ─────────────────────────────────────────
-
-function Screen4Progress({ progress, evalError }) {
-    const stage = [...EVAL_STAGES].reverse().find(s => progress >= s.pct) || EVAL_STAGES[0];
-
-    if (evalError) {
-        return (
-            <div className="flex-1 flex flex-col" style={{ backgroundColor: '#ffffff' }}>
-                <div style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 56px', width: '100%' }}>
-                    <EvalProgress step={4} />
-                    <div style={{ border: '1px solid #ef4444', backgroundColor: '#fef2f2', borderRadius: '8px', padding: '16px', marginTop: '40px', textAlign: 'center' }}>
-                        <AlertCircle style={{ color: '#ef4444', width: '24px', height: '24px', margin: '0 auto 10px' }} />
-                        <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>Evaluation encountered an issue</p>
-                        <p style={{ color: '#6b7280', fontSize: '13px' }}>{evalError}</p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="flex-1 flex flex-col" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 56px', width: '100%' }}>
-                <EvalProgress step={4} />
-                <div style={{ paddingTop: '40px' }}>
-                    <h2 style={{ color: '#0d2444', fontSize: '20px', fontWeight: 500, marginBottom: '32px', textAlign: 'center' }}>
-                        Evaluating your assessment...
-                    </h2>
-                    <div style={{ width: '100%', height: '8px', borderRadius: '4px', backgroundColor: '#e5e7eb', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${progress}%`, borderRadius: '4px', backgroundColor: '#c9a84c', transition: 'width 0.6s ease' }} />
-                    </div>
-                    <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 700, textAlign: 'center', marginTop: '10px' }}>{progress}%</p>
-                    <p style={{ color: '#6b7280', fontSize: '13px', fontStyle: 'italic', textAlign: 'center', marginTop: '4px' }}>{stage.label}</p>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ── Screen 5: Report ready ────────────────────────────────────────────────────
-
-const DISCLAIMER = 'This evaluation identifies potential coverage gaps and readability issues. Final compliance determination rests with the assessor, the RTO, and where applicable, the relevant regulatory authority (ASQA or VRQA). This report does not constitute a compliance ruling.';
-
-// Coverage stacked bar component
-function CoverageBar({ label, covered, partial, notCovered, total, coveredLabel, partialLabel, notLabel }) {
-    if (total === 0) return null;
-    const covPct = parseFloat((covered / total * 100).toFixed(1));
-    const parPct = parseFloat((partial / total * 100).toFixed(1));
-    const notPct = parseFloat((100 - covPct - parPct).toFixed(1));
-    const summaryParts = [];
-    if (covered > 0) summaryParts.push(`${covered} covered`);
-    if (partial > 0) summaryParts.push(`${partial} partial`);
-    if (notCovered > 0) summaryParts.push(`${notCovered} missing`);
-    return (
-        <div style={{ marginBottom: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                <span style={{ color: '#0d2444', fontSize: '13px', fontWeight: 500 }}>{label}</span>
-                <span style={{ color: '#6b7280', fontSize: '12px' }}>{summaryParts.join(' · ')}</span>
-            </div>
-            <div style={{ display: 'flex', height: '20px', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#e5e7eb' }}>
-                {covPct > 0 && <div style={{ width: `${covPct}%`, background: '#639922' }} title={`Covered: ${covPct}%`} />}
-                {parPct > 0 && <div style={{ width: `${parPct}%`, background: '#BA7517' }} title={`Partial: ${parPct}%`} />}
-                {notPct > 0 && <div style={{ width: `${notPct}%`, background: '#A32D2D' }} title={`Not covered: ${notPct}%`} />}
-            </div>
-            <div style={{ display: 'flex', gap: '16px', marginTop: '6px', flexWrap: 'wrap' }}>
-                {covered > 0 && coveredLabel && <span style={{ fontSize: '11px', color: '#639922' }}>{coveredLabel}</span>}
-                {partial > 0 && partialLabel && <span style={{ fontSize: '11px', color: '#BA7517' }}>{partialLabel}</span>}
-                {notCovered > 0 && notLabel && <span style={{ fontSize: '11px', color: '#A32D2D' }}>{notLabel}</span>}
-            </div>
-        </div>
-    );
-}
-
-// Gap card component
-function GapCard({ gap }) {
-    const type = (gap.gapType || '').toUpperCase();
-    const isNotCovered = type === 'NOT COVERED' || type === 'NOT MAPPED';
-    const isPartial = type === 'PARTIALLY COVERED' || type === 'PARTIALLY MAPPED';
-    const borderColor = isNotCovered ? '#A32D2D' : isPartial ? '#BA7517' : '#9ca3af';
-    const bgColor = isNotCovered ? '#FCEBEB' : isPartial ? '#FAEEDA' : '#f9fafb';
-    const IconComp = isNotCovered ? XCircle : isPartial ? TriangleAlert : Info;
-    const iconColor = isNotCovered ? '#A32D2D' : isPartial ? '#BA7517' : '#6b7280';
-    return (
-        <div style={{ borderLeft: `3px solid ${borderColor}`, backgroundColor: bgColor, borderRadius: '6px', padding: '12px 14px', marginBottom: '10px' }}>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <IconComp style={{ color: iconColor, width: '16px', height: '16px', flexShrink: 0, marginTop: '1px' }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>{gap.requirement}</p>
-                    <p style={{ color: '#374151', fontSize: '13px', lineHeight: 1.5 }}>{gap.recommendation}</p>
-                    {gap.exampleContent && (
-                        <details style={{ marginTop: '8px' }}>
-                            <summary style={{ fontSize: '12px', color: '#185FA5', cursor: 'pointer', fontWeight: 500 }}>
-                                Show example question or activity
-                            </summary>
-                            <div style={{
-                                marginTop: '8px', padding: '12px',
-                                background: '#EFF6FF',
-                                borderLeft: '3px solid #185FA5',
-                                borderRadius: '4px',
-                                fontSize: '13px',
-                                whiteSpace: 'pre-wrap',
-                                color: '#1e3a5f',
-                                lineHeight: 1.6,
-                                fontFamily: 'var(--font-mono)',
-                            }}>
-                                {gap.exampleContent}
-                            </div>
-                        </details>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function Screen5Report({ unitInfo, cohortProfile, results, reportText, onReset, onSave, previousEvaluation, showComparison }) {
-    const [downloading, setDownloading] = useState(false);
-    const [showFeedback, setShowFeedback] = useState(false);
-
-    const { sections = [], peResults = [], keResults = [], elementsResults = [], gaps = [], overallVerdict = 'REQUIRES DEVELOPMENT', summaryStatement = '' } = results;
-
-    const peCovered = peResults.filter(r => r.status === 'COVERED').length;
-    const pePartial = peResults.filter(r => r.status === 'PARTIALLY COVERED').length;
-    const peNotCovered = peResults.filter(r => r.status === 'NOT COVERED').length;
-    const keCovered = keResults.filter(r => r.status === 'COVERED').length;
-    const kePartial = keResults.filter(r => r.status === 'PARTIALLY COVERED').length;
-    const keNotCovered = keResults.filter(r => r.status === 'NOT COVERED').length;
-    const allPCs = elementsResults.flatMap(e => e.performanceCriteria || []);
-    const pcTotal = allPCs.length;
-    const pcMapped = allPCs.filter(pc => pc.status === 'MAPPED').length;
-    const pcPartial = allPCs.filter(pc => pc.status === 'PARTIALLY MAPPED').length;
-    const pcNotMapped = allPCs.filter(pc => pc.status === 'NOT MAPPED').length;
-    const withinRange = sections.filter(s => s._readability && Math.abs((s._readability.fkgl || 0) - cohortProfile.targetFKGL) <= 1.5).length;
-    const isAdequate = overallVerdict === 'ADEQUATE';
-
-    // Build ref labels for bar annotations
-    const peRefs = (items, status) => items.filter(r => r.status === status).map((r, i) => `PE${i + 1}`).join(', ');
-    const keRefs = (items, status) => items.filter(r => r.status === status).map((r, i) => `KE${i + 1}`).join(', ');
-    const pcRefs = (pcs, status) => pcs.filter(pc => pc.status === status).map(pc => pc.ref).join(', ');
-
-    const handleDownload = async () => {
-        setDownloading(true);
-        try {
-            const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, BorderStyle, WidthType, ShadingType, VerticalAlign } = await import('docx');
-            const NAVY = '0D2444'; const WHITE = 'FFFFFF'; const LIGHT_GREY = 'F9FAFB'; const BORDER_GREY = 'D1D5DB';
-            const PAGE_WIDTH = 9026;
-            const thin = { style: BorderStyle.SINGLE, size: 1, color: BORDER_GREY };
-            const none = { style: BorderStyle.NONE };
-            const navyB = { style: BorderStyle.SINGLE, size: 2, color: NAVY };
-            const borders = { top: thin, bottom: thin, left: thin, right: thin };
-            const navyBorders = { top: navyB, bottom: navyB, left: navyB, right: navyB };
-            const cm = { top: 80, bottom: 80, left: 140, right: 140 };
-            const navyHeader = (text) => new Table({ width: { size: PAGE_WIDTH, type: WidthType.DXA }, columnWidths: [PAGE_WIDTH], rows: [new TableRow({ children: [new TableCell({ borders: navyBorders, width: { size: PAGE_WIDTH, type: WidthType.DXA }, shading: { fill: NAVY, type: ShadingType.CLEAR }, margins: { top: 120, bottom: 120, left: 200, right: 200 }, children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 26, color: WHITE, font: 'Arial' })] })] })] })] });
-            const para = (t, opts = {}) => new Paragraph({ spacing: { before: opts.before || 80, after: opts.after || 80 }, children: [new TextRun({ text: t, size: opts.size || 20, font: 'Arial', color: opts.color || '1A1A1A', bold: opts.bold || false, italics: opts.italic || false })] });
-            const tableRow = (cells, isHeader = false) => new TableRow({ children: cells.map((t, i) => new TableCell({ borders, margins: cm, shading: { fill: isHeader ? NAVY : (i % 2 === 0 ? LIGHT_GREY : WHITE), type: ShadingType.CLEAR }, children: [new Paragraph({ children: [new TextRun({ text: String(t || ''), size: 18, font: 'Arial', color: isHeader ? WHITE : '1A1A1A', bold: isHeader })] })] })) });
-            const makeTable = (headers, trows) => new Table({ width: { size: PAGE_WIDTH, type: WidthType.DXA }, columnWidths: Array(headers.length).fill(Math.floor(PAGE_WIDTH / headers.length)), rows: [tableRow(headers, true), ...trows.map(r => tableRow(r))] });
-            const sp = () => new Paragraph({ spacing: { before: 120, after: 120 }, children: [new TextRun({ text: '' })] });
-
-            // ── Readability chart builder ─────────────────────────────────────
-            const buildReadabilityChart = (sectionList, targetFKGL) => {
-                const MAX_FKGL = 20;
-                const LABEL_COL = Math.floor(PAGE_WIDTH * 0.35);
-                const BAR_ZONE_TOTAL = PAGE_WIDTH - LABEL_COL;
-                const FKGL_LABEL_W = 600;
-                const BAR_ZONE = BAR_ZONE_TOTAL - FKGL_LABEL_W;
-                const noBorder = { top: none, bottom: none, left: none, right: none };
-                const bottomOnly = { top: none, bottom: thin, left: none, right: none };
-
-                const chartRows = [
-                    // Header row
-                    new TableRow({ children: [
-                        new TableCell({ width: { size: LABEL_COL, type: WidthType.DXA }, borders: bottomOnly, margins: { top: 60, bottom: 60, left: 0, right: 140 }, children: [new Paragraph({ children: [new TextRun({ text: 'Section', bold: true, size: 18, font: 'Arial', color: '6B7280' })] })] }),
-                        new TableCell({ width: { size: BAR_ZONE_TOTAL, type: WidthType.DXA }, borders: bottomOnly, margins: { top: 60, bottom: 60, left: 0, right: 0 }, children: [new Paragraph({ children: [new TextRun({ text: `Reading level. Target: ${cohortProfile.band}`, bold: true, size: 18, font: 'Arial', color: '6B7280' })] })] }),
-                    ]}),
-                ];
-
-                sectionList.forEach(section => {
-                    const fkgl = parseFloat(section._readability?.fkgl) || 0;
-                    const diff = section._readability ? Math.abs(fkgl - targetFKGL) : null;
-                    const status = diff === null ? 'not scored' : diff <= 1.5 ? 'within' : diff <= 2.5 ? 'advisory' : 'refer';
-                    const barColour = status === 'within' ? '639922' : status === 'advisory' ? 'BA7517' : status === 'refer' ? 'A32D2D' : 'D1D5DB';
-                    const barPct = Math.min(fkgl / MAX_FKGL, 1);
-                    const filledW = Math.max(Math.floor(BAR_ZONE * barPct), 20);
-                    const emptyW = Math.max(BAR_ZONE - filledW, 20);
-
-                    chartRows.push(new TableRow({
-                        height: { value: 380, rule: 'exact' },
-                        children: [
-                            new TableCell({
-                                width: { size: LABEL_COL, type: WidthType.DXA },
-                                borders: noBorder,
-                                margins: { top: 80, bottom: 0, left: 0, right: 140 },
-                                verticalAlign: VerticalAlign.CENTER,
-                                children: [new Paragraph({ children: [new TextRun({ text: section.name || 'Section', size: 17, font: 'Arial', color: '374151' })] })],
-                            }),
-                            new TableCell({
-                                width: { size: BAR_ZONE_TOTAL, type: WidthType.DXA },
-                                borders: noBorder,
-                                margins: { top: 80, bottom: 0, left: 0, right: 0 },
-                                verticalAlign: VerticalAlign.CENTER,
-                                children: [new Table({
-                                    width: { size: BAR_ZONE_TOTAL, type: WidthType.DXA },
-                                    columnWidths: [filledW, emptyW, FKGL_LABEL_W],
-                                    rows: [new TableRow({
-                                        height: { value: 200, rule: 'exact' },
-                                        children: [
-                                            new TableCell({ width: { size: filledW, type: WidthType.DXA }, shading: { fill: barColour, type: ShadingType.CLEAR }, borders: noBorder, children: [new Paragraph({ children: [] })] }),
-                                            new TableCell({ width: { size: emptyW, type: WidthType.DXA }, shading: { fill: 'F3F4F6', type: ShadingType.CLEAR }, borders: noBorder, children: [new Paragraph({ children: [] })] }),
-                                            new TableCell({ width: { size: FKGL_LABEL_W, type: WidthType.DXA }, borders: noBorder, margins: { left: 80 }, children: [new Paragraph({ children: [new TextRun({ text: fkgl > 0 ? fkgl.toFixed(1) : 'N/A', size: 17, bold: true, font: 'Arial', color: barColour })] })] }),
-                                        ],
-                                    })],
-                                })],
-                            }),
-                        ],
-                    }));
-                });
-
-                return new Table({ width: { size: PAGE_WIDTH, type: WidthType.DXA }, columnWidths: [LABEL_COL, BAR_ZONE_TOTAL], rows: chartRows });
-            };
-
-            // Legend table
-            const buildChartLegend = () => {
-                const legendItems = [
-                    { fill: '639922', label: 'Within range (FKGL within 1.5 of target)' },
-                    { fill: 'BA7517', label: 'Advisory (1.6 to 2.5 above target)' },
-                    { fill: 'A32D2D', label: 'Refer for review (more than 2.5 above target)' },
-                ];
-                const colW = Math.floor(PAGE_WIDTH / 3);
-                return new Table({
-                    width: { size: PAGE_WIDTH, type: WidthType.DXA },
-                    columnWidths: [colW, colW, colW],
-                    rows: [new TableRow({ children: legendItems.map(item => new TableCell({
-                        width: { size: colW, type: WidthType.DXA },
-                        borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } },
-                        margins: { top: 60, bottom: 60, left: 0, right: 40 },
-                        children: [new Paragraph({ children: [
-                            new TextRun({ text: '\u25A0 ', size: 18, font: 'Arial', color: item.fill, bold: true }),
-                            new TextRun({ text: item.label, size: 16, font: 'Arial', color: '6B7280' }),
-                        ] })],
-                    })) })]
-                });
-            };
-
-            // Reading Ease table
-            const buildReadingEaseTable = (sectionList) => {
-                const freLabel = (fre) => {
-                    if (fre >= 70) return 'Easy';
-                    if (fre >= 50) return 'Standard';
-                    if (fre >= 30) return 'Difficult';
-                    return 'Very difficult';
-                };
-                const colW = Math.floor(PAGE_WIDTH / 3);
-                return new Table({
-                    width: { size: PAGE_WIDTH, type: WidthType.DXA },
-                    columnWidths: [colW, colW, colW],
-                    rows: [
-                        tableRow(['Section', 'Reading Ease', 'Plain English'], true),
-                        ...sectionList.map((s, i) => {
-                            const fre = s._readability?.fre;
-                            const freVal = typeof fre === 'number' ? fre.toFixed(0) : 'N/A';
-                            const label = typeof fre === 'number' ? freLabel(fre) : 'Not scored';
-                            return tableRow([s.name || 'Section', freVal, label]);
-                        }),
-                    ],
-                });
-            };
-
-            // Gap example box builder
-            const buildExampleBox = (gap) => {
-                if (!gap.exampleContent) return null;
-                const blueLeft = { style: BorderStyle.SINGLE, size: 8, color: '185FA5' };
-                const lines = gap.exampleContent.split('\n');
-                const boldStarts = ['Model answer', 'Assessor decision', 'What to look', 'Example question', 'Example task'];
-                return new Table({
-                    width: { size: PAGE_WIDTH, type: WidthType.DXA },
-                    columnWidths: [PAGE_WIDTH],
-                    rows: [new TableRow({ children: [new TableCell({
-                        borders: { top: thin, bottom: thin, left: blueLeft, right: thin },
-                        shading: { fill: 'EFF6FF', type: ShadingType.CLEAR },
-                        margins: { top: 100, bottom: 100, left: 160, right: 140 },
-                        children: [
-                            new Paragraph({ children: [new TextRun({ text: 'Example addition:', bold: true, size: 18, font: 'Arial', color: '185FA5' })] }),
-                            ...lines.map(line => new Paragraph({
-                                spacing: { before: 40 },
-                                children: [new TextRun({
-                                    text: line,
-                                    size: 18,
-                                    font: 'Arial',
-                                    color: '374151',
-                                    bold: boldStarts.some(s => line.startsWith(s)),
-                                })],
-                            })),
-                        ],
-                    })] })],
-                });
-            };
-
-            const withinRangeCount = sections.filter(s => s._readability && Math.abs((s._readability.fkgl || 0) - cohortProfile.targetFKGL) <= 1.5).length;
-            const cohortDesc = cohortProfile.band;
-
-            const children = [
-                navyHeader('COMPLIANCE AUDIT REPORT'), sp(),
-                para(`${unitInfo.code} - ${unitInfo.title}`, { bold: true, size: 24 }),
-                para(`Cohort: ${cohortProfile.band} level`, { color: '6B7280' }),
-                para(`Date: ${new Date().toLocaleDateString('en-AU')}`, { color: '6B7280' }),
-                para(`Overall verdict: ${overallVerdict}`, { bold: true, color: isAdequate ? '16A34A' : 'D97706' }), sp(),
-                navyHeader('Executive Summary'), sp(),
-                para(summaryStatement || reportText.split('\n').slice(0, 4).join(' ')), sp(),
-                navyHeader('Readability Analysis'), sp(),
-                para(`Target reading level: ${cohortDesc}. ${withinRangeCount} of ${sections.length} sections are within the acceptable range.`, { color: '374151' }), sp(),
-                buildReadabilityChart(sections, cohortProfile.targetFKGL ?? 10.5), sp(),
-                buildChartLegend(), sp(),
-                para('Reading Ease Scores (0 to 100, higher is easier)', { bold: true, size: 18, color: '0D2444' }), sp(),
-                buildReadingEaseTable(sections), sp(),
-                navyHeader('Performance Evidence Coverage'), sp(),
-                makeTable(['Requirement', 'Status', 'Coverage cited', 'Gap'], peResults.map(r => [r.requirement || '', r.status || '', r.coverage || '', r.gap || ''])), sp(),
-                navyHeader('Knowledge Evidence Coverage'), sp(),
-                makeTable(['Requirement', 'Status', 'Coverage cited', 'Gap'], keResults.map(r => [r.requirement || '', r.status || '', r.coverage || '', r.gap || ''])), sp(),
-                navyHeader('Element and Performance Criteria Mapping'), sp(),
-                makeTable(['Element', 'PC', 'Status', 'Mapped to', 'Gap'], elementsResults.flatMap(el => (el.performanceCriteria || []).map(pc => [el.title || '', pc.ref || '', pc.status || '', pc.mappedTo || '', pc.gap || '']))), sp(),
-                navyHeader('Gaps and Recommendations'), sp(),
-            ];
-
-            if (gaps.length === 0) {
-                children.push(para('No gaps identified.'));
-            } else {
-                gaps.forEach(g => {
-                    children.push(para(`${g.requirement}: ${g.recommendation} (add: ${g.recommendedSectionType})`, { before: 80, after: 60 }));
-                    const exBox = buildExampleBox(g);
-                    if (exBox) { children.push(exBox); children.push(sp()); }
-                });
-            }
-
-            children.push(sp(), navyHeader('Instrument Adequacy'), sp());
-            children.push(para(overallVerdict, { bold: true, size: 24, color: isAdequate ? '16A34A' : 'D97706' }));
-            children.push(sp(), navyHeader('Compliance Disclaimer'), sp());
-            children.push(para(DISCLAIMER, { italic: true, color: '6B7280', size: 18 }));
-
-            const doc = new Document({ styles: { default: { document: { run: { font: 'Arial', size: 20 } } } }, sections: [{ properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 } } }, children }] });
-            const blob = await Packer.toBlob(doc);
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = `${unitInfo.code}-compliance-audit.docx`; a.click();
-            URL.revokeObjectURL(url);
-        } catch (err) {
-            console.error('Download error:', err);
-            alert('Download failed: ' + err.message);
-        } finally {
-            setDownloading(false);
-        }
-    };
-
-    return (
-        <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#ffffff' }}>
-            <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 56px' }}>
-                <EvalProgress step={5} />
-
-                {/* Header row: verdict + readability */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-                    <div style={{
-                        borderLeft: `4px solid ${isAdequate ? '#639922' : '#BA7517'}`,
-                        border: '1px solid #e5e7eb',
-                        borderLeftWidth: '4px',
-                        borderLeftColor: isAdequate ? '#639922' : '#BA7517',
-                        borderRadius: '8px', padding: '16px',
-                    }}>
-                        <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>Overall verdict</p>
-                        <p style={{ color: isAdequate ? '#3B6D11' : '#854F0B', fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>{overallVerdict}</p>
-                        <p style={{ color: '#6b7280', fontSize: '12px' }}>
-                            {gaps.length === 0 ? 'No gaps identified' : `${gaps.length} recommendation${gaps.length !== 1 ? 's' : ''}`}
-                        </p>
-                    </div>
-                    <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px' }}>
-                        <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>Readability</p>
-                        <p style={{ color: '#0d2444', fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>{withinRange} / {sections.length} sections</p>
-                        <p style={{ color: '#6b7280', fontSize: '12px' }}>at the right reading level</p>
-                    </div>
-                </div>
-
-                {/* Coverage overview */}
-                <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px', marginBottom: '20px' }}>
-                    <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '14px' }}>Coverage overview</p>
-
-                    {/* Legend */}
-                    <div style={{ display: 'flex', gap: '16px', marginBottom: '18px', flexWrap: 'wrap' }}>
-                        {[['#639922', 'Covered'], ['#BA7517', 'Partially covered'], ['#A32D2D', 'Not covered']].map(([color, label]) => (
-                            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <div style={{ width: '10px', height: '10px', borderRadius: '2px', backgroundColor: color, flexShrink: 0 }} />
-                                <span style={{ color: '#6b7280', fontSize: '11px' }}>{label}</span>
-                            </div>
-                        ))}
-                    </div>
-
-                    <CoverageBar
-                        label="Performance Evidence"
-                        covered={peCovered} partial={pePartial} notCovered={peNotCovered} total={peResults.length}
-                        coveredLabel={peRefs(peResults, 'COVERED') ? `Covered: ${peRefs(peResults, 'COVERED')}` : null}
-                        partialLabel={peRefs(peResults, 'PARTIALLY COVERED') ? `Partial: ${peRefs(peResults, 'PARTIALLY COVERED')}` : null}
-                        notLabel={peRefs(peResults, 'NOT COVERED') ? `Missing: ${peRefs(peResults, 'NOT COVERED')}` : null}
-                    />
-                    <CoverageBar
-                        label="Knowledge Evidence"
-                        covered={keCovered} partial={kePartial} notCovered={keNotCovered} total={keResults.length}
-                        coveredLabel={keRefs(keResults, 'COVERED') ? `Covered: ${keRefs(keResults, 'COVERED')}` : null}
-                        partialLabel={keRefs(keResults, 'PARTIALLY COVERED') ? `Partial: ${keRefs(keResults, 'PARTIALLY COVERED')}` : null}
-                        notLabel={keRefs(keResults, 'NOT COVERED') ? `Missing: ${keRefs(keResults, 'NOT COVERED')}` : null}
-                    />
-                    <CoverageBar
-                        label="Performance Criteria"
-                        covered={pcMapped} partial={pcPartial} notCovered={pcNotMapped} total={pcTotal}
-                        coveredLabel={pcRefs(allPCs, 'MAPPED') ? `Mapped: ${pcRefs(allPCs, 'MAPPED').split(', ').slice(0, 6).join(', ')}${allPCs.filter(p => p.status === 'MAPPED').length > 6 ? '...' : ''}` : null}
-                        partialLabel={pcRefs(allPCs, 'PARTIALLY MAPPED') ? `Partial: ${pcRefs(allPCs, 'PARTIALLY MAPPED')}` : null}
-                        notLabel={pcRefs(allPCs, 'NOT MAPPED') ? `Missing: ${pcRefs(allPCs, 'NOT MAPPED')}` : null}
-                    />
-                </div>
-
-                {/* Comparison section */}
-                {showComparison && previousEvaluation?.richData && (
-                    <ComparisonSection previous={previousEvaluation.richData} currentResults={results} />
-                )}
-
-                {/* Gaps to fix */}
-                {gaps.length > 0 && (
-                    <div style={{ marginBottom: '20px' }}>
-                        <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '12px' }}>Gaps to fix</p>
-                        {gaps.map((g, i) => <GapCard key={i} gap={g} />)}
-                    </div>
-                )}
-
-                {gaps.length === 0 && (
-                    <div style={{ border: '1px solid #639922', borderRadius: '8px', padding: '14px 16px', backgroundColor: '#f0fdf4', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <CheckCircle style={{ color: '#639922', width: '18px', height: '18px', flexShrink: 0 }} />
-                        <p style={{ color: '#3B6D11', fontSize: '13px', fontWeight: 500 }}>No gaps identified. This assessment appears to cover all requirements.</p>
-                    </div>
-                )}
-
-                {/* Download buttons */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
-                    <button
-                        onClick={handleDownload}
-                        disabled={downloading}
-                        style={{
-                            width: '100%', height: '48px',
-                            backgroundColor: downloading ? '#e5e7eb' : '#0d2444',
-                            color: downloading ? '#9ca3af' : '#ffffff',
-                            borderRadius: '8px', border: 'none',
-                            fontSize: '14px', fontWeight: 600,
-                            cursor: downloading ? 'not-allowed' : 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                        }}
-                    >
-                        <Download style={{ width: '16px', height: '16px' }} />
-                        {downloading ? 'Preparing document...' : 'Download audit report (.docx)'}
-                    </button>
-                    <button
-                        onClick={onSave}
-                        style={{ width: '100%', height: '44px', backgroundColor: 'transparent', color: '#0d2444', borderRadius: '8px', border: '1px solid #0d2444', fontSize: '14px', cursor: 'pointer' }}
-                    >
-                        Save to library
-                    </button>
-                    <button
-                        onClick={onReset}
-                        style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer', marginTop: '4px' }}
-                    >
-                        Evaluate another assessment
-                    </button>
-                </div>
-
-                <p style={{ color: '#9ca3af', fontSize: '11px', fontStyle: 'italic', lineHeight: 1.6 }}>
-                    {DISCLAIMER}
-                </p>
-
-                <div style={{ textAlign: 'center', marginTop: '8px' }}>
-                    <FeedbackButton onClick={() => setShowFeedback(true)} />
-                </div>
-            </div>
-
-            {showFeedback && (
-                <FeedbackModal flow="Evaluate" unitCode={unitInfo?.code} onClose={() => setShowFeedback(false)} />
-            )}
-        </div>
-    );
-}
-
-// ── Comparison helpers ────────────────────────────────────────────────────────
-
-function statusRank(status) {
-    const s = (status || '').toUpperCase();
-    if (s === 'COVERED' || s === 'MAPPED') return 2;
-    if (s.includes('PARTIAL')) return 1;
-    return 0;
-}
-
-function ChangeArrow({ prev, curr }) {
-    const pRank = statusRank(prev), cRank = statusRank(curr);
-    if (cRank > pRank) return <span style={{ color: '#639922', fontWeight: 700 }}>&#8593;</span>;
-    if (cRank < pRank) return <span style={{ color: '#A32D2D', fontWeight: 700 }}>&#8595;</span>;
-    return <span style={{ color: '#9ca3af' }}>&#8212;</span>;
-}
-
-function statusStyle(status) {
-    const s = (status || '').toUpperCase();
-    if (s === 'COVERED' || s === 'MAPPED') return { color: '#3B6D11', fontWeight: 500 };
-    if (s.includes('PARTIAL')) return { color: '#854F0B', fontWeight: 500 };
-    if (s === 'NO DATA') return { color: '#9ca3af' };
-    return { color: '#A32D2D', fontWeight: 500 };
-}
-
-function ComparisonSection({ previous, currentResults }) {
-    const { peResults = [], keResults = [], elementsResults = [] } = currentResults;
-    const allPCs = elementsResults.flatMap(e => e.performanceCriteria || []);
-    const prevDate = previous.savedAt ? new Date(previous.savedAt).toLocaleDateString('en-AU') : 'Previous';
-
-    const prevPE = previous.pe || {};
-    const prevKE = previous.ke || {};
-    const prevPC = previous.pc || {};
-
-    const keChanged = (keResults.filter(r => r.status === 'COVERED').length) - (prevKE.covered || 0);
-    const peChanged = (peResults.filter(r => r.status === 'COVERED').length) - (prevPE.covered || 0);
-    const pcChanged = (allPCs.filter(r => r.status === 'MAPPED').length) - (prevPC.mapped || 0);
-
-    const changeCard = (label, prevVal, currVal, total) => {
-        const diff = currVal - prevVal;
-        const color = diff > 0 ? '#639922' : diff < 0 ? '#A32D2D' : '#6b7280';
-        const arrow = diff > 0 ? '↑' : diff < 0 ? '↓' : '';
-        return (
-            <div key={label} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '14px', flex: 1, minWidth: 0 }}>
-                <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>{label}</p>
-                <p style={{ color, fontSize: '15px', fontWeight: 700, marginBottom: '2px' }}>
-                    {prevVal}/{total} {arrow} {currVal}/{total}
-                </p>
-                <p style={{ color: '#9ca3af', fontSize: '11px' }}>{diff === 0 ? 'No change' : diff > 0 ? `${diff} improved` : `${Math.abs(diff)} regressed`}</p>
-            </div>
-        );
-    };
-
-    // Build item-by-item rows
-    const rows = [];
-    keResults.forEach((r, i) => {
-        const prevItem = (previous.ke?.items || [])[i];
-        const prevStatus = prevItem?.status || 'NO DATA';
-        rows.push({ req: `KE${i + 1}: ${(r.requirement || '').slice(0, 60)}`, prev: prevStatus, curr: r.status });
-    });
-    peResults.forEach((r, i) => {
-        const prevItem = (previous.pe?.items || [])[i];
-        const prevStatus = prevItem?.status || 'NO DATA';
-        rows.push({ req: `PE${i + 1}: ${(r.requirement || '').slice(0, 60)}`, prev: prevStatus, curr: r.status });
-    });
-    allPCs.forEach((r) => {
-        const prevItem = (previous.pc?.items || []).find(p => p.ref === r.ref);
-        const prevStatus = prevItem?.status || 'NO DATA';
-        rows.push({ req: `${r.ref}: ${(r.text || '').slice(0, 60)}`, prev: prevStatus, curr: r.status });
-    });
-
-    return (
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px', marginBottom: '20px' }}>
-            <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '14px' }}>Changes since previous evaluation</p>
-
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                <div style={{ flex: 1, textAlign: 'center', padding: '8px', backgroundColor: '#f9fafb', borderRadius: '6px', fontSize: '12px', color: '#6b7280' }}>
-                    Previous: {prevDate}
-                </div>
-                <div style={{ flex: 1, textAlign: 'center', padding: '8px', backgroundColor: '#f0f7ff', borderRadius: '6px', fontSize: '12px', color: '#0d2444', fontWeight: 500 }}>
-                    Current: {new Date().toLocaleDateString('en-AU')}
-                </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                {changeCard('Knowledge Evidence', prevKE.covered || 0, keResults.filter(r => r.status === 'COVERED').length, keResults.length)}
-                {changeCard('Performance Evidence', prevPE.covered || 0, peResults.filter(r => r.status === 'COVERED').length, peResults.length)}
-                {changeCard('Performance Criteria', prevPC.mapped || 0, allPCs.filter(r => r.status === 'MAPPED').length, allPCs.length)}
-            </div>
-
-            {rows.length > 0 && (
-                <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                        <thead>
-                            <tr style={{ backgroundColor: '#0d2444' }}>
-                                {['Requirement', 'Previous', 'Current', 'Change'].map(h => (
-                                    <th key={h} style={{ padding: '8px 10px', color: '#ffffff', fontWeight: 600, textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows.map((r, i) => (
-                                <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
-                                    <td style={{ padding: '7px 10px', color: '#374151', maxWidth: '280px' }}>{r.req}</td>
-                                    <td style={{ padding: '7px 10px', whiteSpace: 'nowrap', ...statusStyle(r.prev) }}>{r.prev || 'No data'}</td>
-                                    <td style={{ padding: '7px 10px', whiteSpace: 'nowrap', ...statusStyle(r.curr) }}>{r.curr}</td>
-                                    <td style={{ padding: '7px 10px', textAlign: 'center' }}><ChangeArrow prev={r.prev} curr={r.curr} /></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-        </div>
-    );
-}
-
-// ── Main Evaluate page ────────────────────────────────────────────────────────
+import EvalScreen1Units from '@/components/evaluate/EvalScreen1Units';
+import EvalScreen2Upload from '@/components/evaluate/EvalScreen2Upload';
+import EvalScreen3Learner from '@/components/evaluate/EvalScreen3Learner';
+import EvalScreen4Progress from '@/components/evaluate/EvalScreen4Progress';
+import EvalScreen5Report from '@/components/evaluate/EvalScreen5Report';
+import {
+    runUnitAudit, extractSections, collectGaps, runGapRecommendations, generateReportText,
+    clusterKey,
+} from '@/lib/evaluateAudit';
 
 export default function Evaluate() {
     const navigate = useNavigate();
     const [screen, setScreen] = useState(1);
-    const [unitInfo, setUnitInfo] = useState(null);
+    const [units, setUnits] = useState([]);
     const [assessmentDoc, setAssessmentDoc] = useState(null);
     const [cohortProfile, setCohortProfile] = useState(null);
-    const [evalProgress, setEvalProgress] = useState(0);
+    const [progress, setProgress] = useState(0);
+    const [stageLabel, setStageLabel] = useState('Starting...');
     const [evalError, setEvalError] = useState(null);
     const [results, setResults] = useState({});
     const [reportText, setReportText] = useState('');
     const [previousEvaluation, setPreviousEvaluation] = useState(null);
     const [showComparison, setShowComparison] = useState(false);
 
-    const handleScreen1Confirm = async (info) => {
-        setUnitInfo(info);
-        // Look for a previous evaluation of the same unit
+    const handleScreen1Confirm = async (selectedUnits) => {
+        setUnits(selectedUnits);
+        const key = clusterKey(selectedUnits);
         try {
-            const library = await base44.entities.WorkLibraryItem.filter({ task_type: 'evaluate', unit_code: info.code });
+            const library = await base44.entities.WorkLibraryItem.filter({ task_type: 'evaluate', unit_code: key });
             if (library && library.length > 0) {
                 const sorted = library.sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
                 const prev = sorted[0];
-                // Parse stored notes field for rich data
                 let richData = null;
                 try { richData = prev.notes ? JSON.parse(prev.notes) : null; } catch (e) { /* no rich data */ }
                 setPreviousEvaluation({ ...prev, richData });
@@ -1264,140 +45,78 @@ export default function Evaluate() {
         setShowComparison(false);
         setScreen(2);
     };
-    const handleScreen2Confirm = (doc) => { setAssessmentDoc(doc); setScreen(3); };
+
+    const handleScreen2Confirm = (doc) => {
+        setAssessmentDoc(doc);
+        setScreen(3);
+    };
 
     const handleScreen3Confirm = async (cohort) => {
         setCohortProfile(cohort);
-        setEvalProgress(10);
+        setProgress(5);
+        setStageLabel('Reading your assessment...');
         setEvalError(null);
         setScreen(4);
 
-        const uocData = unitInfo.uocData;
         const rawText = assessmentDoc.text;
         const assessableText = assessmentDoc.assessableText || rawText;
-        console.log('=== CONTENT EXTRACTION CHECK ===');
-        console.log('Raw length:', rawText.length);
-        console.log('Assessable length:', assessableText.length);
-        console.log('Reduction:', Math.round((1 - assessableText.length / rawText.length) * 100) + '%');
-        console.log('First 150 chars:', assessableText.substring(0, 150));
-        console.log('Last 150 chars:', assessableText.substring(assessableText.length - 150));
-        console.log('Has Q1:', /\bQ1\b/.test(assessableText));
-        console.log('Has S/NS:', /S\s*\/\s*N/.test(assessableText));
-        console.log('Has Part B:', assessableText.includes('Part B'));
-        console.log('Has Part C:', assessableText.includes('Part C'));
-        const { targetFKGL, band } = cohort;
-
-        const peList = (uocData?.performanceEvidence || []).join('\n');
-        const keList = (uocData?.knowledgeEvidence || []).map(k => k.subItems ? `${k.text}: ${k.subItems.join(', ')}` : k.text).join('\n');
-        const elementsText = (uocData?.elements || []).map(el =>
-            `Element ${el.number}: ${el.title}\n` +
-            (el.performanceCriteria || []).map(pc => `  ${pc.ref} ${pc.text}`).join('\n')
-        ).join('\n\n');
-
-        let sections = [], peResults = [], keResults = [], elementsResults = [], gaps = [], overallVerdict = 'REQUIRES DEVELOPMENT', summaryStatement = '';
 
         try {
-            // Call 1 — Extract and classify sections
-            setEvalProgress(25);
-            let sectionsRaw;
-            try {
-                const r1 = await llmCall(
-                    `You are an RTO assessment analyst. Extract and classify every section of the assessment text provided.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "sections": [\n    {\n      "name": "section name or heading",\n      "type": "Knowledge Questions | Observation Checklist | Workplace Project | Verbal Questions | Case Study | Third Party Report | Other",\n      "evidenceCategory": "Knowledge Evidence | Performance Evidence | Product Evidence | Indirect Evidence",\n      "items": ["item 1 text", "item 2 text"],\n      "itemCount": 3,\n      "wordCount": 450\n    }\n  ],\n  "totalWordCount": 1200,\n  "sectionCount": 3\n}\n\nSection type rules:\n- Questions starting with Q1, Q2 etc or numbered questions: Knowledge Questions\n- Checklist with tick boxes or observable behaviours: Observation Checklist\n- Steps or tasks to complete over time: Workplace Project\n- Questions marked verbal or oral: Verbal Questions\n- Scenario followed by questions: Case Study\n- Form for supervisor or third party: Third Party Report\n\nASSESSMENT TEXT:\n${assessableText.slice(0, 8000)}`
-                );
-                sectionsRaw = parseAIJson(r1);
-                sections = sectionsRaw.sections || [];
-            } catch (e) {
-                console.error('Call 1 failed:', e.message);
-                sections = [{ name: 'Could not be evaluated', type: 'Other', items: [assessableText.slice(0, 500)], itemCount: 1, wordCount: assessmentDoc.wordCount }];
+            // Step 1: Extract sections (once, full text)
+            setProgress(8);
+            setStageLabel('Identifying sections...');
+            const sections = await extractSections(assessableText, assessmentDoc.wordCount);
+
+            // Step 2: Per-unit audit
+            const unitResults = [];
+            for (let i = 0; i < units.length; i++) {
+                const unit = units[i];
+                const audit = await runUnitAudit(unit, i, units.length, assessableText, (pct, label) => {
+                    if (label) setStageLabel(label);
+                    if (pct) setProgress(pct);
+                });
+                unitResults.push({
+                    unitCode: unit.code,
+                    unitTitle: unit.title,
+                    peResults: audit.peResults,
+                    keResults: audit.keResults,
+                    elementsResults: audit.elementsResults,
+                    gaps: [],
+                    unitVerdict: 'REQUIRES DEVELOPMENT',
+                });
             }
 
-            // Step 2 — Score readability per section using JS (no AI)
-            sections = sections.map(s => {
-                const sectionText = (s.items || []).join(' ');
-                let readability = null;
-                try {
-                    if (sectionText.trim().length > 30) {
-                        readability = calculateReadability(sectionText);
-                    }
-                } catch (e) { /* skip */ }
-                return { ...s, _readability: readability };
-            });
+            // Step 3: Collect gaps and run recommendations (chunked)
+            setProgress(82);
+            setStageLabel('Writing recommendations...');
+            const allGaps = collectGaps(unitResults);
+            const gapRecs = await runGapRecommendations(allGaps);
 
-            // Call 3 — Audit Performance Evidence
-            setEvalProgress(45);
-            try {
-                const r3 = await llmCall(
-                    `You are an RTO compliance auditor. Check whether the assessment covers each Performance Evidence requirement.\n\nUse ONLY these three statuses: COVERED, PARTIALLY COVERED, NOT COVERED.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "performanceEvidence": [\n    {\n      "requirement": "verbatim PE requirement text",\n      "status": "COVERED | PARTIALLY COVERED | NOT COVERED",\n      "coverage": "cite specific assessment text, or none found",\n      "gap": "explain what is missing if PARTIALLY COVERED or NOT COVERED"\n    }\n  ]\n}\n\nPERFORMANCE EVIDENCE REQUIREMENTS:\n${peList || 'None specified'}\n\nASSESSMENT TEXT:\n${assessableText.slice(0, 6000)}`
-                );
-                const parsed = parseAIJson(r3);
-                peResults = parsed.performanceEvidence || [];
-            } catch (e) {
-                console.error('Call 3 failed:', e.message);
-                peResults = (uocData?.performanceEvidence || []).map(pe => ({ requirement: pe, status: 'Could not be evaluated', coverage: '', gap: '' }));
+            // Assign gaps back to units and compute unit verdicts
+            for (const unit of unitResults) {
+                const unitGaps = gapRecs.filter(g => g.unitCode === unit.unitCode);
+                unit.gaps = unitGaps;
+                const hasGaps = unit.peResults.some(r => r.status !== 'COVERED')
+                    || unit.keResults.some(r => r.status !== 'COVERED')
+                    || unit.elementsResults.flatMap(e => e.performanceCriteria || []).some(pc => pc.status !== 'MAPPED');
+                unit.unitVerdict = hasGaps ? 'REQUIRES DEVELOPMENT' : 'ADEQUATE';
             }
 
-            // Call 4 — Audit Knowledge Evidence
-            setEvalProgress(60);
-            try {
-                const r4 = await llmCall(
-                    `You are an RTO compliance auditor. Check whether the assessment covers each Knowledge Evidence requirement.\n\nUse ONLY these three statuses: COVERED, PARTIALLY COVERED, NOT COVERED.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "knowledgeEvidence": [\n    {\n      "requirement": "verbatim KE requirement text",\n      "status": "COVERED | PARTIALLY COVERED | NOT COVERED",\n      "coverage": "cite specific assessment text, or none found",\n      "gap": "explain what is missing if PARTIALLY COVERED or NOT COVERED"\n    }\n  ]\n}\n\nKNOWLEDGE EVIDENCE REQUIREMENTS:\n${keList || 'None specified'}\n\nASSESSMENT TEXT:\n${assessableText.slice(0, 6000)}`
-                );
-                const parsed = parseAIJson(r4);
-                keResults = parsed.knowledgeEvidence || [];
-            } catch (e) {
-                console.error('Call 4 failed:', e.message);
-                keResults = (uocData?.knowledgeEvidence || []).map(ke => ({ requirement: ke.text || ke, status: 'Could not be evaluated', coverage: '', gap: '' }));
-            }
+            const overallVerdict = unitResults.every(u => u.unitVerdict === 'ADEQUATE') ? 'ADEQUATE' : 'REQUIRES DEVELOPMENT';
+            const summaryStatement = overallVerdict === 'ADEQUATE'
+                ? `All ${units.length} unit${units.length !== 1 ? 's' : ''} in this cluster are adequately covered by the assessment.`
+                : `${unitResults.filter(u => u.unitVerdict === 'REQUIRES DEVELOPMENT').length} of ${units.length} unit${units.length !== 1 ? 's' : ''} require development to achieve full coverage.`;
 
-            // Call 5 — Audit Elements and PCs
-            setEvalProgress(75);
-            try {
-                const r5 = await llmCall(
-                    `You are an RTO compliance auditor. Check whether the assessment maps to each Element and Performance Criterion.\n\nUse ONLY these three statuses: MAPPED, PARTIALLY MAPPED, NOT MAPPED.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "elements": [\n    {\n      "number": 1,\n      "title": "element title",\n      "status": "MAPPED | PARTIALLY MAPPED | NOT MAPPED",\n      "performanceCriteria": [\n        {\n          "ref": "1.1",\n          "text": "verbatim PC text",\n          "status": "MAPPED | PARTIALLY MAPPED | NOT MAPPED",\n          "mappedTo": "section name or none found",\n          "gap": "what context or conditions are missing if PARTIALLY MAPPED"\n        }\n      ]\n    }\n  ]\n}\n\nELEMENTS AND PERFORMANCE CRITERIA:\n${elementsText || 'None specified'}\n\nASSESSMENT TEXT:\n${assessableText.slice(0, 6000)}`
-                );
-                const parsed = parseAIJson(r5);
-                elementsResults = parsed.elements || [];
-            } catch (e) {
-                console.error('Call 5 failed:', e.message);
-                elementsResults = (uocData?.elements || []).map(el => ({ number: el.number, title: el.title, status: 'Could not be evaluated', performanceCriteria: (el.performanceCriteria || []).map(pc => ({ ref: pc.ref, text: pc.text, status: 'Could not be evaluated', mappedTo: '', gap: '' })) }));
-            }
+            // Step 4: Generate report text
+            setProgress(95);
+            setStageLabel('Writing report...');
+            const report = await generateReportText(units, { sections, units: unitResults, overallVerdict, summaryStatement }, cohort);
+            setReportText(report);
 
-            // Call 6 — Gap recommendations
-            setEvalProgress(88);
-            const peGaps = peResults.filter(r => r.status !== 'COVERED');
-            const keGaps = keResults.filter(r => r.status !== 'COVERED');
-            const pcGaps = elementsResults.flatMap(el => (el.performanceCriteria || []).filter(pc => pc.status !== 'MAPPED').map(pc => ({ ...pc, elementTitle: el.title })));
-            try {
-                const r6 = await llmCall(
-                    `You are an RTO assessment designer. Based on the coverage audit results, write specific recommendations for each gap.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "gaps": [\n    {\n      "requirement": "PE or KE or PC reference and text",\n      "gapType": "NOT COVERED | PARTIALLY COVERED | NOT MAPPED | PARTIALLY MAPPED",\n      "recommendedSectionType": "exact type name",\n      "recommendation": "plain English description of what to add",\n      "minimumContent": ["required field 1", "required field 2"],\n      "exampleContent": "Complete ready-to-use example the assessor can adapt directly. See rules below."\n    }\n  ],\n  "overallVerdict": "ADEQUATE | REQUIRES DEVELOPMENT",\n  "summaryStatement": "one sentence plain English summary"\n}\n\nRULES FOR exampleContent:\n- Write at FKGL 9 to 11 (plain workplace language, not academic)\n- Match the section type: write a question for Knowledge Questions, write a task step for Project tasks or Observation Checklists\n- Include a model answer guide with 3 to 5 key points\n- Include an S/NYS decision field label\n- Keep the total under 200 words\n- Do not use em dashes anywhere\n- Label the model answer clearly: Model answer guide:\n\nExample format for a knowledge question gap:\nExample question:\nQ[n]. [Question text here]\n\nModel answer guide:\nA satisfactory response must include:\n- [Key point 1]\n- [Key point 2]\n- [Key point 3]\n\nAssessor decision: S / NYS\n\nExample format for a project task or observation gap:\nExample task step:\nStep [n]: [Task instruction here]\n\nWhat to look for:\n- [Observable indicator 1]\n- [Observable indicator 2]\n- [Observable indicator 3]\n\nAssessor decision: S / NYS\n\nUOC TITLE: ${unitInfo.title}\n\nPE GAPS:\n${JSON.stringify(peGaps.slice(0, 10))}\n\nKE GAPS:\n${JSON.stringify(keGaps.slice(0, 10))}\n\nPC GAPS:\n${JSON.stringify(pcGaps.slice(0, 10))}`
-                );
-                const parsed = parseAIJson(r6);
-                gaps = parsed.gaps || [];
-                overallVerdict = parsed.overallVerdict || 'REQUIRES DEVELOPMENT';
-                summaryStatement = parsed.summaryStatement || '';
-            } catch (e) {
-                console.error('Call 6 failed:', e.message);
-                gaps = [...peGaps, ...keGaps].map(g => ({ requirement: g.requirement, gapType: g.status, recommendedSectionType: 'Knowledge Questions', recommendation: 'Review and add coverage for this requirement.', minimumContent: [], exampleContent: '' }));
-                overallVerdict = (peGaps.length === 0 && keGaps.length === 0 && pcGaps.length === 0) ? 'ADEQUATE' : 'REQUIRES DEVELOPMENT';
-            }
-
-            // Call 7 — Report text
-            setEvalProgress(95);
-            const cohortSummary = `${cohort.band} level (FKGL ${targetFKGL}), learner type: ${cohort.learner}, support: ${cohort.support}`;
-            try {
-                const r7 = await llmCall(
-                    `You are writing an RTO compliance report. Write clear, professional plain English. Do not use em dashes. Use full stops between sentences. Do not use bullet points. Write in prose with numbered lists where needed.\n\nWrite a compliance audit report with these sections:\n1. Executive Summary (3-4 sentences)\n2. Assessment Overview (what sections were found)\n3. Readability Summary (how each section scored)\n4. Coverage Analysis (PE, KE, PC findings in prose)\n5. Gaps and Recommendations (what needs to be added)\n6. Instrument Adequacy: state ${overallVerdict}\n\nUNIT: ${unitInfo.code} ${unitInfo.title}\nCOHORT: ${cohortSummary}\nREADABILITY TARGET: FKGL ${targetFKGL}\n\nSECTIONS FOUND: ${sections.map(s => s.name + ' (' + s.type + ')').join(', ')}\nPE COVERAGE: ${peResults.length} items, ${peResults.filter(r => r.status === 'COVERED').length} covered\nKE COVERAGE: ${keResults.length} items, ${keResults.filter(r => r.status === 'COVERED').length} covered\nPC MAPPING: ${elementsResults.flatMap(e => e.performanceCriteria || []).length} criteria, ${elementsResults.flatMap(e => e.performanceCriteria || []).filter(pc => pc.status === 'MAPPED').length} mapped\nGAPS: ${gaps.length} identified`
-                );
-                setReportText(typeof r7 === 'string' ? r7 : JSON.stringify(r7));
-            } catch (e) {
-                console.error('Call 7 failed:', e.message);
-                setReportText(`Compliance Audit Report\n${unitInfo.code} ${unitInfo.title}\n\nOverall verdict: ${overallVerdict}\n\n${summaryStatement}\n\nOne or more report sections could not be completed. Download the partial report for available findings.`);
-            }
-
-            setResults({ sections, peResults, keResults, elementsResults, gaps, overallVerdict, summaryStatement });
-            setEvalProgress(100);
+            setResults({ sections, units: unitResults, overallVerdict, summaryStatement });
+            setProgress(100);
+            setStageLabel('Done');
             setScreen(5);
-
         } catch (e) {
             console.error('Evaluation failed:', e);
             setEvalError('One evaluation step could not complete. The report may be incomplete. Try again or check your document.');
@@ -1405,41 +124,45 @@ export default function Evaluate() {
     };
 
     const handleSave = async () => {
-        const { peResults = [], keResults = [], elementsResults = [], gaps = [], overallVerdict = '' } = results;
-        const allPCs = elementsResults.flatMap(e => e.performanceCriteria || []);
+        const key = clusterKey(units);
         const richData = {
-            verdict: overallVerdict,
+            verdict: results.overallVerdict,
             savedAt: new Date().toISOString(),
             cohort: cohortProfile,
-            ke: {
-                total: keResults.length,
-                covered: keResults.filter(r => r.status === 'COVERED').length,
-                partial: keResults.filter(r => r.status === 'PARTIALLY COVERED').length,
-                notCovered: keResults.filter(r => r.status === 'NOT COVERED').length,
-                items: keResults.map(r => ({ requirement: r.requirement, status: r.status })),
-            },
-            pe: {
-                total: peResults.length,
-                covered: peResults.filter(r => r.status === 'COVERED').length,
-                partial: peResults.filter(r => r.status === 'PARTIALLY COVERED').length,
-                notCovered: peResults.filter(r => r.status === 'NOT COVERED').length,
-                items: peResults.map(r => ({ requirement: r.requirement, status: r.status })),
-            },
-            pc: {
-                total: allPCs.length,
-                mapped: allPCs.filter(r => r.status === 'MAPPED').length,
-                partial: allPCs.filter(r => r.status === 'PARTIALLY MAPPED').length,
-                notMapped: allPCs.filter(r => r.status === 'NOT MAPPED').length,
-                items: allPCs.map(r => ({ ref: r.ref, text: r.text, status: r.status })),
-            },
-            gapCount: gaps.length,
+            units: (results.units || []).map(u => ({
+                unitCode: u.unitCode,
+                unitTitle: u.unitTitle,
+                unitVerdict: u.unitVerdict,
+                ke: {
+                    total: u.keResults.length,
+                    covered: u.keResults.filter(r => r.status === 'COVERED').length,
+                    partial: u.keResults.filter(r => r.status === 'PARTIALLY COVERED').length,
+                    notCovered: u.keResults.filter(r => r.status !== 'COVERED' && r.status !== 'PARTIALLY COVERED').length,
+                    items: u.keResults.map(r => ({ requirement: r.requirement, status: r.status })),
+                },
+                pe: {
+                    total: u.peResults.length,
+                    covered: u.peResults.filter(r => r.status === 'COVERED').length,
+                    partial: u.peResults.filter(r => r.status === 'PARTIALLY COVERED').length,
+                    notCovered: u.peResults.filter(r => r.status !== 'COVERED' && r.status !== 'PARTIALLY COVERED').length,
+                    items: u.peResults.map(r => ({ requirement: r.requirement, status: r.status })),
+                },
+                pc: {
+                    total: u.elementsResults.flatMap(e => e.performanceCriteria || []).length,
+                    mapped: u.elementsResults.flatMap(e => e.performanceCriteria || []).filter(p => p.status === 'MAPPED').length,
+                    partial: u.elementsResults.flatMap(e => e.performanceCriteria || []).filter(p => p.status === 'PARTIALLY MAPPED').length,
+                    notMapped: u.elementsResults.flatMap(e => e.performanceCriteria || []).filter(p => p.status !== 'MAPPED' && p.status !== 'PARTIALLY MAPPED').length,
+                    items: u.elementsResults.flatMap(e => e.performanceCriteria || []).map(p => ({ ref: p.ref, text: p.text, status: p.status })),
+                },
+                gapCount: u.gaps.length,
+            })),
         };
         try {
             await base44.entities.WorkLibraryItem.create({
-                title: `Evaluate: ${unitInfo.code} - ${unitInfo.title}`,
+                title: `Evaluate: ${units.map(u => u.code).join(', ')}`,
                 task_type: 'evaluate',
-                unit_code: unitInfo.code,
-                unit_title: unitInfo.title,
+                unit_code: key,
+                unit_title: units.map(u => u.title).join(', '),
                 aqf_level: cohortProfile?.band || '',
                 output_text: reportText,
                 notes: JSON.stringify(richData),
@@ -1453,33 +176,42 @@ export default function Evaluate() {
 
     const handleReset = () => {
         setScreen(1);
-        setUnitInfo(null);
+        setUnits([]);
         setAssessmentDoc(null);
         setCohortProfile(null);
         setResults({});
         setReportText('');
         setEvalError(null);
-        setEvalProgress(0);
+        setProgress(0);
+        setStageLabel('Starting...');
         setPreviousEvaluation(null);
         setShowComparison(false);
     };
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#ffffff' }}>
-            {/* Header */}
             <div className="flex items-center justify-between px-6 py-3 flex-shrink-0" style={{ backgroundColor: '#0d2444' }}>
                 <span style={{ color: '#c9a84c', letterSpacing: '2px', fontSize: '13px', fontWeight: 500 }}>CLEARPASS</span>
                 <span style={{ color: '#ffffff', fontSize: '14px', fontWeight: 400 }}>Evaluate Assessment</span>
                 <div style={{ width: '80px' }} />
             </div>
 
-            {screen === 1 && <Screen1 onConfirm={handleScreen1Confirm} />}
-            {screen === 2 && <Screen2 unitInfo={unitInfo} onBack={() => setScreen(1)} onConfirm={handleScreen2Confirm} previousEvaluation={previousEvaluation} showComparison={showComparison} onSetShowComparison={setShowComparison} />}
-            {screen === 3 && <Screen3 unitInfo={unitInfo} onBack={() => setScreen(2)} onConfirm={handleScreen3Confirm} />}
-            {screen === 4 && <Screen4Progress progress={evalProgress} evalError={evalError} />}
+            {screen === 1 && <EvalScreen1Units onConfirm={handleScreen1Confirm} />}
+            {screen === 2 && (
+                <EvalScreen2Upload
+                    units={units}
+                    onBack={() => setScreen(1)}
+                    onConfirm={handleScreen2Confirm}
+                    previousEvaluation={previousEvaluation}
+                    showComparison={showComparison}
+                    onSetShowComparison={setShowComparison}
+                />
+            )}
+            {screen === 3 && <EvalScreen3Learner units={units} onBack={() => setScreen(2)} onConfirm={handleScreen3Confirm} />}
+            {screen === 4 && <EvalScreen4Progress progress={progress} stageLabel={stageLabel} evalError={evalError} />}
             {screen === 5 && (
-                <Screen5Report
-                    unitInfo={unitInfo}
+                <EvalScreen5Report
+                    units={units}
                     cohortProfile={cohortProfile}
                     results={results}
                     reportText={reportText}
