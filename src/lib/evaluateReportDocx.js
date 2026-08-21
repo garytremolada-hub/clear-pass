@@ -1,6 +1,6 @@
 import {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-    BorderStyle, WidthType, ShadingType, VerticalAlign,
+    BorderStyle, WidthType,
 } from 'docx';
 
 const NAVY = '0D2444';
@@ -17,7 +17,7 @@ function navyHeader(text) {
         rows: [new TableRow({
             children: [new TableCell({
                 borders: { top: navyB, bottom: navyB, left: navyB, right: navyB },
-                shading: { fill: NAVY, type: ShadingType.CLEAR },
+                shading: { fill: NAVY, type: 'clear' },
                 margins: { top: 120, bottom: 120, left: 200, right: 200 },
                 children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 26, color: WHITE, font: 'Arial' })] })],
             })],
@@ -40,7 +40,7 @@ function tableRow(cells, isHeader = false) {
         children: cells.map((t, i) => new TableCell({
             borders,
             margins: cm,
-            shading: { fill: isHeader ? NAVY : (i % 2 === 0 ? LIGHT_GREY : WHITE), type: ShadingType.CLEAR },
+            shading: { fill: isHeader ? NAVY : (i % 2 === 0 ? LIGHT_GREY : WHITE), type: 'clear' },
             children: [new Paragraph({ children: [new TextRun({ text: String(t || ''), size: 18, font: 'Arial', color: isHeader ? WHITE : '1A1A1A', bold: isHeader })] })],
         })),
     });
@@ -92,20 +92,20 @@ function buildReadabilityChart(sectionList, targetFKGL, bandLabel) {
             children: [
                 new TableCell({
                     width: { size: LABEL_COL, type: WidthType.DXA }, borders: noBorder,
-                    margins: { top: 80, bottom: 0, left: 0, right: 140 }, verticalAlign: VerticalAlign.CENTER,
+                    margins: { top: 80, bottom: 0, left: 0, right: 140 }, verticalAlign: 'center',
                     children: [new Paragraph({ children: [new TextRun({ text: section.name || 'Section', size: 17, font: 'Arial', color: '374151' })] })],
                 }),
                 new TableCell({
                     width: { size: BAR_ZONE_TOTAL, type: WidthType.DXA }, borders: noBorder,
-                    margins: { top: 80, bottom: 0, left: 0, right: 0 }, verticalAlign: VerticalAlign.CENTER,
+                    margins: { top: 80, bottom: 0, left: 0, right: 0 }, verticalAlign: 'center',
                     children: [new Table({
                         width: { size: BAR_ZONE_TOTAL, type: WidthType.DXA },
                         columnWidths: [filledW, emptyW, FKGL_LABEL_W],
                         rows: [new TableRow({
                             height: { value: 200, rule: 'exact' },
                             children: [
-                                new TableCell({ width: { size: filledW, type: WidthType.DXA }, shading: { fill: barColour, type: ShadingType.CLEAR }, borders: noBorder, children: [new Paragraph({ children: [] })] }),
-                                new TableCell({ width: { size: emptyW, type: WidthType.DXA }, shading: { fill: 'F3F4F6', type: ShadingType.CLEAR }, borders: noBorder, children: [new Paragraph({ children: [] })] }),
+                                new TableCell({ width: { size: filledW, type: WidthType.DXA }, shading: { fill: barColour, type: 'clear' }, borders: noBorder, children: [new Paragraph({ children: [] })] }),
+                                new TableCell({ width: { size: emptyW, type: WidthType.DXA }, shading: { fill: 'F3F4F6', type: 'clear' }, borders: noBorder, children: [new Paragraph({ children: [] })] }),
                                 new TableCell({ width: { size: FKGL_LABEL_W, type: WidthType.DXA }, borders: noBorder, margins: { left: 80 }, children: [new Paragraph({ children: [new TextRun({ text: fkgl > 0 ? fkgl.toFixed(1) : 'N/A', size: 17, bold: true, font: 'Arial', color: barColour })] })] }),
                             ],
                         })],
@@ -180,7 +180,7 @@ function buildExampleBox(gap) {
         rows: [new TableRow({
             children: [new TableCell({
                 borders: { top: thin, bottom: thin, left: blueLeft, right: thin },
-                shading: { fill: 'EFF6FF', type: ShadingType.CLEAR },
+                shading: { fill: 'EFF6FF', type: 'clear' },
                 margins: { top: 100, bottom: 100, left: 160, right: 140 },
                 children: [
                     new Paragraph({ children: [new TextRun({ text: 'Example addition:', bold: true, size: 18, font: 'Arial', color: '185FA5' })] }),
