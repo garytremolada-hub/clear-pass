@@ -11,6 +11,7 @@ import ThumbsRating from '@/components/feedback/ThumbsRating';
 import { extractMappingData } from '@/lib/extractMappingData';
 import { callWithRetry } from '@/lib/buildUtils';
 import { extractDocxText } from '@/lib/extractDocxText';
+import BuildScreen1Units from '@/components/build/BuildScreen1Units';
 
 function isNewUocStructure(data) {
     return Array.isArray(data?.elements) && data.elements.length > 0;
@@ -775,7 +776,7 @@ function Screen4Loading({ onReset, onRetry, progress, buildError, failedStep }) 
     );
 }
 
-function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, validationResult, mappingError, validationError, studentBookletBase64, studentBookletError, usageInfo, onBack, onReset, onSave }) {
+function Screen4Ready({ unitInfo, units, cohortInfo, assessmentText, mappingResults, validationResults, mappingError, validationError, studentBookletBase64, studentBookletError, usageInfo, onBack, onReset, onSave }) {
     const navigate = useNavigate();
     const [showFeedback, setShowFeedback] = useState(false);
     const hasGaps = assessmentText?.includes('⚠') || assessmentText?.includes('NOT COVERED');
@@ -832,6 +833,13 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, val
                     <p style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>
                         {unitInfo.code} — {unitInfo.title}
                     </p>
+                    {units.length > 1 && (
+                        <div style={{ marginBottom: '8px' }}>
+                            {units.map(u => (
+                                <p key={u.code} style={{ color: '#6b7280', fontSize: '12px', marginBottom: '2px' }}>· {u.code} — {u.title}</p>
+                            ))}
+                        </div>
+                    )}
                     <p style={{ color: '#6b7280', fontSize: '13px', marginBottom: '16px' }}>
                         Reading level: {cohortInfo.band}
                     </p>
@@ -890,22 +898,41 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, val
                             : 'Download student booklet (.docx) →'}
                     </button>
 
-                    {/* Button 2 — Competency mapping */}
+                    {/* Button 2 — Competency mapping (per unit) */}
                     <div>
-                        <button
-                            onClick={() => handleDownloadBase64(mappingResult)}
-                            disabled={!mappingResult}
-                            style={{
-                                width: '100%', height: '44px',
-                                backgroundColor: 'transparent',
-                                color: mappingResult ? '#0d2444' : '#9ca3af',
-                                borderRadius: '8px',
-                                border: `1px solid ${mappingResult ? '#0d2444' : '#d1d5db'}`,
-                                fontSize: '14px', cursor: mappingResult ? 'pointer' : 'not-allowed',
-                            }}
-                        >
-                            Download competency mapping (.docx) →
-                        </button>
+                        {mappingResults.length > 0 ? (
+                            mappingResults.map(mr => (
+                                <button
+                                    key={mr.unitCode}
+                                    onClick={() => handleDownloadBase64(mr)}
+                                    style={{
+                                        width: '100%', height: '44px',
+                                        backgroundColor: 'transparent',
+                                        color: '#0d2444',
+                                        borderRadius: '8px',
+                                        border: '1px solid #0d2444',
+                                        fontSize: '14px', cursor: 'pointer',
+                                        marginBottom: '6px',
+                                    }}
+                                >
+                                    Download competency mapping — {mr.unitCode} (.docx) →
+                                </button>
+                            ))
+                        ) : (
+                            <button
+                                disabled
+                                style={{
+                                    width: '100%', height: '44px',
+                                    backgroundColor: 'transparent',
+                                    color: '#9ca3af',
+                                    borderRadius: '8px',
+                                    border: '1px solid #d1d5db',
+                                    fontSize: '14px', cursor: 'not-allowed',
+                                }}
+                            >
+                                Download competency mapping (.docx) →
+                            </button>
+                        )}
                         <p style={{ color: '#9ca3af', fontSize: '11px', fontStyle: 'italic', textAlign: 'center', marginTop: '4px' }}>
                             Word document — maps every requirement to specific questions and tasks
                         </p>
@@ -916,22 +943,41 @@ function Screen4Ready({ unitInfo, cohortInfo, assessmentText, mappingResult, val
                         )}
                     </div>
 
-                    {/* Button 3 — Validation record */}
+                    {/* Button 3 — Validation record (per unit) */}
                     <div>
-                        <button
-                            onClick={() => handleDownloadBase64(validationResult)}
-                            disabled={!validationResult}
-                            style={{
-                                width: '100%', height: '44px',
-                                backgroundColor: 'transparent',
-                                color: validationResult ? '#0d2444' : '#9ca3af',
-                                borderRadius: '8px',
-                                border: `1px solid ${validationResult ? '#0d2444' : '#d1d5db'}`,
-                                fontSize: '14px', cursor: validationResult ? 'pointer' : 'not-allowed',
-                            }}
-                        >
-                            Download validation record (.docx) →
-                        </button>
+                        {validationResults.length > 0 ? (
+                            validationResults.map(vr => (
+                                <button
+                                    key={vr.unitCode}
+                                    onClick={() => handleDownloadBase64(vr)}
+                                    style={{
+                                        width: '100%', height: '44px',
+                                        backgroundColor: 'transparent',
+                                        color: '#0d2444',
+                                        borderRadius: '8px',
+                                        border: '1px solid #0d2444',
+                                        fontSize: '14px', cursor: 'pointer',
+                                        marginBottom: '6px',
+                                    }}
+                                >
+                                    Download validation record — {vr.unitCode} (.docx) →
+                                </button>
+                            ))
+                        ) : (
+                            <button
+                                disabled
+                                style={{
+                                    width: '100%', height: '44px',
+                                    backgroundColor: 'transparent',
+                                    color: '#9ca3af',
+                                    borderRadius: '8px',
+                                    border: '1px solid #d1d5db',
+                                    fontSize: '14px', cursor: 'not-allowed',
+                                }}
+                            >
+                                Download validation record (.docx) →
+                            </button>
+                        )}
                         <p style={{ color: '#9ca3af', fontSize: '11px', fontStyle: 'italic', textAlign: 'center', marginTop: '4px' }}>
                             One-page sign-off document — for your validation folder
                         </p>
@@ -987,7 +1033,7 @@ export default function Build() {
     const navigate = useNavigate();
     const { profile, getLabel } = useCohort();
     const [screen, setScreen] = useState(1);
-    const [unitInfo, setUnitInfo] = useState(null);
+    const [units, setUnits] = useState([]);
     const [cohortInfo, setCohortInfo] = useState(null);
     const [structureProposal, setStructureProposal] = useState(null);
     const [structureLoading, setStructureLoading] = useState(false);
@@ -996,8 +1042,8 @@ export default function Build() {
     const [buildProgress, setBuildProgress] = useState(0);
     const [buildError, setBuildError] = useState(null);
     const [assessmentText, setAssessmentText] = useState('');
-    const [mappingResult, setMappingResult] = useState(null);     // { file_base64, filename }
-    const [validationResult, setValidationResult] = useState(null); // { file_base64, filename }
+    const [mappingResults, setMappingResults] = useState([]);     // [{ unitCode, file_base64, filename }]
+    const [validationResults, setValidationResults] = useState([]); // [{ unitCode, file_base64, filename }]
     const [mappingError, setMappingError] = useState(null);
     const [validationError, setValidationError] = useState(null);
     const [studentBookletBase64, setStudentBookletBase64] = useState(null);
@@ -1015,8 +1061,8 @@ export default function Build() {
 
     const llmCall = (prompt, model) => base44.integrations.Core.InvokeLLM({ prompt: NO_DASH_RULE + prompt, ...(model ? { model } : {}) });
 
-    const handleScreen1Confirm = (info) => {
-        setUnitInfo(info);
+    const handleScreen1Confirm = (selectedUnits) => {
+        setUnits(selectedUnits);
         setScreen(2);
     };
 
@@ -1029,24 +1075,27 @@ export default function Build() {
         const isLiteracy = ci.support === 'literacy' || ci.support === 'both';
         const isWorkplace = true; // default delivery
 
-        // Build a text summary for the structure LLM call — works for both new and old paths
-        const uocTextForStructure = isNewUocStructure(unitInfo.uocData)
-            ? [
-                `Unit: ${unitInfo.code} — ${unitInfo.title}`,
-                `\nKnowledge Evidence (${unitInfo.uocData.knowledgeEvidence.length} items):`,
-                unitInfo.uocData.knowledgeEvidence.map(k => k.text).join('\n'),
-                `\nPerformance Evidence (${unitInfo.uocData.performanceEvidence.length} items):`,
-                unitInfo.uocData.performanceEvidence.join('\n'),
-                `\nAssessment Conditions:`,
-                unitInfo.uocData.assessmentConditions.join('\n'),
-              ].join('\n')
-            : (unitInfo.text || '').slice(0, 6000);
+        // Build a combined text summary for the structure LLM call from all units in the cluster
+        const uocTextForStructure = units.map((u, idx) => {
+            if (isNewUocStructure(u.uocData)) {
+                return [
+                    `${idx > 0 ? '\n---\n' : ''}Unit ${idx + 1}: ${u.code} — ${u.title}`,
+                    `\nKnowledge Evidence (${u.uocData.knowledgeEvidence.length} items):`,
+                    u.uocData.knowledgeEvidence.map(k => k.text).join('\n'),
+                    `\nPerformance Evidence (${u.uocData.performanceEvidence.length} items):`,
+                    u.uocData.performanceEvidence.join('\n'),
+                    `\nAssessment Conditions:`,
+                    u.uocData.assessmentConditions.join('\n'),
+                ].join('\n');
+            }
+            return `${idx > 0 ? '\n---\n' : ''}Unit ${idx + 1}: ${u.code} — ${u.title}\n${(u.text || '').slice(0, 4000)}`;
+        }).join('\n');
 
         try {
             const result = await llmCall(
-                `You are an Australian VET assessment designer. Analyse this Unit of Competency and return a JSON object ONLY (no other text).
+                `You are an Australian VET assessment designer. Analyse this ${units.length > 1 ? `cluster of ${units.length} Units of Competency` : 'Unit of Competency'} and return a JSON object ONLY (no other text).
 
-UoC TEXT (first 6000 chars):
+UoC TEXT:
 ${uocTextForStructure}
 
 COHORT: ${ci.learnerDesc}, reading level: ${ci.band}
@@ -1157,9 +1206,8 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
         const band = cohortInfo.band;
         const levelNote = `Target reading level: ${band}\nCohort: ${cohortBlock}`;
 
-        // Determine if we have structured TGA data or legacy text
-        const hasStructured = isNewUocStructure(unitInfo.uocData);
-        const totalSteps = hasStructured ? 3 : 4;
+        // Cluster build: all units should come from TGA (structured data)
+        const totalSteps = 3;
         let stepNum = 0;
 
         // Step wrapper: logs step number, retries on failure, caches for resume
@@ -1188,64 +1236,27 @@ IMPORTANT: uocRequirement must always be populated for required sections. Use ex
             // STEP 1 (legacy only) — Parse UoC structure
             setBuildProgress(10);
 
-            let parsed;
-            if (hasStructured) {
-                // Build parsed object directly from structured TGA data — no AI needed
-                const ud = unitInfo.uocData;
-                parsed = {
-                    unit_code: unitInfo.code,
-                    unit_title: unitInfo.title,
+            // Build parsed object for each unit in the cluster from structured TGA data
+            const allParsed = units.map(u => {
+                const ud = u.uocData;
+                return {
+                    unit_code: u.code,
+                    unit_title: u.title,
                     ke_items: ud.knowledgeEvidence.map(k => k.subItems ? `${k.text} (including: ${k.subItems.join(', ')})` : k.text),
                     pe_items: ud.performanceEvidence,
                     pc_items: ud.elements.flatMap(el => el.performanceCriteria.map(pc => `${pc.ref} — ${pc.text}`)),
+                    assessment_conditions: ud.assessmentConditions || [],
+                    foundation_skills: (ud.foundationSkills || []).map(fs => ({ name: fs.skill, description: (fs.descriptions || []).join(' ') })),
                 };
-            } else {
-                const uoc = unitInfo.text || '';
-                const structure = await llmStep('Parse UoC structure',
-                    `You are an Australian VET assessment designer. Parse this Unit of Competency and return a JSON object only (no other text) with these fields:
-- unit_code: string
-- unit_title: string  
-- ke_items: array of strings (each Knowledge Evidence item, verbatim)
-- pe_items: array of strings (each Performance Evidence item, verbatim)
-- pc_items: array of strings (each Performance Criteria item, formatted as "X.X — description")
+            });
 
-UoC TEXT:
-${uoc.slice(0, 8000)}`, 'claude_sonnet_4_6'
-                );
-                try {
-                    const jsonStr = typeof structure === 'string' ? structure.replace(/```json|```/g, '').trim() : JSON.stringify(structure);
-                    parsed = JSON.parse(jsonStr);
-                } catch {
-                    parsed = { ke_items: [], pe_items: [], pc_items: [] };
-                }
-            }
-
-            const keList = (parsed.ke_items || []).join('\n');
-            const peList = (parsed.pe_items || []).join('\n');
-
-            // STEP 1 — Assessment Sections (combined: Knowledge Questions + Observation Checklist + Workplace Project)
-            setBuildProgress(40);
-            const assessmentCombined = await llmStep('Assessment Sections',
-                `You are an Australian VET assessment writer. Write three sections for an assessment instrument in a single response.
-
-${levelNote}
-Unit: ${unitInfo.code} — ${unitInfo.title}
-
-KNOWLEDGE EVIDENCE ITEMS TO COVER:
-${keList || (unitInfo.text || '').slice(0, 3000)}
-
-PERFORMANCE EVIDENCE AND CRITERIA TO COVER:
-${peList || ''}
-${parsed.pc_items?.join('\n') || ''}
-
-Instructions for Part A — Knowledge Questions:
-- Write 8–12 questions that cover all knowledge evidence items
-- Use short-answer format (2–4 sentences expected per answer)
-- Write at ${band} reading level
-- Number each question (Q1, Q2, etc.)
-- Include a "Model Answer" for each question in italics below the question
-- Use plain, clear language appropriate for the cohort
-
+            // Build combined lists with unit labels for prompts
+            const keList = allParsed.map(p => `\n[${p.unit_code}]\n${(p.ke_items || []).map((ke, i) => `${p.unit_code} KE${i + 1}: ${ke}`).join('\n')}`).join('\n');
+            const peList = allParsed.map(p => `\n[${p.unit_code}]\n${(p.pe_items || []).map((pe, i) => `${p.unit_code} PE${i + 1}: ${pe}`).join('\n')}`).join('\n');
+            const pcList = allParsed.map(p => `\n[${p.unit_code}]\n${(p.pc_items || []).join('\n')}`).join('\n');
+            const unitsList = units.map(u => `${u.code} — ${u.title}`).join('\n');
+            const hasBSBLDR413 = units.some(u => u.code.toUpperCase().includes('BSBLDR413'));
+            const bsbsldr413Block = hasBSBLDR413 ? `
 MANDATORY Q4 REQUIREMENT: Q4 must be written exactly as follows (do not change any wording):
 
 Q4. Leaders use five key skills to build trust with their team. Name each skill below. Write what it means and give one example of how you would use it at work.
@@ -1268,17 +1279,44 @@ Q5 REQUIREMENT: After writing Q4 as above, check whether Q5 would be redundant. 
 Q5. Think about a time when a workplace relationship was difficult. What steps could a leader take to repair trust and improve the relationship?
 
 *Model Answer: A leader could start by having a private, respectful conversation to understand the other person's perspective. They could acknowledge any misunderstandings, agree on clear expectations going forward, and follow up regularly to make sure the relationship continues to improve. Seeking support from HR or a mentor may also help.*
+` : '';
 
+            // STEP 1 — Assessment Sections (combined: Knowledge Questions + Observation Checklist + Workplace Project)
+            setBuildProgress(40);
+            const assessmentCombined = await llmStep('Assessment Sections',
+                `You are an Australian VET assessment writer. Write three sections for an assessment instrument in a single response.
+
+${levelNote}
+UNITS IN THIS CLUSTER:
+${unitsList}
+
+KNOWLEDGE EVIDENCE ITEMS TO COVER (all units, labelled by unit code):
+${keList}
+
+PERFORMANCE EVIDENCE AND CRITERIA TO COVER (all units, labelled by unit code):
+${peList}
+
+${pcList}
+
+Instructions for Part A — Knowledge Questions:
+- Write enough questions to cover ALL knowledge evidence items from ALL units in the cluster (aim for roughly 8–12 questions per unit)
+- Use short-answer format (2–4 sentences expected per answer)
+- Write at ${band} reading level
+- Number each question (Q1, Q2, etc.)
+- Include a "Model Answer" for each question in italics below the question
+- Use plain, clear language appropriate for the cohort
+
+${bsbsldr413Block}
 Instructions for Part B — Observation Checklist:
-- Write a checklist of 10–15 observable behaviours/tasks the assessor will observe
+- Write a checklist of observable behaviours/tasks the assessor will observe (aim for 10–15 per unit in the cluster)
 - Each item should be a clear, observable action (Satisfactory / Not Yet Satisfactory checkboxes)
-- Cover all performance evidence and key performance criteria
+- Cover all performance evidence and key performance criteria from ALL units
 - Write at ${band} reading level
 - Include an "Assessor Notes" field at the end
 - Output as a Markdown table with columns: Item | Observable Behaviour | S | NYS | Comments
 
 Instructions for Part C — Workplace Project:
-- Write one practical workplace project task that covers all performance evidence
+- Write one practical workplace project task that covers all performance evidence from ALL units in the cluster
 - Include: scenario context, task instructions (numbered steps), resources required, submission requirements
 - Write at ${band} reading level
 - The task should produce a physical or digital work product as evidence
@@ -1305,9 +1343,8 @@ Output format: Markdown with three sections. Start each section with its header:
                 `You are an Australian VET assessment writer. Write the complete marking guide for this assessment.
 
 ${levelNote}
-Unit: ${unitInfo.code} — ${unitInfo.title}
-
-KNOWLEDGE QUESTIONS (already written):
+UNITS IN THIS CLUSTER:
+${unitsList}
 ${kText.slice(0, 3000)}
 
 OBSERVATION CHECKLIST (already written):
@@ -1328,7 +1365,9 @@ Output format: Markdown. Start with: ## Knowledge Questions — Marking Guide
 Then continue with: ## Observation & Project — Marking Guide`, 'claude_sonnet_4_6'
             );
 
-            const markingGuide = `# Assessor Marking Guide — ${unitInfo.code}\n\n${typeof markingGuideRaw === 'string' ? markingGuideRaw : JSON.stringify(markingGuideRaw)}`;
+            const clusterCode = units.length === 1 ? units[0].code : units.map(u => u.code).join(' + ');
+            const clusterTitle = units.length === 1 ? units[0].title : `${units.length}-unit cluster`;
+            const markingGuide = `# Assessor Marking Guide — ${clusterCode}\n\n${typeof markingGuideRaw === 'string' ? markingGuideRaw : JSON.stringify(markingGuideRaw)}`;
 
             // STEP 3 — Mapping Index
             setBuildProgress(97);
@@ -1336,8 +1375,18 @@ Then continue with: ## Observation & Project — Marking Guide`, 'claude_sonnet_
             const oSummary = oText.slice(0, 2000);
             const pSummary = pText.slice(0, 2000);
 
+            const acFsText = allParsed.map(p => {
+                const ud = units.find(u => u.code === p.unit_code).uocData;
+                return [
+                    `[${p.unit_code}]`,
+                    ...(ud.assessmentConditions || []).map(c => `Assessment condition: ${c}`),
+                    ...(ud.foundationSkills || []).map(fs => `Foundation skill: ${fs.skill} — ${(fs.descriptions || []).join(' ')}`),
+                ].join('\n');
+            }).join('\n');
+
             const mappingIndexRaw = await llmStep('Mapping Index',
-                `You have just built an assessment for ${unitInfo.code} — ${unitInfo.title}.
+                `You have just built a clustered assessment covering these units:
+${unitsList}
 
 The assessment contains the following sections:
 
@@ -1350,35 +1399,30 @@ ${oSummary}
 PART C — WORKPLACE PROJECT (actual content):
 ${pSummary}
 
-KNOWLEDGE EVIDENCE ITEMS FROM UoC:
-${keList || '(see UoC)'}
+KNOWLEDGE EVIDENCE ITEMS FROM UoC (labelled by unit code):
+${keList}
 
-PERFORMANCE EVIDENCE ITEMS FROM UoC:
-${peList || '(see UoC)'}
+PERFORMANCE EVIDENCE ITEMS FROM UoC (labelled by unit code):
+${peList}
 
-PERFORMANCE CRITERIA FROM UoC:
-${parsed.pc_items?.join('\n') || '(see UoC)'}
+PERFORMANCE CRITERIA FROM UoC (labelled by unit code):
+${pcList}
 
-FULL UoC TEXT (for foundation skills and assessment conditions):
-${hasStructured
-    ? [
-        ...(unitInfo.uocData.assessmentConditions || []).map(c => `Assessment condition: ${c}`),
-        ...(unitInfo.uocData.foundationSkills || []).map(fs => `Foundation skill: ${fs.skill} — ${(fs.descriptions || []).join(' ')}`),
-      ].join('\n')
-    : (unitInfo.text || '').slice(0, 4000)
-}
+FULL UoC DETAILS (foundation skills and assessment conditions, per unit):
+${acFsText}
 
 Now produce a mapping index as a JSON object.
 Return ONLY the JSON. No explanation. No markdown fences.
 Start your response with { and end with }
 
-The JSON must use this exact format with double quotes:
+The JSON must use this exact format with double quotes. Each entry MUST include a "unit" field with the exact unit code it maps to:
 
 {
   "mappingIndex": {
     "knowledgeQuestions": [
       {
         "num": "Q1",
+        "unit": "UNITCODE",
         "ke": ["KE1"],
         "pc": ["1.1"],
         "text": "brief question topic"
@@ -1387,6 +1431,7 @@ The JSON must use this exact format with double quotes:
     "observationItems": [
       {
         "num": "Item 1",
+        "unit": "UNITCODE",
         "pe": ["PE1", "PE2"],
         "pc": ["1.1", "1.2"],
         "text": "brief behaviour description"
@@ -1395,6 +1440,7 @@ The JSON must use this exact format with double quotes:
     "projectSteps": [
       {
         "num": "Step 1",
+        "unit": "UNITCODE",
         "name": "exact step name from assessment",
         "pe": ["PE2"],
         "pc": ["1.1"],
@@ -1404,12 +1450,14 @@ The JSON must use this exact format with double quotes:
     "verbalQuestions": [],
     "assessmentConditions": [
       {
+        "unit": "UNITCODE",
         "condition": "verbatim condition text from UoC",
         "howMet": "plain English explanation of how this assessment meets it"
       }
     ],
     "foundationSkills": [
       {
+        "unit": "UNITCODE",
         "skill": "skill name",
         "pcRefs": ["1.1", "2.3"],
         "description": "verbatim description from UoC",
@@ -1425,15 +1473,17 @@ The JSON must use this exact format with double quotes:
 }
 
 Rules:
-- Every KE item must appear in at least one knowledgeQuestions entry
-- Every PE item must appear in at least one observationItems or projectSteps entry
-- Every PC must appear in at least one entry across all sections
+- EVERY entry in knowledgeQuestions, observationItems, projectSteps, assessmentConditions, and foundationSkills MUST include a "unit" field set to the exact unit code (e.g. "BSBLDR413") that the requirement belongs to. This is critical for a clustered assessment.
+- The ke, pe, and pc references must use the LOCAL references for that unit (e.g. "KE1", "PE1", "1.1") without the unit code prefix. The unit field tells us which unit they belong to.
+- Every KE item from every unit must appear in at least one knowledgeQuestions entry
+- Every PE item from every unit must appear in at least one observationItems or projectSteps entry
+- Every PC from every unit must appear in at least one entry across all sections
 - Use exact references with prefixes: "Q1" not "1", "Item 1" not "1", "Step 1" not "1"
-- assessmentConditions must quote the UoC conditions verbatim. Make sure to include ALL conditions listed under "Assessment conditions" in the UoC. Common conditions that are often missed: interaction with others, access to real or simulated workplace, access to workplace documentation. Do not stop at 3 or 4 conditions if the UoC lists more.
-- foundationSkills must include all skills listed in the UoC
+- assessmentConditions must quote the UoC conditions verbatim, grouped by unit. Include ALL conditions from ALL units.
+- foundationSkills must include all skills listed in each unit's UoC
 - Return ONLY the JSON object. Nothing else.
 
-Important: map every single question to its KE requirement. Do not stop before you have mapped all questions. The second-to-last knowledge question covers conflict resolution methods. Map it to KE7. The third-to-last knowledge question covers poor work performance management methods. Map it to KE8. The last knowledge question covers methods to monitor and improve work relationships. Map it to KE9. Count your knowledgeQuestions array entries when done. The count must equal the total number of questions built. If it does not, you have missed some questions. Go back and add them.`, 'claude_sonnet_4_6'
+Important: map every single question to its KE requirement. Do not stop before you have mapped all questions from all units. Count your knowledgeQuestions array entries when done. The count must equal the total number of questions built. If it does not, you have missed some questions. Go back and add them.`, 'claude_sonnet_4_6'
             );
 
             // Parse mapping index
@@ -1464,8 +1514,8 @@ Important: map every single question to its KE requirement. Do not stop before y
                 console.warn(`Mapping index has ${mappedCount} entries but assessment has ${builtQuestionCount} questions. Some questions are unmapped.`);
             }
 
-            // BUG 4 FIX Part B — BSBLDR413 fallback: ensure "Interaction with others" condition is present
-            if ((parsed.unit_code || unitInfo.code || '').includes('BSBLDR413')) {
+            // BSBLDR413 fallback: ensure "Interaction with others" condition is present
+            if (hasBSBLDR413) {
                 const hasInteraction = mappingIndex.assessmentConditions &&
                     mappingIndex.assessmentConditions.some(ac =>
                         (ac.condition || '').toLowerCase().includes('interaction')
@@ -1483,7 +1533,7 @@ Important: map every single question to its KE requirement. Do not stop before y
             const mText = typeof markingGuide === 'string' ? markingGuide : JSON.stringify(markingGuide);
 
             const fullAssessment = `# Assessment Instrument
-## ${unitInfo.code} — ${unitInfo.title}
+## ${clusterCode} — ${clusterTitle}
 *Reading level: ${band}*
 
 ---
@@ -1505,8 +1555,24 @@ ${mText}`;
             setAssessmentText(fullAssessment);
             setBuildProgress(100);
 
-            // ── Generate compliance documents ──────────────────────────────
-            const mappingData = extractMappingData(parsed, unitInfo, cohortInfo, useSections, mappingIndex);
+            // ── Generate compliance documents (per-unit for cluster) ───────
+            const filterMIByUnit = (mi, unitCode) => {
+                const f = arr => (arr || []).filter(e => !e.unit || e.unit === unitCode);
+                return {
+                    ...mi,
+                    knowledgeQuestions: f(mi.knowledgeQuestions),
+                    observationItems: f(mi.observationItems),
+                    projectSteps: f(mi.projectSteps),
+                    verbalQuestions: f(mi.verbalQuestions),
+                    assessmentConditions: f(mi.assessmentConditions),
+                    foundationSkills: f(mi.foundationSkills),
+                };
+            };
+            const perUnitMappingData = allParsed.map((p, i) => {
+                const unitInfoForUnit = { code: p.unit_code, title: p.unit_title, uocData: units[i].uocData, text: null };
+                const unitMI = filterMIByUnit(mappingIndex, p.unit_code);
+                return { unitCode: p.unit_code, mappingData: extractMappingData(p, unitInfoForUnit, cohortInfo, useSections, unitMI) };
+            });
 
             // Extract question strings from knowledgeSection
             // Matches lines like: "Q1. text", "**Q1. text**", "**Q1.** text", "Q1. **text**"
@@ -1558,38 +1624,59 @@ ${mText}`;
                 projectSteps: builtProjectSteps,
             });
 
-            // Run all three in parallel, don't block on errors
-            const [cmRes, vrRes, sbRes] = await Promise.allSettled([
-                base44.functions.invoke('generateCompetencyMapping', { mappingData }),
-                base44.functions.invoke('generateValidationRecord', { mappingData }),
+            // Generate per-unit competency mapping + validation records, and one combined student booklet
+            const docPromises = [
+                ...perUnitMappingData.map(({ unitCode, mappingData }) =>
+                    base44.functions.invoke('generateCompetencyMapping', { mappingData }).then(r => ({ type: 'mapping', unitCode, data: r.data }))
+                ),
+                ...perUnitMappingData.map(({ unitCode, mappingData }) =>
+                    base44.functions.invoke('generateValidationRecord', { mappingData }).then(r => ({ type: 'validation', unitCode, data: r.data }))
+                ),
                 base44.functions.invoke('generateStudentBooklet', {
-                    unitCode: unitInfo.code,
-                    unitTitle: unitInfo.title,
+                    unitCode: clusterCode,
+                    unitTitle: clusterTitle,
                     questions: builtQuestions,
                     obsItems: builtObsItems.length > 0 ? builtObsItems : [],
                     projectSteps: builtProjectSteps.length > 0 ? builtProjectSteps : [],
                     occasionCount: 4,
-                }),
-            ]);
+                }).then(r => ({ type: 'booklet', data: r.data })),
+            ];
 
-            if (cmRes.status === 'fulfilled' && cmRes.value?.data?.file_base64) {
-                setMappingResult(cmRes.value.data);
+            const docResults = await Promise.allSettled(docPromises);
+
+            const newMappingResults = [];
+            const newValidationResults = [];
+            let bookletSuccess = false;
+
+            docResults.forEach(r => {
+                if (r.status !== 'fulfilled') return;
+                const val = r.value;
+                if (val.type === 'mapping' && val.data?.file_base64) {
+                    newMappingResults.push({ unitCode: val.unitCode, file_base64: val.data.file_base64, filename: val.data.filename });
+                } else if (val.type === 'validation' && val.data?.file_base64) {
+                    newValidationResults.push({ unitCode: val.unitCode, file_base64: val.data.file_base64, filename: val.data.filename });
+                } else if (val.type === 'booklet' && val.data?.file_base64) {
+                    setStudentBookletBase64(val.data.file_base64);
+                    setStudentBookletError(false);
+                    bookletSuccess = true;
+                }
+            });
+
+            if (newMappingResults.length > 0) {
+                setMappingResults(newMappingResults);
                 setMappingError(null);
             } else {
                 setMappingError('Competency mapping could not be generated. Try downloading the assessment first, then rebuild.');
             }
 
-            if (vrRes.status === 'fulfilled' && vrRes.value?.data?.file_base64) {
-                setValidationResult(vrRes.value.data);
+            if (newValidationResults.length > 0) {
+                setValidationResults(newValidationResults);
                 setValidationError(null);
             } else {
                 setValidationError('Validation record could not be generated. Try downloading the assessment first, then rebuild.');
             }
 
-            if (sbRes.status === 'fulfilled' && sbRes.value?.data?.file_base64) {
-                setStudentBookletBase64(sbRes.value.data.file_base64);
-                setStudentBookletError(false);
-            } else {
+            if (!bookletSuccess) {
                 setStudentBookletError(true);
             }
 
@@ -1621,13 +1708,15 @@ ${mText}`;
     };
 
     const handleSave = async () => {
-        if (!unitInfo || !assessmentText) return;
+        if (units.length === 0 || !assessmentText) return;
+        const saveCode = units.length === 1 ? units[0].code : units.map(u => u.code).join(' + ');
+        const saveTitle = units.length === 1 ? units[0].title : `${units.length}-unit cluster`;
         try {
             await base44.entities.WorkLibraryItem.create({
-                title: `${unitInfo.code} — ${unitInfo.title}`,
+                title: `${saveCode} — ${saveTitle}`,
                 task_type: 'build',
-                unit_code: unitInfo.code,
-                unit_title: unitInfo.title,
+                unit_code: saveCode,
+                unit_title: saveTitle,
                 aqf_level: cohortInfo?.band || '',
                 output_text: assessmentText,
             });
@@ -1641,13 +1730,13 @@ ${mText}`;
     const handleReset = () => {
         buildStateRef.current = {};
         setScreen(1);
-        setUnitInfo(null);
+        setUnits([]);
         setCohortInfo(null);
         setStructureProposal(null);
         setActiveSections([]);
         setAssessmentText('');
-        setMappingResult(null);
-        setValidationResult(null);
+        setMappingResults([]);
+        setValidationResults([]);
         setMappingError(null);
         setValidationError(null);
         setStudentBookletBase64(null);
@@ -1656,11 +1745,16 @@ ${mText}`;
         setBuilding(false);
     };
 
+    const unitInfo = units.length > 0 ? {
+        code: units.length === 1 ? units[0].code : units.map(u => u.code).join(' + '),
+        title: units.length === 1 ? units[0].title : `${units.length}-unit cluster`,
+    } : null;
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#ffffff' }}>
             <BuildHeader />
 
-            {screen === 1 && <Screen1 onConfirm={handleScreen1Confirm} />}
+            {screen === 1 && <BuildScreen1Units onConfirm={handleScreen1Confirm} />}
             {screen === 2 && <Screen2 unitInfo={unitInfo} onBack={() => setScreen(1)} onConfirm={handleScreen2Confirm} />}
             {screen === 3 && (
                 structureLoading ? (
@@ -1683,10 +1777,11 @@ ${mText}`;
             {screen === 4 && !building && !buildError && (
                 <Screen4Ready
                     unitInfo={unitInfo}
+                    units={units}
                     cohortInfo={cohortInfo}
                     assessmentText={assessmentText}
-                    mappingResult={mappingResult}
-                    validationResult={validationResult}
+                    mappingResults={mappingResults}
+                    validationResults={validationResults}
                     mappingError={mappingError}
                     validationError={validationError}
                     studentBookletBase64={studentBookletBase64}
