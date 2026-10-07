@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { base44 } from '@/api/base44Client';
+import { fetchUnitFromTGA } from '@/lib/fetchUnitFromTGA';
 import { CheckCircle, AlertCircle, Loader2, Search, Plus, X } from 'lucide-react';
 
 const BP_STEPS = ['Find Units', 'Learners', 'Review', 'Done'];
@@ -54,7 +54,7 @@ export default function BuildScreen1Units({ onConfirm }) {
         setSearchError('');
         setUocData(null);
         try {
-            const result = await base44.functions.invoke('fetchUnitFromTGA', { unitCode: unitCode.trim() });
+            const result = { data: await fetchUnitFromTGA(unitCode) };
             setUocData(result.data);
             setSearchState('confirmed');
         } catch (err) {

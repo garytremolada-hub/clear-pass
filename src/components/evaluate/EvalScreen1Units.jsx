@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { fetchUnitFromTGA } from '@/lib/fetchUnitFromTGA';
 import { CheckCircle, AlertCircle, Loader2, Search, X } from 'lucide-react';
 import EvalProgress from './EvalProgress';
 
@@ -17,7 +17,7 @@ export default function EvalScreen1Units({ onConfirm }) {
         setUnits(prev => [...prev, { code, title: '', uocData: null, status: 'loading' }]);
         setUnitCode('');
         try {
-            const result = await base44.functions.invoke('fetchUnitFromTGA', { unitCode: code });
+            const result = { data: await fetchUnitFromTGA(code) };
             setUnits(prev => prev.map(u => u.code === code
                 ? { ...u, title: result.data.unitTitle, uocData: result.data, status: 'confirmed' }
                 : u));

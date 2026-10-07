@@ -11,6 +11,7 @@ import ThumbsRating from '@/components/feedback/ThumbsRating';
 import { extractMappingData } from '@/lib/extractMappingData';
 import { callWithRetry } from '@/lib/buildUtils';
 import { extractDocxText } from '@/lib/extractDocxText';
+import { fetchUnitFromTGA } from '@/lib/fetchUnitFromTGA';
 import BuildScreen1Units from '@/components/build/BuildScreen1Units';
 
 function isNewUocStructure(data) {
@@ -159,7 +160,7 @@ function Screen1({ onConfirm }) {
         setSearchError('');
         setUocData(null);
         try {
-            const result = await base44.functions.invoke('fetchUnitFromTGA', { unitCode: unitCode.trim() });
+            const result = { data: await fetchUnitFromTGA(unitCode) };
             setUocData(result.data);
             setSearchState('confirmed');
         } catch (err) {

@@ -154,6 +154,11 @@ function parseAuthorITXml(xmlText) {
     };
 }
 
+const TGA_HEADERS = {
+    'Accept': 'application/json',
+    'User-Agent': 'Mozilla/5.0',
+};
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -174,13 +179,19 @@ Deno.serve(async (req) => {
             }, { status: 400 });
         }
 
+        if (body.probe) {
+            const out = {};
+            for (const u of body.probe) {
+                try { const r = await fetch(u, { headers: TGA_HEADERS }); out[u] = r.status; } catch (e) { out[u] = String(e); }
+            }
+            return Response.json(out);
+        }
+
         // Step 1: Get unit metadata
         const metaUrl = `https://training.gov.au/api/training/${rawCode}?api-version=1.0&include=all`;
         console.log(`Fetching metadata: ${metaUrl}`);
 
-        const metaRes = await fetch(metaUrl, {
-            headers: { 'Accept': 'application/json', 'User-Agent': 'Clearpass/1.0' }
-        });
+        const metaRes = await fetch(metaUrl, { headers: TGA_HEADERS });
 
         if (metaRes.status === 404) {
             return Response.json({
@@ -188,8 +199,9 @@ Deno.serve(async (req) => {
             }, { status: 404 });
         }
         if (!metaRes.ok) {
+            const errBody = (await metaRes.text()).slice(0, 300);
             return Response.json({
-                error: `training.gov.au returned an error (${metaRes.status}). Try again in a moment.`
+                error: `training.gov.au returned an error (${metaRes.status}). Try again in a moment. ${errBody}`
             }, { status: 502 });
         }
 
@@ -209,9 +221,7 @@ Deno.serve(async (req) => {
         const assetsUrl = `https://training.gov.au/api/training/${rawCode}/releases/${releaseNumber}?include=All&api-version=1.0`;
         console.log(`Fetching assets: ${assetsUrl}`);
 
-        const assetsRes = await fetch(assetsUrl, {
-            headers: { 'Accept': 'application/json', 'User-Agent': 'Clearpass/1.0' }
-        });
+        const assetsRes = await fetch(assetsUrl, { headers: TGA_HEADERS });
 
         if (!assetsRes.ok) {
             return Response.json({
@@ -235,7 +245,7 @@ Deno.serve(async (req) => {
         console.log(`Downloading XML: ${xmlAsset.url}`);
 
         // Step 3: Download and parse XML
-        const xmlRes = await fetch(xmlAsset.url, { headers: { 'User-Agent': 'Clearpass/1.0' } });
+        const xmlRes = await fetch(xmlAsset.url, { headers: TGA_HEADERS });
         if (!xmlRes.ok) {
             return Response.json({
                 error: `Could not download unit data for ${rawCode}. Upload a document instead.`
