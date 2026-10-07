@@ -48,6 +48,7 @@ export default function BuildScreen1Units({ onConfirm }) {
     const [searchError, setSearchError] = useState('');
     const [uocData, setUocData] = useState(null);
     const [units, setUnits] = useState([]);
+    const [clusterMode, setClusterMode] = useState(false);
 
     const handleFindUnit = async (e) => {
         e.preventDefault();
@@ -175,7 +176,33 @@ export default function BuildScreen1Units({ onConfirm }) {
                                 <tr><td style={{ padding: '7px 12px', color: '#6b7280', fontSize: '13px', fontWeight: 500, whiteSpace: 'nowrap' }}>Performance Evidence</td><td style={{ padding: '7px 12px', color: '#0d2444', fontSize: '13px' }}>{uocData.summary?.peCount ?? '—'}</td></tr>
                             </tbody>
                         </table>
+                        <div style={{ padding: '14px 16px', borderBottom: '1px solid #dcfce7', backgroundColor: '#fff' }}>
+                            <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>Is this a cluster of units?</p>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                {[{ v: false, label: 'No, just this unit' }, { v: true, label: 'Yes, add more units' }].map(o => {
+                                    const active = (clusterMode || units.length > 0) === o.v;
+                                    return (
+                                        <button
+                                            key={o.label}
+                                            onClick={() => setClusterMode(o.v)}
+                                            disabled={units.length > 0}
+                                            style={{ flex: 1, height: '40px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, cursor: units.length > 0 ? 'default' : 'pointer', border: active ? '2px solid #c9a84c' : '1px solid #e5e7eb', backgroundColor: active ? '#fefce8' : '#fff', color: '#0d2444' }}
+                                        >
+                                            {o.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                         <div style={{ padding: '14px 16px', display: 'flex', gap: '8px' }}>
+                            {!(clusterMode || units.length > 0) ? (
+                                <button
+                                    onClick={() => onConfirm([{ code: uocData.unitCode, title: uocData.unitTitle, releaseNumber: uocData.releaseNumber, uocData, text: null }])}
+                                    style={{ flex: 1, height: '44px', backgroundColor: '#c9a84c', color: '#0d2444', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                    Build assessment for this unit →
+                                </button>
+                            ) : (
                             <button
                                 onClick={handleAddUnit}
                                 disabled={isDuplicate(uocData.unitCode)}
@@ -184,6 +211,7 @@ export default function BuildScreen1Units({ onConfirm }) {
                                 <Plus style={{ width: '16px', height: '16px' }} />
                                 {isDuplicate(uocData.unitCode) ? 'Already added' : 'Add to cluster'}
                             </button>
+                            )}
                             <button
                                 onClick={() => { setSearchState('idle'); setUocData(null); setUnitCode(''); }}
                                 style={{ padding: '0 16px', height: '44px', border: '1px solid #d1d5db', borderRadius: '8px', backgroundColor: 'transparent', color: '#6b7280', fontSize: '13px', cursor: 'pointer' }}
@@ -230,8 +258,8 @@ export default function BuildScreen1Units({ onConfirm }) {
                     setUnits(prev => [...prev, { code: data.unitCode, title: data.unitTitle, releaseNumber: data.releaseNumber, uocData: data, text: null }]);
                 }} />
 
-                {/* Build button */}
-                <button
+                {/* Build button — cluster mode only */}
+                {units.length > 0 && <button
                     onClick={() => onConfirm(units)}
                     disabled={!canBuild}
                     style={{
@@ -249,7 +277,7 @@ export default function BuildScreen1Units({ onConfirm }) {
                             ? `Build assessment for ${units[0].code} →`
                             : `Build combined assessment for ${units.length} units →`
                     }
-                </button>
+                </button>}
             </div>
         </div>
     );
