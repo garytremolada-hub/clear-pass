@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { fetchUnitFromTGA } from '@/lib/fetchUnitFromTGA';
+import TgaLink from '@/components/shared/TgaLink';
 import { CheckCircle, AlertCircle, Loader2, Search, X } from 'lucide-react';
 import EvalProgress from './EvalProgress';
 
@@ -91,6 +92,8 @@ export default function EvalScreen1Units({ onConfirm }) {
                     </div>
                     <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
                 </form>
+
+                <TgaLink unitCode={unitCode} />
 
                 {units.length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>

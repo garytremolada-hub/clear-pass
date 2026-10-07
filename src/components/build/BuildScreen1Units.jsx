@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { fetchUnitFromTGA } from '@/lib/fetchUnitFromTGA';
+import TgaLink from '@/components/shared/TgaLink';
 import { CheckCircle, AlertCircle, Loader2, Search, Plus, X } from 'lucide-react';
 
 const BP_STEPS = ['Find Units', 'Learners', 'Review', 'Done'];
@@ -141,6 +142,8 @@ export default function BuildScreen1Units({ onConfirm }) {
                         )}
                     </form>
                 )}
+
+                <TgaLink unitCode={unitCode || uocData?.unitCode} />
 
                 {/* Error state */}
                 {searchState === 'error' && (
