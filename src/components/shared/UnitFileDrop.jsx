@@ -1,7 +1,34 @@
 import { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { extractDocxText } from '@/lib/extractDocxText';
+import { parseAuthorITXml } from '@/lib/fetchUnitFromTGA';
+import JSZip from 'jszip';
 import { Upload, Loader2, AlertCircle } from 'lucide-react';
+
+const CODE_RE = /[A-Z]{3,8}\d{3,6}[A-Z]?/;
+
+// Zip: use the unit XML if present (same parser as the TGA lookup), else a Word document inside.
+async function readZip(file) {
+    const zip = await JSZip.loadAsync(file);
+    const entries = Object.values(zip.files).filter(f => !f.dir && !f.name.startsWith('__MACOSX'));
+    const xmlEntry = entries.find(f => /complete.*\.xml$/i.test(f.name)) || entries.find(f => /\.xml$/i.test(f.name));
+    if (xmlEntry) {
+        const xml = await xmlEntry.async('string');
+        const parsed = parseAuthorITXml(xml);
+        if (parsed.summary.pcCount + parsed.summary.keCount + parsed.summary.peCount > 0) {
+            const code = (xml.match(CODE_RE) || (file.name.toUpperCase().match(CODE_RE)) || [''])[0];
+            const title = (xml.match(/<title>([^<]+)<\/title>/i) || [])[1] || code;
+            return { structured: { unitCode: code, unitTitle: title, releaseNumber: 'Uploaded', ...parsed } };
+        }
+    }
+    const docEntry = entries.find(f => /\.docx$/i.test(f.name));
+    if (docEntry) {
+        const blob = await docEntry.async('blob');
+        const f = new File([blob], docEntry.name.split('/').pop());
+        return { text: (await extractDocxText(f)).text };
+    }
+    throw new Error('nozip');
+}
 
 const MAX_SIZE = 5 * 1024 * 1024;
 
@@ -91,14 +118,24 @@ export default function UnitFileDrop({ onUnit }) {
 
     const handleFile = async (file) => {
         if (!file) return;
-        if (!file.name.match(/\.(pdf|docx)$/i)) { setError('Please use a .pdf or .docx file.'); return; }
+        if (!file.name.match(/\.(pdf|docx|zip)$/i)) { setError('Please use a .pdf, .docx or .zip file.'); return; }
         if (file.size > MAX_SIZE) { setError('That file is over 5 MB. Try a smaller file.'); return; }
         setBusy(true);
         setError('');
         try {
-            const text = await readFileText(file);
-            if (!text || text.trim().length < 100) throw new Error('empty');
-            const uocData = await parseUnit(text);
+            let uocData;
+            if (file.name.toLowerCase().endsWith('.zip')) {
+                const z = await readZip(file);
+                if (z.structured) uocData = z.structured;
+                else {
+                    if (!z.text || z.text.trim().length < 100) throw new Error('empty');
+                    uocData = await parseUnit(z.text);
+                }
+            } else {
+                const text = await readFileText(file);
+                if (!text || text.trim().length < 100) throw new Error('empty');
+                uocData = await parseUnit(text);
+            }
             if (!uocData.unitCode) throw new Error('nocode');
             onUnit(uocData);
         } catch (err) {
@@ -106,7 +143,9 @@ export default function UnitFileDrop({ onUnit }) {
                 ? 'We could not read any text in that file. It may be a scanned image.'
                 : err.message === 'nocode'
                     ? 'We could not find a unit code in that file.'
-                    : 'We could not read that file. Try a different one.');
+                    : err.message === 'nozip'
+                        ? 'We could not find a unit XML or Word file inside that zip.'
+                        : 'We could not read that file. Try a different one.');
         } finally {
             setBusy(false);
             if (inputRef.current) inputRef.current.value = '';
@@ -123,7 +162,7 @@ export default function UnitFileDrop({ onUnit }) {
                 onMouseEnter={e => e.currentTarget.style.borderColor = '#c9a84c'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = '#e5e7eb'}
             >
-                <input ref={inputRef} type="file" accept=".pdf,.docx" style={{ display: 'none' }} onChange={e => handleFile(e.target.files?.[0])} />
+                <input ref={inputRef} type="file" accept=".pdf,.docx,.zip" style={{ display: 'none' }} onChange={e => handleFile(e.target.files?.[0])} />
                 {busy ? (
                     <>
                         <Loader2 style={{ color: '#c9a84c', width: '24px', height: '24px', margin: '0 auto 8px', animation: 'spin 1s linear infinite' }} />
@@ -133,7 +172,7 @@ export default function UnitFileDrop({ onUnit }) {
                     <>
                         <Upload style={{ color: '#c9a84c', width: '24px', height: '24px', margin: '0 auto 8px' }} />
                         <p style={{ color: '#0d2444', fontSize: '14px', marginBottom: '4px' }}>Or drop your unit document here, or click to browse</p>
-                        <p style={{ color: '#9ca3af', fontSize: '12px' }}>.pdf or .docx, up to 5 MB. Use either the unit code or a file.</p>
+                        <p style={{ color: '#9ca3af', fontSize: '12px' }}>.pdf, .docx or .zip (like the training.gov.au download), up to 5 MB. Use either the unit code or a file.</p>
                     </>
                 )}
             </div>

@@ -1,7 +1,7 @@
 // Fetches a Unit of Competency straight from training.gov.au in the browser.
 // (The site blocks server-side requests, but allows browser requests.)
 
-function parseAuthorITXml(xmlText) {
+export function parseAuthorITXml(xmlText) {
     const lowerXml = xmlText.toLowerCase();
 
     function findTopicContent(sectionName) {
