@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Download } from 'lucide-react';
 import EvalProgress from './EvalProgress';
 import UnitReportBlock from './UnitReportBlock';
+import AuditNotes from './AuditNotes';
 import ComparisonSection from './ComparisonSection';
 import FeedbackButton from '@/components/feedback/FeedbackButton';
 import FeedbackModal from '@/components/feedback/FeedbackModal';
@@ -47,7 +48,7 @@ export default function EvalScreen5Report({ units, cohortProfile, results, repor
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '24px' }}>
                     <div style={{
                         border: '1px solid #e5e7eb', borderLeftWidth: '4px',
-                        borderLeftColor: isAdequate ? '#639922' : '#BA7517',
+                        borderLeftColor: isAdequate ? '#639922' : overallVerdict === 'AUDIT INCOMPLETE' ? '#6b7280' : '#BA7517',
                         borderRadius: '8px', padding: '16px',
                     }}>
                         <p style={{ color: '#9ca3af', fontSize: '10px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>Overall verdict</p>
@@ -68,6 +69,8 @@ export default function EvalScreen5Report({ units, cohortProfile, results, repor
                         <p style={{ color: '#6b7280', fontSize: '12px' }}>{totalGaps === 0 ? 'no gaps found' : 'gap' + (totalGaps !== 1 ? 's' : '') + ' to fix'}</p>
                     </div>
                 </div>
+
+                <AuditNotes diagnostics={results.diagnostics} />
 
                 {/* Per-unit report blocks */}
                 {unitResults.map(unit => (

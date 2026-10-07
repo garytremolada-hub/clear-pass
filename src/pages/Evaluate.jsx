@@ -10,6 +10,7 @@ import {
     runUnitAudit, extractSections, collectGaps, runGapRecommendations, generateReportText,
     clusterKey,
 } from '@/lib/evaluateAudit';
+import { computeUnitVerdict } from '@/lib/auditValidation';
 
 export default function Evaluate() {
     const navigate = useNavigate();
@@ -69,15 +70,24 @@ export default function Evaluate() {
 
             // Step 2: Per-unit audit
             const unitResults = [];
+            const diagnostics = {
+                extraction: assessmentDoc.extraction?.warnings || [],
+                notes: assessmentDoc.extraction?.notes || [],
+                audit: [],
+            };
             for (let i = 0; i < units.length; i++) {
                 const unit = units[i];
                 const audit = await runUnitAudit(unit, i, units.length, assessableText, (pct, label) => {
                     if (label) setStageLabel(label);
                     if (pct) setProgress(pct);
-                });
+                }, rawText);
+                const d = audit.diagnostics;
+                if (d.unevaluated > 0) diagnostics.audit.push(`${unit.code}: ${d.unevaluated} requirement${d.unevaluated !== 1 ? 's' : ''} could not be evaluated, so ${d.unevaluated !== 1 ? 'they are' : 'it is'} marked "Could not be evaluated" rather than covered or missing.`);
+                if (d.unverified > 0) diagnostics.audit.push(`${unit.code}: ${d.unverified} result${d.unverified !== 1 ? 's' : ''} cited a quote that could not be matched to the document text. Check ${d.unverified !== 1 ? 'these' : 'this'} manually.`);
                 unitResults.push({
                     unitCode: unit.code,
                     unitTitle: unit.title,
+                    releaseNumber: unit.releaseNumber,
                     peResults: audit.peResults,
                     keResults: audit.keResults,
                     acResults: audit.acResults,
@@ -97,17 +107,18 @@ export default function Evaluate() {
             for (const unit of unitResults) {
                 const unitGaps = gapRecs.filter(g => g.unitCode === unit.unitCode);
                 unit.gaps = unitGaps;
-                const hasGaps = unit.peResults.some(r => r.status !== 'COVERED')
-                    || unit.keResults.some(r => r.status !== 'COVERED')
-                    || (unit.acResults || []).some(r => r.status !== 'COVERED')
-                    || unit.elementsResults.flatMap(e => e.performanceCriteria || []).some(pc => pc.status !== 'MAPPED');
-                unit.unitVerdict = hasGaps ? 'REQUIRES DEVELOPMENT' : 'ADEQUATE';
+                unit.unitVerdict = computeUnitVerdict(unit);
             }
 
-            const overallVerdict = unitResults.every(u => u.unitVerdict === 'ADEQUATE') ? 'ADEQUATE' : 'REQUIRES DEVELOPMENT';
+            const overallVerdict = unitResults.every(u => u.unitVerdict === 'ADEQUATE')
+                ? 'ADEQUATE'
+                : unitResults.some(u => u.unitVerdict === 'REQUIRES DEVELOPMENT') ? 'REQUIRES DEVELOPMENT' : 'AUDIT INCOMPLETE';
+            const plural = units.length !== 1 ? 's' : '';
             const summaryStatement = overallVerdict === 'ADEQUATE'
-                ? `All ${units.length} unit${units.length !== 1 ? 's' : ''} in this cluster are adequately covered by the assessment.`
-                : `${unitResults.filter(u => u.unitVerdict === 'REQUIRES DEVELOPMENT').length} of ${units.length} unit${units.length !== 1 ? 's' : ''} require development to achieve full coverage.`;
+                ? `All ${units.length} unit${plural} in this cluster are adequately covered by the assessment.`
+                : overallVerdict === 'AUDIT INCOMPLETE'
+                    ? 'No gaps were confirmed, but some requirements could not be evaluated. See the audit notes and check those requirements manually.'
+                    : `${unitResults.filter(u => u.unitVerdict === 'REQUIRES DEVELOPMENT').length} of ${units.length} unit${plural} require development to achieve full coverage.`;
 
             // Step 4: Generate report text
             setProgress(95);
@@ -115,7 +126,7 @@ export default function Evaluate() {
             const report = await generateReportText(units, { sections, units: unitResults, overallVerdict, summaryStatement }, cohort);
             setReportText(report);
 
-            setResults({ sections, units: unitResults, overallVerdict, summaryStatement });
+            setResults({ sections, units: unitResults, overallVerdict, summaryStatement, diagnostics });
             setProgress(100);
             setStageLabel('Done');
             setScreen(5);

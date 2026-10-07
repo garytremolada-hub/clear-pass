@@ -3,6 +3,8 @@ import {
     BorderStyle, WidthType,
 } from 'docx';
 
+import { flattenRequirements, KIND_STYLE } from '@/lib/evaluateTrace';
+
 const NAVY = '0D2444';
 const WHITE = 'FFFFFF';
 const LIGHT_GREY = 'F9FAFB';
@@ -32,26 +34,43 @@ function para(t, opts = {}) {
     });
 }
 
-function tableRow(cells, isHeader = false) {
+function tableRow(cells, isHeader = false, widths = null) {
     const thin = { style: BorderStyle.SINGLE, size: 1, color: BORDER_GREY };
     const borders = { top: thin, bottom: thin, left: thin, right: thin };
-    const cm = { top: 80, bottom: 80, left: 140, right: 140 };
+    const cm = { top: 80, bottom: 80, left: 100, right: 100 };
     return new TableRow({
         children: cells.map((t, i) => new TableCell({
             borders,
             margins: cm,
+            ...(widths ? { width: { size: widths[i], type: WidthType.DXA } } : {}),
             shading: { fill: isHeader ? NAVY : (i % 2 === 0 ? LIGHT_GREY : WHITE), type: 'clear' },
             children: [new Paragraph({ children: [new TextRun({ text: String(t || ''), size: 18, font: 'Arial', color: isHeader ? WHITE : '1A1A1A', bold: isHeader })] })],
         })),
     });
 }
 
-function makeTable(headers, trows) {
+function makeTable(headers, trows, widths = null) {
     return new Table({
         width: { size: PAGE_WIDTH, type: WidthType.DXA },
-        columnWidths: Array(headers.length).fill(Math.floor(PAGE_WIDTH / headers.length)),
-        rows: [tableRow(headers, true), ...trows.map(r => tableRow(r))],
+        columnWidths: widths || Array(headers.length).fill(Math.floor(PAGE_WIDTH / headers.length)),
+        rows: [tableRow(headers, true, widths), ...trows.map(r => tableRow(r, false, widths))],
     });
+}
+
+const TRACE_WIDTHS = [650, 2100, 1050, 2000, 1500, 1726];
+
+function traceTable(group) {
+    const rows = group.items.map(r => [
+        r.label,
+        r.source + (r.detail ? ` (${r.detail})` : ''),
+        KIND_STYLE[r.kind].label,
+        r.kind === 'covered' || r.kind === 'partial'
+            ? (r.evidence ? `"${r.evidence}"${r.evidenceVerified === false ? ' (quote not matched, check manually)' : ''}` : 'None cited')
+            : (r.kind === 'unevaluated' ? 'No valid result produced' : 'No matching text found'),
+        [r.reason, r.gap].filter(Boolean).join(' '),
+        r.fix,
+    ]);
+    return makeTable(['ID', 'Requirement (training.gov.au)', 'Result', 'Evidence from assessment', 'Why this result', 'Suggested change (AI suggestion)'], rows, TRACE_WIDTHS);
 }
 
 function sp() {
@@ -216,22 +235,32 @@ export async function generateAuditDocx(units, results, cohortProfile, disclaime
         buildReadingEaseTable(sections), sp(),
     ];
 
+    const diag = results.diagnostics || {};
+    const limitations = [...(diag.extraction || []), ...(diag.audit || [])];
+    if (limitations.length || (diag.notes || []).length) {
+        children.push(navyHeader('Audit Notes and Limitations'), sp());
+        limitations.forEach(w => children.push(para(`Limitation: ${w}`, { color: '92400E' })));
+        (diag.notes || []).forEach(n => children.push(para(n, { color: '6B7280' })));
+        children.push(para('Results are checked against the text read from your document. Suggested changes are AI suggestions, not official requirements. PE, KE and AC numbers are internal IDs for this report; PC references match the official unit.', { italic: true, color: '6B7280', size: 18 }), sp());
+    }
+
     unitResults.forEach(unit => {
         const unitAdequate = unit.unitVerdict === 'ADEQUATE';
         children.push(navyHeader(`${unit.unitCode} — ${unit.unitTitle}`), sp());
         children.push(para(`Unit verdict: ${unit.unitVerdict}`, { bold: true, color: unitAdequate ? '16A34A' : 'D97706' }), sp());
-        children.push(para('Performance Evidence Coverage', { bold: true, size: 18, color: '0D2444' }), sp());
-        children.push(makeTable(['Requirement', 'Status', 'Coverage cited', 'Gap'], (unit.peResults || []).map(r => [r.requirement || '', r.status || '', r.coverage || '', r.gap || ''])), sp());
-        children.push(para('Knowledge Evidence Coverage', { bold: true, size: 18, color: '0D2444' }), sp());
-        children.push(makeTable(['Requirement', 'Status', 'Coverage cited', 'Gap'], (unit.keResults || []).map(r => [r.requirement || '', r.status || '', r.coverage || '', r.gap || ''])), sp());
-        children.push(para('Element and Performance Criteria Mapping', { bold: true, size: 18, color: '0D2444' }), sp());
-        children.push(makeTable(['Element', 'PC', 'Status', 'Mapped to', 'Gap'], (unit.elementsResults || []).flatMap(el => (el.performanceCriteria || []).map(pc => [el.title || '', pc.ref || '', pc.status || '', pc.mappedTo || '', pc.gap || '']))), sp());
+        if (unit.releaseNumber) children.push(para(`Requirements read from training.gov.au, release ${unit.releaseNumber}.`, { color: '6B7280', size: 18 }));
+        flattenRequirements(unit).forEach(group => {
+            children.push(para(`${group.title} (${group.items.length})`, { bold: true, size: 18, color: '0D2444' }));
+            children.push(para(group.note, { italic: true, color: '6B7280', size: 16 }), sp());
+            children.push(traceTable(group), sp());
+        });
         children.push(para('Gaps and Recommendations', { bold: true, size: 18, color: '0D2444' }), sp());
         if ((unit.gaps || []).length === 0) {
             children.push(para('No gaps identified for this unit.'), sp());
         } else {
             unit.gaps.forEach(g => {
-                children.push(para(`${g.requirement}: ${g.recommendation} (add: ${g.recommendedSectionType})`, { before: 80, after: 60 }));
+                children.push(para(`${g.label ? g.label + ': ' : ''}${g.requirement}`, { before: 80, after: 20, bold: true }));
+                children.push(para(`Suggestion (not an official requirement): ${g.recommendation}${g.recommendedSectionType ? ` (add: ${g.recommendedSectionType})` : ''}`, { before: 0, after: 60 }));
                 const exBox = buildExampleBox(g);
                 if (exBox) { children.push(exBox); children.push(sp()); }
             });

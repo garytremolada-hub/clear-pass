@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { CheckCircle, Upload, AlertCircle, Loader2 } from 'lucide-react';
 import EvalProgress from './EvalProgress';
-import { extractDocxText } from '@/lib/extractDocxText';
+import { extractDocxStructured } from '@/lib/extractDocxStructured';
 import { extractAssessableContent, clusterLabel } from '@/lib/evaluateAudit';
 
 export default function EvalScreen2Upload({ units, onBack, onConfirm, previousEvaluation, showComparison, onSetShowComparison }) {
@@ -13,7 +13,16 @@ export default function EvalScreen2Upload({ units, onBack, onConfirm, previousEv
     const [error, setError] = useState('');
     const [showPaste, setShowPaste] = useState(false);
     const [pasteText, setPasteText] = useState('');
+    const [extraction, setExtraction] = useState({ warnings: [], notes: [] });
     const inputRef = useRef();
+
+    const handleContinue = () => {
+        const assessableText = extractAssessableContent(activeText);
+        const excluded = Math.round((1 - assessableText.length / Math.max(activeText.length, 1)) * 100);
+        const warnings = [...extraction.warnings];
+        if (excluded >= 15) warnings.push(`About ${excluded}% of the document was treated as assessor or admin content (such as declarations and assessor-only sections). Requirements are audited against the student-facing content, and cited evidence is checked against the whole document.`);
+        onConfirm({ text: activeText, assessableText, fileName, wordCount: activeWc, extraction: { warnings, notes: extraction.notes } });
+    };
 
     const handleFile = async (f) => {
         if (!f) return;
@@ -26,14 +35,18 @@ export default function EvalScreen2Upload({ units, onBack, onConfirm, previousEv
         setExtracting(true);
         try {
             let text = '';
+            let ext = { warnings: [], notes: [] };
             if (f.name.toLowerCase().endsWith('.docx')) {
-                const result = await extractDocxText(f);
+                const result = await extractDocxStructured(f);
                 text = result.text;
+                ext = { warnings: result.warnings, notes: result.notes };
             } else {
                 const up = await base44.integrations.Core.UploadFile({ file: f });
                 const res = await base44.functions.invoke('extractDocumentText', { file_url: up.file_url, file_name: f.name, label: 'Assessment' });
                 text = res?.data?.text || '';
+                ext = { warnings: ['This PDF was read as plain text. Tables and layout may not be preserved, so content inside tables could be missed. A .docx upload gives the most reliable result.'], notes: [] };
             }
+            setExtraction(ext);
             const wc = text.split(/\s+/).filter(Boolean).length;
             setExtractedText(text);
             if (wc < 100) {
@@ -52,6 +65,7 @@ export default function EvalScreen2Upload({ units, onBack, onConfirm, previousEv
     const handlePasteChange = (val) => {
         setPasteText(val);
         setExtractedText(val);
+        setExtraction({ warnings: [], notes: [] });
         setFileName('Pasted text');
         setError('');
     };
@@ -102,6 +116,8 @@ export default function EvalScreen2Upload({ units, onBack, onConfirm, previousEv
                             <span style={{ color: '#0d2444', fontSize: '14px', fontWeight: 500 }}>Document loaded: {fileName}</span>
                         </div>
                         <p style={{ color: '#6b7280', fontSize: '12px', marginLeft: '28px', marginBottom: '8px' }}>{activeWc} words detected</p>
+                        {extraction.notes.map((n, i) => <p key={i} style={{ color: '#6b7280', fontSize: '12px', marginLeft: '28px', marginBottom: '4px' }}>{n}</p>)}
+                        {extraction.warnings.map((w, i) => <p key={i} style={{ color: '#92400e', fontSize: '12px', marginLeft: '28px', marginBottom: '4px' }}>Note: {w}</p>)}
                         <button
                             onClick={() => { setExtractedText(''); setFile(null); setFileName(''); setError(''); }}
                             style={{ marginLeft: '28px', background: 'none', border: 'none', color: '#c9a84c', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
@@ -168,7 +184,7 @@ export default function EvalScreen2Upload({ units, onBack, onConfirm, previousEv
                         ← Back
                     </button>
                     <button
-                        onClick={() => onConfirm({ text: activeText, assessableText: extractAssessableContent(activeText), fileName, wordCount: activeWc })}
+                        onClick={handleContinue}
                         disabled={!canContinue}
                         style={{
                             flex: 1, height: '44px', borderRadius: '8px',
