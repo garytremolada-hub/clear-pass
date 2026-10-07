@@ -41,8 +41,8 @@ export default function EvalScreen2Upload({ units, onBack, onConfirm, previousEv
                 text = result.text;
                 ext = { warnings: result.warnings, notes: result.notes };
             } else {
-                const up = await base44.integrations.Core.UploadFile({ file: f });
-                const res = await base44.functions.invoke('extractDocumentText', { file_url: up.file_url, file_name: f.name, label: 'Assessment' });
+                const up = await base44.integrations.Core.UploadPrivateFile({ file: f });
+                const res = await base44.functions.invoke('extractDocumentText', { file_uri: up.file_uri, file_name: f.name, label: 'Assessment' });
                 text = res?.data?.text || '';
                 ext = { warnings: ['This PDF was read as plain text. Tables and layout may not be preserved, so content inside tables could be missed. A .docx upload gives the most reliable result.'], notes: [] };
             }

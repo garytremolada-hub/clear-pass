@@ -10,12 +10,18 @@ Deno.serve(async (req) => {
             return Response.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const { file_url, file_name, label } = await req.json();
+        const body = await req.json();
+        const { file_name, label, file_uri } = body;
+        let file_url = body.file_url;
+        if (!file_url && file_uri) {
+            const signed = await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({ file_uri, expires_in: 300 });
+            file_url = signed.signed_url;
+        }
         if (!file_url) {
-            return Response.json({ error: 'file_url is required' }, { status: 400 });
+            return Response.json({ error: 'file_url or file_uri is required' }, { status: 400 });
         }
 
-        console.log(`[extractDocumentText] label="${label}" file_name="${file_name}" url="${file_url}"`);
+        console.log(`[extractDocumentText] label="${label}" file_name="${file_name}"`);
 
         const isDocx = file_name?.toLowerCase().endsWith('.docx') ||
                        file_url.toLowerCase().includes('.docx');
