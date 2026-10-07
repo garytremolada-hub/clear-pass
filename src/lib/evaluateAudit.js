@@ -93,6 +93,11 @@ function normalizeStatus(status, isPC) {
     return 'Could not be evaluated';
 }
 
+function reqText(t) {
+    if (typeof t === 'string') return t;
+    return t.subItems ? `${t.text}: ${t.subItems.join(', ')}` : t.text;
+}
+
 function validateResponse(unitCode, type, tgaItems, llmResults, isPC) {
     const validIds = tgaItems.map((t, i) => isPC ? `${unitCode}-${t.ref}` : `${unitCode}-${type}-${i + 1}`);
     const tgaMap = new Map(validIds.map((id, i) => [id, tgaItems[i]]));
@@ -116,7 +121,7 @@ function validateResponse(unitCode, type, tgaItems, llmResults, isPC) {
         } else {
             validated.push({
                 id,
-                requirement: tga.subItems ? `${tga.text}: ${tga.subItems.join(', ')}` : tga.text,
+                requirement: reqText(tga),
                 status: normalizeStatus(item.status),
                 coverage: item.coverage || '',
                 gap: item.gap || '',
@@ -140,7 +145,7 @@ function validateResponse(unitCode, type, tgaItems, llmResults, isPC) {
             } else {
                 validated.push({
                     id,
-                    requirement: tga.subItems ? `${tga.text}: ${tga.subItems.join(', ')}` : tga.text,
+                    requirement: reqText(tga),
                     status: 'Could not be evaluated',
                     coverage: '',
                     gap: 'This requirement could not be located in the assessment.',
@@ -158,6 +163,10 @@ export function validatePEResponse(unitCode, tgaPE, llmResults) {
 
 export function validateKEResponse(unitCode, tgaKE, llmResults) {
     return validateResponse(unitCode, 'KE', tgaKE, llmResults, false);
+}
+
+export function validateACResponse(unitCode, tgaAC, llmResults) {
+    return validateResponse(unitCode, 'AC', tgaAC, llmResults, false);
 }
 
 export function validatePCResponse(unitCode, tgaElements, llmResults) {
@@ -178,6 +187,7 @@ export function reconstructElements(unitCode, tgaElements, validatedPCs) {
                 status: v?.status || 'Could not be evaluated',
                 mappedTo: v?.mappedTo || '',
                 gap: v?.gap || '',
+                fix: v?.fix || '',
             };
         });
         const mappedCount = pcs.filter(p => p.status === 'MAPPED').length;
@@ -193,66 +203,80 @@ export function reconstructElements(unitCode, tgaElements, validatedPCs) {
 
 // ── Per-unit audit runner ─────────────────────────────────────────────────────
 
+const CHUNK = 8;
+
+// Calls the LLM in small batches so no requirement is dropped; re-asks once for any ID still missing.
+async function auditInChunks(tagged, key, buildPrompt) {
+    const results = [];
+    const askBatch = async (batch) => {
+        try {
+            const parsed = parseAIJson(await llmCall(buildPrompt(batch)));
+            results.push(...(parsed[key] || []));
+        } catch (e) {
+            console.error(`${key} batch failed:`, e.message);
+        }
+    };
+    for (let i = 0; i < tagged.length; i += CHUNK) await askBatch(tagged.slice(i, i + CHUNK));
+    const seen = new Set(results.map(r => r.id));
+    const missing = tagged.filter(t => !seen.has(t.id));
+    for (let i = 0; i < missing.length; i += 4) await askBatch(missing.slice(i, i + 4));
+    return results;
+}
+
+const AUDITOR_RULES = (code, example) => `You are a strict RTO compliance auditor. Each requirement below has an ID (e.g. ${example}). You MUST return a result for EVERY ID listed, using the exact same ID. Do not invent IDs. Do not omit any ID.\n\nMark an item as fully covered ONLY when the assessment substantively addresses every part of the requirement (all listed sub-items, all stated numbers, frequencies, contexts and conditions). If any part is missing, the item is partial. If nothing addresses it, it is not covered.\n\nFor every item that is not fully covered, the "gap" field must explain exactly which part is missing, and "fix" must give a specific, ready-to-apply change to the assessment.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n`;
+
 export async function runUnitAudit(unit, unitIndex, totalUnits, assessableText, onProgress) {
     const { code, uocData } = unit;
     const peList = uocData?.performanceEvidence || [];
     const keList = uocData?.knowledgeEvidence || [];
+    const acList = uocData?.assessmentConditions || [];
     const elements = uocData?.elements || [];
 
     const taggedPE = tagPE(code, peList);
     const taggedKE = tagKE(code, keList);
     const taggedPC = tagPC(code, elements);
+    const taggedAC = acList.map((c, i) => ({ id: `${code}-AC-${i + 1}`, text: c }));
 
     const perUnit = 70 / totalUnits;
     const unitStart = 10 + unitIndex * perUnit;
-    const perCall = perUnit / 3;
+    const perCall = perUnit / 4;
+    const label = `(unit ${unitIndex + 1} of ${totalUnits})`;
 
-    let peResults, keResults, validatedPCs;
+    const evidencePrompt = (title, key, example) => (batch) =>
+        `${AUDITOR_RULES(code, example)}Use ONLY these statuses: COVERED, PARTIALLY COVERED, NOT COVERED.\n\n{\n  "${key}": [\n    {\n      "id": "${example}",\n      "status": "COVERED | PARTIALLY COVERED | NOT COVERED",\n      "coverage": "quote the specific assessment text that addresses it, or none found",\n      "gap": "what is missing (empty if COVERED)",\n      "fix": "specific change to make (empty if COVERED)"\n    }\n  ]\n}\n\n${title}:\n${batch.map(t => `${t.id}: ${t.text}`).join('\n')}\n\nASSESSMENT TEXT:\n${assessableText}`;
 
-    // PE audit
-    onProgress(Math.round(unitStart), `Checking performance evidence for ${code} (unit ${unitIndex + 1} of ${totalUnits})...`);
-    try {
-        const r = await llmCall(
-            `You are an RTO compliance auditor. Check whether the assessment covers each Performance Evidence requirement.\n\nEach requirement below has an ID (e.g. ${code}-PE-1). You MUST return a result for EVERY ID listed. Use the exact same ID in your response. Do not invent IDs. Do not omit any ID.\n\nUse ONLY these three statuses: COVERED, PARTIALLY COVERED, NOT COVERED.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "performanceEvidence": [\n    {\n      "id": "${code}-PE-1",\n      "requirement": "verbatim PE requirement text",\n      "status": "COVERED | PARTIALLY COVERED | NOT COVERED",\n      "coverage": "cite specific assessment text, or none found",\n      "gap": "explain what is missing if PARTIALLY COVERED or NOT COVERED"\n    }\n  ]\n}\n\nPERFORMANCE EVIDENCE REQUIREMENTS:\n${taggedPE.map(t => `${t.id}: ${t.text}`).join('\n') || 'None specified'}\n\nASSESSMENT TEXT:\n${assessableText}`
-        );
-        const parsed = parseAIJson(r);
-        peResults = validatePEResponse(code, peList, parsed.performanceEvidence || []);
-    } catch (e) {
-        console.error(`${code} PE audit failed:`, e.message);
-        peResults = peList.map((pe, i) => ({ id: `${code}-PE-${i + 1}`, requirement: pe, status: 'Could not be evaluated', coverage: '', gap: 'This requirement could not be located in the assessment.' }));
-    }
+    onProgress(Math.round(unitStart), `Checking performance evidence for ${code} ${label}...`);
+    const peRaw = await auditInChunks(taggedPE, 'performanceEvidence', evidencePrompt('PERFORMANCE EVIDENCE REQUIREMENTS', 'performanceEvidence', `${code}-PE-1`));
+    const peResults = validatePEResponse(code, peList, peRaw);
 
-    // KE audit
-    onProgress(Math.round(unitStart + perCall), `Checking knowledge evidence for ${code} (unit ${unitIndex + 1} of ${totalUnits})...`);
-    try {
-        const r = await llmCall(
-            `You are an RTO compliance auditor. Check whether the assessment covers each Knowledge Evidence requirement.\n\nEach requirement below has an ID (e.g. ${code}-KE-1). You MUST return a result for EVERY ID listed. Use the exact same ID in your response. Do not invent IDs. Do not omit any ID.\n\nUse ONLY these three statuses: COVERED, PARTIALLY COVERED, NOT COVERED.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "knowledgeEvidence": [\n    {\n      "id": "${code}-KE-1",\n      "requirement": "verbatim KE requirement text",\n      "status": "COVERED | PARTIALLY COVERED | NOT COVERED",\n      "coverage": "cite specific assessment text, or none found",\n      "gap": "explain what is missing if PARTIALLY COVERED or NOT COVERED"\n    }\n  ]\n}\n\nKNOWLEDGE EVIDENCE REQUIREMENTS:\n${taggedKE.map(t => `${t.id}: ${t.text}`).join('\n') || 'None specified'}\n\nASSESSMENT TEXT:\n${assessableText}`
-        );
-        const parsed = parseAIJson(r);
-        keResults = validateKEResponse(code, keList, parsed.knowledgeEvidence || []);
-    } catch (e) {
-        console.error(`${code} KE audit failed:`, e.message);
-        keResults = keList.map((ke, i) => ({ id: `${code}-KE-${i + 1}`, requirement: ke.subItems ? `${ke.text}: ${ke.subItems.join(', ')}` : ke.text, status: 'Could not be evaluated', coverage: '', gap: 'This requirement could not be located in the assessment.' }));
-    }
+    onProgress(Math.round(unitStart + perCall), `Checking knowledge evidence for ${code} ${label}...`);
+    const keRaw = await auditInChunks(taggedKE, 'knowledgeEvidence', evidencePrompt('KNOWLEDGE EVIDENCE REQUIREMENTS', 'knowledgeEvidence', `${code}-KE-1`));
+    const keResults = validateKEResponse(code, keList, keRaw);
 
-    // PC audit
-    onProgress(Math.round(unitStart + perCall * 2), `Mapping performance criteria for ${code} (unit ${unitIndex + 1} of ${totalUnits})...`);
-    try {
-        const r = await llmCall(
-            `You are an RTO compliance auditor. Check whether the assessment maps to each Performance Criterion.\n\nEach criterion below has an ID (e.g. ${code}-1.1). You MUST return a result for EVERY ID listed. Use the exact same ID in your response. Do not invent IDs. Do not omit any ID.\n\nUse ONLY these three statuses: MAPPED, PARTIALLY MAPPED, NOT MAPPED.\n\nReturn ONLY valid JSON. No explanation. No markdown fences.\n\n{\n  "performanceCriteria": [\n    {\n      "id": "${code}-1.1",\n      "ref": "1.1",\n      "status": "MAPPED | PARTIALLY MAPPED | NOT MAPPED",\n      "mappedTo": "section name or none found",\n      "gap": "what context or conditions are missing if PARTIALLY MAPPED"\n    }\n  ]\n}\n\nPERFORMANCE CRITERIA:\n${taggedPC.map(t => `${t.id} (Element ${t.elementNumber}): ${t.text}`).join('\n') || 'None specified'}\n\nASSESSMENT TEXT:\n${assessableText}`
-        );
-        const parsed = parseAIJson(r);
-        validatedPCs = validatePCResponse(code, elements, parsed.performanceCriteria || []);
-    } catch (e) {
-        console.error(`${code} PC audit failed:`, e.message);
-        validatedPCs = tagPC(code, elements).map(t => ({ id: t.id, ref: t.ref, text: t.text, status: 'Could not be evaluated', mappedTo: '', gap: 'This performance criterion could not be located in the assessment.' }));
-    }
+    onProgress(Math.round(unitStart + perCall * 2), `Mapping performance criteria for ${code} ${label}...`);
+    const pcRaw = await auditInChunks(taggedPC, 'performanceCriteria', (batch) =>
+        `${AUDITOR_RULES(code, `${code}-1.1`)}Use ONLY these statuses: MAPPED, PARTIALLY MAPPED, NOT MAPPED.\n\n{\n  "performanceCriteria": [\n    {\n      "id": "${code}-1.1",\n      "ref": "1.1",\n      "status": "MAPPED | PARTIALLY MAPPED | NOT MAPPED",\n      "mappedTo": "section name or none found",\n      "gap": "what is missing (empty if MAPPED)",\n      "fix": "specific change to make (empty if MAPPED)"\n    }\n  ]\n}\n\nPERFORMANCE CRITERIA:\n${batch.map(t => `${t.id} (Element ${t.elementNumber}): ${t.text}`).join('\n')}\n\nASSESSMENT TEXT:\n${assessableText}`);
+    const validatedPCs = validatePCResponse(code, elements, pcRaw);
+    const rawPcById = new Map(pcRaw.map(r => [r.id, r]));
+    validatedPCs.forEach(v => { v.fix = rawPcById.get(v.id)?.fix || ''; });
+
+    onProgress(Math.round(unitStart + perCall * 3), `Checking assessment conditions for ${code} ${label}...`);
+    const acRaw = await auditInChunks(taggedAC, 'assessmentConditions', evidencePrompt('ASSESSMENT CONDITIONS (the assessment must be set up so each condition is met, e.g. environment, resources, assessor requirements, interaction with others)', 'assessmentConditions', `${code}-AC-1`));
+    const acResults = validateACResponse(code, acList, acRaw);
+
+    const attach = (results, raw) => {
+        const byId = new Map(raw.map(r => [r.id, r]));
+        results.forEach(r => { r.fix = byId.get(r.id)?.fix || ''; });
+    };
+    attach(peResults, peRaw);
+    attach(keResults, keRaw);
+    attach(acResults, acRaw);
 
     const elementsResults = reconstructElements(code, elements, validatedPCs);
 
-    onProgress(Math.round(unitStart + perCall * 3), '');
+    onProgress(Math.round(unitStart + perCall * 4), '');
 
-    return { peResults, keResults, elementsResults };
+    return { peResults, keResults, acResults, elementsResults };
 }
 
 // ── Section extraction (full text, no slicing) ────────────────────────────────
@@ -286,21 +310,19 @@ export async function extractSections(assessableText, wordCount) {
 export function collectGaps(unitResults) {
     const gaps = [];
     for (const unit of unitResults) {
-        const { unitCode, unitTitle, peResults, keResults, elementsResults } = unit;
-        for (const r of peResults) {
-            if (r.status !== 'COVERED') {
-                gaps.push({ unitCode, unitTitle, type: 'PE', id: r.id, requirement: r.requirement, gapType: r.status === 'Could not be evaluated' ? 'NOT COVERED' : r.status });
-            }
-        }
-        for (const r of keResults) {
-            if (r.status !== 'COVERED') {
-                gaps.push({ unitCode, unitTitle, type: 'KE', id: r.id, requirement: r.requirement, gapType: r.status === 'Could not be evaluated' ? 'NOT COVERED' : r.status });
+        const { unitCode, unitTitle, peResults, keResults, acResults = [], elementsResults } = unit;
+        const extra = r => ({ reason: r.gap || '', evidence: r.coverage || r.mappedTo || '', fix: r.fix || '' });
+        for (const [type, list] of [['PE', peResults], ['KE', keResults], ['AC', acResults]]) {
+            for (const r of list) {
+                if (r.status !== 'COVERED') {
+                    gaps.push({ unitCode, unitTitle, type, id: r.id, requirement: r.requirement, gapType: r.status === 'Could not be evaluated' ? 'NOT COVERED' : r.status, ...extra(r) });
+                }
             }
         }
         const allPCs = elementsResults.flatMap(e => (e.performanceCriteria || []));
         for (const pc of allPCs) {
             if (pc.status !== 'MAPPED') {
-                gaps.push({ unitCode, unitTitle, type: 'PC', id: `${unitCode}-${pc.ref}`, requirement: `${pc.ref}: ${pc.text}`, gapType: pc.status === 'Could not be evaluated' ? 'NOT MAPPED' : pc.status });
+                gaps.push({ unitCode, unitTitle, type: 'PC', id: `${unitCode}-${pc.ref}`, requirement: `${pc.ref}: ${pc.text}`, gapType: pc.status === 'Could not be evaluated' ? 'NOT MAPPED' : pc.status, ...extra(pc) });
             }
         }
     }
@@ -324,7 +346,7 @@ export async function runGapRecommendations(allGaps, chunkSize = 10) {
             for (const g of batchGaps) {
                 if (g.id && batchIds.has(g.id)) {
                     const orig = batch.find(b => b.id === g.id);
-                    allRecs.push({ ...g, unitCode: orig.unitCode, unitTitle: orig.unitTitle });
+                    allRecs.push({ ...g, unitCode: orig.unitCode, unitTitle: orig.unitTitle, reason: orig.reason, evidence: orig.evidence, fix: orig.fix });
                 }
             }
             const seenIds = new Set(batchGaps.map(g => g.id));
@@ -333,6 +355,7 @@ export async function runGapRecommendations(allGaps, chunkSize = 10) {
                     allRecs.push({
                         id: g.id, unitCode: g.unitCode, unitTitle: g.unitTitle,
                         requirement: g.requirement, gapType: g.gapType,
+                        reason: g.reason, evidence: g.evidence, fix: g.fix,
                         recommendedSectionType: 'Knowledge Questions',
                         recommendation: 'Review and add coverage for this requirement.',
                         minimumContent: [], exampleContent: '',
@@ -345,6 +368,7 @@ export async function runGapRecommendations(allGaps, chunkSize = 10) {
                 allRecs.push({
                     id: g.id, unitCode: g.unitCode, unitTitle: g.unitTitle,
                     requirement: g.requirement, gapType: g.gapType,
+                    reason: g.reason, evidence: g.evidence, fix: g.fix,
                     recommendedSectionType: 'Knowledge Questions',
                     recommendation: 'Review and add coverage for this requirement.',
                     minimumContent: [], exampleContent: '',

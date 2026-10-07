@@ -3,7 +3,7 @@ import CoverageBar from './CoverageBar';
 import GapCard from './GapCard';
 
 export default function UnitReportBlock({ unit }) {
-    const { unitCode, unitTitle, peResults = [], keResults = [], elementsResults = [], gaps = [], unitVerdict = 'REQUIRES DEVELOPMENT' } = unit;
+    const { unitCode, unitTitle, peResults = [], keResults = [], acResults = [], elementsResults = [], gaps = [], unitVerdict = 'REQUIRES DEVELOPMENT' } = unit;
     const isAdequate = unitVerdict === 'ADEQUATE';
 
     const peCovered = peResults.filter(r => r.status === 'COVERED').length;
@@ -57,6 +57,16 @@ export default function UnitReportBlock({ unit }) {
                     partialLabel={pcRefs(allPCs, 'PARTIALLY MAPPED') ? `Partial: ${pcRefs(allPCs, 'PARTIALLY MAPPED')}` : null}
                     notLabel={pcRefs(allPCs, 'NOT MAPPED') ? `Missing: ${pcRefs(allPCs, 'NOT MAPPED')}` : null}
                 />
+
+                {acResults.length > 0 && (
+                    <CoverageBar
+                        label="Assessment Conditions"
+                        covered={acResults.filter(r => r.status === 'COVERED').length}
+                        partial={acResults.filter(r => r.status === 'PARTIALLY COVERED').length}
+                        notCovered={acResults.filter(r => r.status !== 'COVERED' && r.status !== 'PARTIALLY COVERED').length}
+                        total={acResults.length}
+                    />
+                )}
 
                 {gaps.length > 0 && (
                     <div style={{ marginTop: '16px' }}>

@@ -80,6 +80,7 @@ export default function Evaluate() {
                     unitTitle: unit.title,
                     peResults: audit.peResults,
                     keResults: audit.keResults,
+                    acResults: audit.acResults,
                     elementsResults: audit.elementsResults,
                     gaps: [],
                     unitVerdict: 'REQUIRES DEVELOPMENT',
@@ -98,6 +99,7 @@ export default function Evaluate() {
                 unit.gaps = unitGaps;
                 const hasGaps = unit.peResults.some(r => r.status !== 'COVERED')
                     || unit.keResults.some(r => r.status !== 'COVERED')
+                    || (unit.acResults || []).some(r => r.status !== 'COVERED')
                     || unit.elementsResults.flatMap(e => e.performanceCriteria || []).some(pc => pc.status !== 'MAPPED');
                 unit.unitVerdict = hasGaps ? 'REQUIRES DEVELOPMENT' : 'ADEQUATE';
             }

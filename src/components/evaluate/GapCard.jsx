@@ -19,6 +19,9 @@ export default function GapCard({ gap }) {
                         </p>
                     )}
                     <p style={{ color: '#0d2444', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>{gap.requirement}</p>
+                    {gap.reason && <p style={{ color: '#6b7280', fontSize: '12px', lineHeight: 1.5, marginBottom: '4px' }}>Why: {gap.reason}</p>}
+                    {gap.evidence && gap.evidence.toLowerCase() !== 'none found' && <p style={{ color: '#6b7280', fontSize: '12px', lineHeight: 1.5, marginBottom: '4px', fontStyle: 'italic' }}>Found in assessment: {gap.evidence}</p>}
+                    {gap.fix && <p style={{ color: '#0d2444', fontSize: '13px', lineHeight: 1.5, marginBottom: '4px' }}><strong>Fix:</strong> {gap.fix}</p>}
                     <p style={{ color: '#374151', fontSize: '13px', lineHeight: 1.5 }}>{gap.recommendation}</p>
                     {gap.exampleContent && (
                         <details style={{ marginTop: '8px' }}>
