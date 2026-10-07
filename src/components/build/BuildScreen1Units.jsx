@@ -144,13 +144,6 @@ export default function BuildScreen1Units({ onConfirm }) {
                     </form>
                 )}
 
-                <TgaLink unitCode={unitCode || uocData?.unitCode} />
-
-                <UnitFileDrop onUnit={(data) => {
-                    if (isDuplicate(data.unitCode)) return;
-                    setUnits(prev => [...prev, { code: data.unitCode, title: data.unitTitle, releaseNumber: data.releaseNumber, uocData: data, text: null }]);
-                }} />
-
                 {/* Error state */}
                 {searchState === 'error' && (
                     <div style={{ border: '1px solid #ef4444', borderRadius: '8px', padding: '14px 16px', backgroundColor: '#fef2f2', marginBottom: '16px' }}>
@@ -229,6 +222,13 @@ export default function BuildScreen1Units({ onConfirm }) {
                         </div>
                     </div>
                 )}
+
+                <TgaLink unitCode={unitCode || uocData?.unitCode} />
+
+                <UnitFileDrop onUnit={(data) => {
+                    if (isDuplicate(data.unitCode)) return;
+                    setUnits(prev => [...prev, { code: data.unitCode, title: data.unitTitle, releaseNumber: data.releaseNumber, uocData: data, text: null }]);
+                }} />
 
                 {/* Build button */}
                 <button
