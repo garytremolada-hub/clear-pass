@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CheckCircle } from 'lucide-react';
 import EvalProgress from './EvalProgress';
+import OptionCardGroup from '@/components/shared/OptionCardGroup';
 import { LEARNER_OPTIONS, SUPPORT_OPTIONS, getBand, BAND_FKGL, clusterLabel } from '@/lib/evaluateAudit';
 
 export default function EvalScreen3Learner({ units, onBack, onConfirm }) {
@@ -23,37 +24,21 @@ export default function EvalScreen3Learner({ units, onBack, onConfirm }) {
                     This sets the reading level we compare the assessment against for {clusterLabel(units)}
                 </p>
 
-                <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', color: '#0d2444', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>
-                        Who are the learners?
-                    </label>
-                    <select
-                        value={learner}
-                        onChange={e => { setLearner(e.target.value); setSupport(''); }}
-                        style={{ width: '100%', height: '44px', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '0 12px', fontSize: '14px', backgroundColor: '#ffffff', outline: 'none', cursor: 'pointer' }}
-                    >
-                        <option value="" disabled>Select your learners...</option>
-                        {LEARNER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
-                    {selectedLearner && (
-                        <p style={{ color: '#6b7280', fontSize: '12px', fontStyle: 'italic', marginTop: '6px' }}>{selectedLearner.feedback}</p>
-                    )}
-                </div>
+                <OptionCardGroup
+                    heading="1. Who are the learners?"
+                    hint={selectedLearner?.feedback}
+                    options={LEARNER_OPTIONS}
+                    value={learner}
+                    onChange={v => { setLearner(v); setSupport(''); }}
+                />
 
                 {learner && (
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', color: '#0d2444', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>
-                            Do any learners need extra support?
-                        </label>
-                        <select
-                            value={support}
-                            onChange={e => setSupport(e.target.value)}
-                            style={{ width: '100%', height: '44px', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '0 12px', fontSize: '14px', backgroundColor: '#ffffff', outline: 'none', cursor: 'pointer' }}
-                        >
-                            <option value="" disabled>Select support needs...</option>
-                            {SUPPORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-                    </div>
+                    <OptionCardGroup
+                        heading="2. Do any learners need extra support?"
+                        options={SUPPORT_OPTIONS}
+                        value={support}
+                        onChange={setSupport}
+                    />
                 )}
 
                 {canContinue && (

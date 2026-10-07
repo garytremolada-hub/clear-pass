@@ -12,6 +12,7 @@ import { extractMappingData } from '@/lib/extractMappingData';
 import { callWithRetry } from '@/lib/buildUtils';
 import { extractDocxText } from '@/lib/extractDocxText';
 import { fetchUnitFromTGA } from '@/lib/fetchUnitFromTGA';
+import OptionCardGroup from '@/components/shared/OptionCardGroup';
 import BuildScreen1Units from '@/components/build/BuildScreen1Units';
 
 function isNewUocStructure(data) {
@@ -464,69 +465,31 @@ function Screen2({ unitInfo, onBack, onConfirm }) {
                 </h2>
 
                 <div style={{ maxWidth: '480px' }}>
-                    {/* Field 1 */}
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', color: '#0d2444', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>
-                            Who will be completing this assessment?
-                            <HelpIcon
-                                url="https://training.gov.au/Training/Details/help"
-                                heading="About learner cohorts"
-                                description="Different learner groups need assessments written at different reading levels. Your selection here helps us set the right language complexity for your specific cohort."
-                            />
-                        </label>
-                        <select
-                            value={learner}
-                            onChange={e => { setLearner(e.target.value); setSupport(''); }}
-                            style={{
-                                width: '100%', height: '44px',
-                                border: '1px solid #e5e7eb', borderRadius: '8px',
-                                padding: '0 12px', fontSize: '14px',
-                                backgroundColor: '#ffffff', color: learner ? '#0d2444' : '#9ca3af',
-                                outline: 'none', cursor: 'pointer',
-                            }}
-                        >
-                            <option value="" disabled>Select your learners...</option>
-                            {LEARNER_OPTIONS.map(o => (
-                                <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                        </select>
+                    <OptionCardGroup
+                        heading="1. Who will be completing this assessment?"
+                        hint={selectedLearner ? `${selectedLearner.feedback} Now tell us about any extra support needs.` : undefined}
+                        options={LEARNER_OPTIONS}
+                        value={learner}
+                        onChange={v => { setLearner(v); setSupport(''); }}
+                        helpIcon={<HelpIcon
+                            url="https://training.gov.au/Training/Details/help"
+                            heading="About learner cohorts"
+                            description="Different learner groups need assessments written at different reading levels. Your selection here helps us set the right language complexity for your specific cohort."
+                        />}
+                    />
 
-                        {/* Partial feedback */}
-                        {selectedLearner && (
-                            <p style={{ color: '#6b7280', fontSize: '12px', fontStyle: 'italic', marginTop: '8px' }}>
-                                {selectedLearner.feedback} Now tell us about any extra support needs.
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Field 2 — appears after Field 1 */}
                     {learner && (
-                        <div style={{ marginBottom: '16px' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', color: '#0d2444', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>
-                                Do any learners need extra support?
-                                <HelpIcon
-                                    url="https://training.gov.au/Training/Details/help"
-                                    heading="Learner support needs"
-                                    description="Learners with English as a second language (ESL) or those needing literacy support may need simpler language in assessments. This setting adjusts the reading level to improve accessibility."
-                                />
-                            </label>
-                            <select
-                                value={support}
-                                onChange={e => setSupport(e.target.value)}
-                                style={{
-                                    width: '100%', height: '44px',
-                                    border: '1px solid #e5e7eb', borderRadius: '8px',
-                                    padding: '0 12px', fontSize: '14px',
-                                    backgroundColor: '#ffffff', color: support ? '#0d2444' : '#9ca3af',
-                                    outline: 'none', cursor: 'pointer',
-                                }}
-                            >
-                                <option value="" disabled>Select support needs...</option>
-                                {SUPPORT_OPTIONS.map(o => (
-                                    <option key={o.value} value={o.value}>{o.label}</option>
-                                ))}
-                            </select>
-                        </div>
+                        <OptionCardGroup
+                            heading="2. Do any learners need extra support?"
+                            options={SUPPORT_OPTIONS}
+                            value={support}
+                            onChange={setSupport}
+                            helpIcon={<HelpIcon
+                                url="https://training.gov.au/Training/Details/help"
+                                heading="Learner support needs"
+                                description="Learners with English as a second language (ESL) or those needing literacy support may need simpler language in assessments. This setting adjusts the reading level to improve accessibility."
+                            />}
+                        />
                     )}
 
                     {/* Full confirmation card */}
