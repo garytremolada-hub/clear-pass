@@ -67,10 +67,10 @@ export default function EvalScreen2Upload({ units, onBack, onConfirm, previousEv
             <div style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 56px' }}>
                 <EvalProgress step={2} />
                 <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
-                    Upload the assessment to evaluate
+                    Upload your completed assessment
                 </h2>
                 <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
-                    Upload the existing assessment you want to check against {clusterLabel(units)}
+                    Upload the finished assessment you want audited against {clusterLabel(units)}. This is the only file you need.
                 </p>
 
                 {!extractedText && !extracting && (
@@ -82,7 +82,7 @@ export default function EvalScreen2Upload({ units, onBack, onConfirm, previousEv
                     >
                         <input ref={inputRef} type="file" accept=".pdf,.docx" className="hidden" onChange={e => handleFile(e.target.files?.[0])} />
                         <Upload style={{ color: '#c9a84c', width: '32px', height: '32px', margin: '0 auto 12px' }} />
-                        <p style={{ color: '#0d2444', fontSize: '14px', marginBottom: '6px' }}>Drop your assessment here or click to browse</p>
+                        <p style={{ color: '#0d2444', fontSize: '14px', marginBottom: '6px' }}>Drop your completed assessment here or click to browse</p>
                         <p style={{ color: '#9ca3af', fontSize: '12px' }}>Accepts .docx and .pdf files</p>
                     </div>
                 )}

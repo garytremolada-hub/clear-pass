@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { fetchUnitFromTGA } from '@/lib/fetchUnitFromTGA';
 import TgaLink from '@/components/shared/TgaLink';
-import UnitFileDrop from '@/components/shared/UnitFileDrop';
 import { CheckCircle, AlertCircle, Loader2, Search, X } from 'lucide-react';
 import EvalProgress from './EvalProgress';
 
@@ -46,13 +45,10 @@ export default function EvalScreen1Units({ onConfirm }) {
             <div style={{ maxWidth: '960px', margin: '0 auto', padding: '40px 56px' }}>
                 <EvalProgress step={1} />
                 <h2 style={{ color: '#0d2444', fontSize: '24px', fontWeight: 500, marginBottom: '8px' }}>
-                    Which units is this assessment for?
+                    Which units does your completed assessment cover?
                 </h2>
-                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>
-                    Enter each unit code to load it from training.gov.au. Add as many as you need for your cluster.
-                </p>
-                <p style={{ color: '#c9a84c', fontSize: '12px', fontWeight: 500, marginBottom: '24px' }}>
-                    + Add units one at a time below
+                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>
+                    You'll upload your finished assessment in the next step. Enter the unit code for each unit it covers (one at a time) and we'll check the assessment against the official requirements from training.gov.au.
                 </p>
 
                 <form onSubmit={handleFindUnit} style={{ marginBottom: '16px' }}>
@@ -95,10 +91,6 @@ export default function EvalScreen1Units({ onConfirm }) {
                 </form>
 
                 <TgaLink unitCode={unitCode} />
-
-                <UnitFileDrop onUnit={(data) => {
-                    setUnits(prev => prev.some(u => u.code === data.unitCode) ? prev : [...prev, { code: data.unitCode, title: data.unitTitle, uocData: data, status: 'confirmed' }]);
-                }} />
 
                 {units.length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
