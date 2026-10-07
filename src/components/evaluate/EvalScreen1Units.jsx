@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { fetchUnitFromTGA } from '@/lib/fetchUnitFromTGA';
 import TgaLink from '@/components/shared/TgaLink';
+import UnitFileDrop from '@/components/shared/UnitFileDrop';
 import { CheckCircle, AlertCircle, Loader2, Search, X } from 'lucide-react';
 import EvalProgress from './EvalProgress';
 
@@ -94,6 +95,10 @@ export default function EvalScreen1Units({ onConfirm }) {
                 </form>
 
                 <TgaLink unitCode={unitCode} />
+
+                <UnitFileDrop onUnit={(data) => {
+                    setUnits(prev => prev.some(u => u.code === data.unitCode) ? prev : [...prev, { code: data.unitCode, title: data.unitTitle, uocData: data, status: 'confirmed' }]);
+                }} />
 
                 {units.length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>

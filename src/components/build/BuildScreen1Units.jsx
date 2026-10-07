@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { fetchUnitFromTGA } from '@/lib/fetchUnitFromTGA';
 import TgaLink from '@/components/shared/TgaLink';
+import UnitFileDrop from '@/components/shared/UnitFileDrop';
 import { CheckCircle, AlertCircle, Loader2, Search, Plus, X } from 'lucide-react';
 
 const BP_STEPS = ['Find Units', 'Learners', 'Review', 'Done'];
@@ -144,6 +145,11 @@ export default function BuildScreen1Units({ onConfirm }) {
                 )}
 
                 <TgaLink unitCode={unitCode || uocData?.unitCode} />
+
+                <UnitFileDrop onUnit={(data) => {
+                    if (isDuplicate(data.unitCode)) return;
+                    setUnits(prev => [...prev, { code: data.unitCode, title: data.unitTitle, releaseNumber: data.releaseNumber, uocData: data, text: null }]);
+                }} />
 
                 {/* Error state */}
                 {searchState === 'error' && (
