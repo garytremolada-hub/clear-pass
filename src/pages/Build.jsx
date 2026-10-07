@@ -14,6 +14,8 @@ import { extractDocxText } from '@/lib/extractDocxText';
 import { fetchUnitFromTGA } from '@/lib/fetchUnitFromTGA';
 import OptionCardGroup from '@/components/shared/OptionCardGroup';
 import BuildScreen1Units from '@/components/build/BuildScreen1Units';
+import BuildCoverageChecklist from '@/components/build/BuildCoverageChecklist';
+import { runBuildCoverage } from '@/lib/buildCoverage';
 
 function isNewUocStructure(data) {
     return Array.isArray(data?.elements) && data.elements.length > 0;
@@ -740,7 +742,7 @@ function Screen4Loading({ onReset, onRetry, progress, buildError, failedStep }) 
     );
 }
 
-function Screen4Ready({ unitInfo, units, cohortInfo, assessmentText, mappingResults, validationResults, mappingError, validationError, studentBookletBase64, studentBookletError, usageInfo, onBack, onReset, onSave }) {
+function Screen4Ready({ unitInfo, units, cohortInfo, assessmentText, mappingResults, validationResults, mappingError, validationError, studentBookletBase64, studentBookletError, usageInfo, coverage, onBack, onReset, onSave }) {
     const navigate = useNavigate();
     const [showFeedback, setShowFeedback] = useState(false);
     const hasGaps = assessmentText?.includes('⚠') || assessmentText?.includes('NOT COVERED');
@@ -807,21 +809,9 @@ function Screen4Ready({ unitInfo, units, cohortInfo, assessmentText, mappingResu
                     <p style={{ color: '#6b7280', fontSize: '13px', marginBottom: '16px' }}>
                         Reading level: {cohortInfo.band}
                     </p>
-                    <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px' }}>
-                        {[
-                            '✓ All practical tasks covered',
-                            '✓ All knowledge questions covered',
-                            '✓ All learning outcomes mapped',
-                        ].map(line => (
-                            <p key={line} style={{ color: '#22c55e', fontSize: '13px', marginBottom: '4px' }}>{line}</p>
-                        ))}
-                        {hasGaps && gapCount > 0 && (
-                            <p style={{ color: '#d97706', fontSize: '13px', marginTop: '4px' }}>
-                                ⚠ {gapCount} item{gapCount !== 1 ? 's' : ''} need review — shown inside the document
-                            </p>
-                        )}
-                    </div>
                 </div>
+
+                <BuildCoverageChecklist coverage={coverage} />
 
                 {/* Usage info */}
                 {usageInfo && (
@@ -1013,6 +1003,7 @@ export default function Build() {
     const [studentBookletBase64, setStudentBookletBase64] = useState(null);
     const [studentBookletError, setStudentBookletError] = useState(false);
     const [usageInfo, setUsageInfo] = useState(null);
+    const [coverage, setCoverage] = useState(null);
     const buildStateRef = useRef({});
     const [failedStep, setFailedStep] = useState(null);
 
@@ -1297,9 +1288,24 @@ Output format: Markdown with three sections. Start each section with its header:
             const partAIdx = combinedText.indexOf('## Part A');
             const partBIdx = combinedText.indexOf('## Part B');
             const partCIdx = combinedText.indexOf('## Part C');
-            const kText = partAIdx !== -1 ? (partBIdx !== -1 ? combinedText.substring(partAIdx, partBIdx) : combinedText.substring(partAIdx)).trim() : combinedText.trim();
-            const oText = partBIdx !== -1 ? (partCIdx !== -1 ? combinedText.substring(partBIdx, partCIdx) : combinedText.substring(partBIdx)).trim() : '';
+            let kText = partAIdx !== -1 ? (partBIdx !== -1 ? combinedText.substring(partAIdx, partBIdx) : combinedText.substring(partAIdx)).trim() : combinedText.trim();
+            let oText = partBIdx !== -1 ? (partCIdx !== -1 ? combinedText.substring(partBIdx, partCIdx) : combinedText.substring(partBIdx)).trim() : '';
             const pText = partCIdx !== -1 ? combinedText.substring(partCIdx).trim() : '';
+
+            // Coverage audit against TGA requirements, with one automatic revision pass
+            setBuildProgress(44);
+            let cov = buildStateRef.current.coverage;
+            if (!cov) {
+                try {
+                    cov = await runBuildCoverage(units, { kText, oText, pText }, p => setBuildProgress(Math.min(72, 40 + Math.round(p * 0.4))));
+                    buildStateRef.current.coverage = cov;
+                } catch (covErr) {
+                    console.error('Coverage check failed:', covErr.message);
+                    cov = { error: true };
+                }
+            }
+            if (cov.kText) { kText = cov.kText; oText = cov.oText; }
+            setCoverage(cov);
 
             // STEP 2 — Marking Guides (combined)
             setBuildProgress(75);
@@ -1706,6 +1712,7 @@ ${mText}`;
         setStudentBookletBase64(null);
         setStudentBookletError(false);
         setUsageInfo(null);
+        setCoverage(null);
         setBuilding(false);
     };
 
@@ -1751,6 +1758,7 @@ ${mText}`;
                     studentBookletBase64={studentBookletBase64}
                     studentBookletError={studentBookletError}
                     usageInfo={usageInfo}
+                    coverage={coverage}
                     onBack={() => setScreen(2)}
                     onReset={handleReset}
                     onSave={handleSave}
