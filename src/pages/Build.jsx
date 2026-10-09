@@ -16,6 +16,9 @@ import OptionCardGroup from '@/components/shared/OptionCardGroup';
 import BuildScreen1Units from '@/components/build/BuildScreen1Units';
 import BuildCoverageChecklist from '@/components/build/BuildCoverageChecklist';
 import { runBuildCoverage } from '@/lib/buildCoverage';
+import { buildMappingIndex, generateSupportingDocs } from '@/lib/buildSupportingDocs';
+import { regenerateWithGuidance } from '@/lib/regenerateBuild';
+import RegeneratePanel from '@/components/build/RegeneratePanel';
 
 function isNewUocStructure(data) {
     return Array.isArray(data?.elements) && data.elements.length > 0;
@@ -742,7 +745,7 @@ function Screen4Loading({ onReset, onRetry, progress, buildError, failedStep }) 
     );
 }
 
-function Screen4Ready({ unitInfo, units, cohortInfo, assessmentText, mappingResults, validationResults, mappingError, validationError, studentBookletBase64, studentBookletError, usageInfo, coverage, onBack, onReset, onSave }) {
+function Screen4Ready({ unitInfo, units, cohortInfo, assessmentText, mappingResults, validationResults, mappingError, validationError, studentBookletBase64, studentBookletError, usageInfo, coverage, regen, onRegenerate, onBack, onReset, onSave }) {
     const navigate = useNavigate();
     const [showFeedback, setShowFeedback] = useState(false);
     const hasGaps = assessmentText?.includes('⚠') || assessmentText?.includes('NOT COVERED');
@@ -812,6 +815,7 @@ function Screen4Ready({ unitInfo, units, cohortInfo, assessmentText, mappingResu
                 </div>
 
                 <BuildCoverageChecklist coverage={coverage} />
+                <RegeneratePanel coverage={coverage} onRegenerate={onRegenerate} running={regen.running} progress={regen.progress} message={regen.message} error={regen.error} />
 
                 {/* Usage info */}
                 {usageInfo && (
@@ -1005,7 +1009,44 @@ export default function Build() {
     const [usageInfo, setUsageInfo] = useState(null);
     const [coverage, setCoverage] = useState(null);
     const buildStateRef = useRef({});
+    const resultRef = useRef(null);
+    const [regen, setRegen] = useState({ running: false, progress: 0, message: '', error: null });
     const [failedStep, setFailedStep] = useState(null);
+
+    const applyDocs = (docs, want) => {
+        if (want.mapping) {
+            setMappingResults(docs.mappingResults);
+            setMappingError(docs.mappingResults.length ? null : 'Competency mapping could not be generated. Try regenerating.');
+        }
+        if (want.validation) {
+            setValidationResults(docs.validationResults);
+            setValidationError(docs.validationResults.length ? null : 'Validation record could not be generated. Try regenerating.');
+        }
+        if (want.booklet) {
+            setStudentBookletBase64(docs.bookletBase64);
+            setStudentBookletError(!docs.bookletBase64);
+        }
+    };
+
+    const handleRegenerate = async ({ overall, notes, outputs }) => {
+        const base = resultRef.current;
+        if (!base || !coverage) return;
+        setRegen({ running: true, progress: 2, message: 'Starting...', error: null });
+        try {
+            const res = await regenerateWithGuidance({
+                units, cohortInfo, base, coverage, overall, notes, outputs,
+                onProgress: (progress, message) => setRegen(r => ({ ...r, progress: Math.min(95, progress), message: message || r.message })),
+            });
+            const next = { ...base, kText: res.kText, oText: res.oText };
+            resultRef.current = next;
+            setCoverage(res.cov);
+            setAssessmentText(`# Assessment Instrument\n## ${next.clusterCode} — ${next.clusterTitle}\n*Reading level: ${next.band}*\n\n---\n\n${next.kText}\n\n---\n\n${next.oText}\n\n---\n\n${next.pText}\n\n---\n\n${next.mText}`);
+            applyDocs(res.docs, { mapping: outputs.mapping, validation: outputs.validation, booklet: outputs.assessment });
+            setRegen({ running: false, progress: 100, message: '', error: null });
+        } catch (e) {
+            setRegen({ running: false, progress: 0, message: '', error: e.message || 'Regeneration failed.' });
+        }
+    };
 
     const buildCohortProfile = (ci) => {
         const learnerLabel = LEARNER_OPTIONS.find(o => o.value === ci.learner)?.label || ci.learner;
@@ -1341,163 +1382,10 @@ Then continue with: ## Observation & Project — Marking Guide`, 'claude_sonnet_
 
             // STEP 3 — Mapping Index
             setBuildProgress(97);
-            const kSummary = kText.slice(0, 3000);
-            const oSummary = oText.slice(0, 2000);
-            const pSummary = pText.slice(0, 2000);
-
-            const acFsText = allParsed.map(p => {
-                const ud = units.find(u => u.code === p.unit_code).uocData;
-                return [
-                    `[${p.unit_code}]`,
-                    ...(ud.assessmentConditions || []).map(c => `Assessment condition: ${c}`),
-                    ...(ud.foundationSkills || []).map(fs => `Foundation skill: ${fs.skill} — ${(fs.descriptions || []).join(' ')}`),
-                ].join('\n');
-            }).join('\n');
-
-            const mappingIndexRaw = await llmStep('Mapping Index',
-                `You have just built a clustered assessment covering these units:
-${unitsList}
-
-The assessment contains the following sections:
-
-PART A — KNOWLEDGE QUESTIONS (actual content):
-${kSummary}
-
-PART B — OBSERVATION CHECKLIST (actual content):
-${oSummary}
-
-PART C — WORKPLACE PROJECT (actual content):
-${pSummary}
-
-KNOWLEDGE EVIDENCE ITEMS FROM UoC (labelled by unit code):
-${keList}
-
-PERFORMANCE EVIDENCE ITEMS FROM UoC (labelled by unit code):
-${peList}
-
-PERFORMANCE CRITERIA FROM UoC (labelled by unit code):
-${pcList}
-
-FULL UoC DETAILS (foundation skills and assessment conditions, per unit):
-${acFsText}
-
-Now produce a mapping index as a JSON object.
-Return ONLY the JSON. No explanation. No markdown fences.
-Start your response with { and end with }
-
-The JSON must use this exact format with double quotes. Each entry MUST include a "unit" field with the exact unit code it maps to:
-
-{
-  "mappingIndex": {
-    "knowledgeQuestions": [
-      {
-        "num": "Q1",
-        "unit": "UNITCODE",
-        "ke": ["KE1"],
-        "pc": ["1.1"],
-        "text": "brief question topic"
-      }
-    ],
-    "observationItems": [
-      {
-        "num": "Item 1",
-        "unit": "UNITCODE",
-        "pe": ["PE1", "PE2"],
-        "pc": ["1.1", "1.2"],
-        "text": "brief behaviour description"
-      }
-    ],
-    "projectSteps": [
-      {
-        "num": "Step 1",
-        "unit": "UNITCODE",
-        "name": "exact step name from assessment",
-        "pe": ["PE2"],
-        "pc": ["1.1"],
-        "text": "brief step description"
-      }
-    ],
-    "verbalQuestions": [],
-    "assessmentConditions": [
-      {
-        "unit": "UNITCODE",
-        "condition": "verbatim condition text from UoC",
-        "howMet": "plain English explanation of how this assessment meets it"
-      }
-    ],
-    "foundationSkills": [
-      {
-        "unit": "UNITCODE",
-        "skill": "skill name",
-        "pcRefs": ["1.1", "2.3"],
-        "description": "verbatim description from UoC",
-        "coveredBy": {
-          "task1": "Q1, Q3",
-          "task2": "Item 2, Item 4",
-          "task3": "Step 2",
-          "task4": ""
-        }
-      }
-    ]
-  }
-}
-
-Rules:
-- EVERY entry in knowledgeQuestions, observationItems, projectSteps, assessmentConditions, and foundationSkills MUST include a "unit" field set to the exact unit code (e.g. "BSBLDR413") that the requirement belongs to. This is critical for a clustered assessment.
-- The ke, pe, and pc references must use the LOCAL references for that unit (e.g. "KE1", "PE1", "1.1") without the unit code prefix. The unit field tells us which unit they belong to.
-- Every KE item from every unit must appear in at least one knowledgeQuestions entry
-- Every PE item from every unit must appear in at least one observationItems or projectSteps entry
-- Every PC from every unit must appear in at least one entry across all sections
-- Use exact references with prefixes: "Q1" not "1", "Item 1" not "1", "Step 1" not "1"
-- assessmentConditions must quote the UoC conditions verbatim, grouped by unit. Include ALL conditions from ALL units.
-- foundationSkills must include all skills listed in each unit's UoC
-- Return ONLY the JSON object. Nothing else.
-
-Important: map every single question to its KE requirement. Do not stop before you have mapped all questions from all units. Count your knowledgeQuestions array entries when done. The count must equal the total number of questions built. If it does not, you have missed some questions. Go back and add them.`, 'claude_sonnet_4_6'
-            );
-
-            // Parse mapping index
-            function parseMappingIndex(aiResponse) {
-                let clean = typeof aiResponse === 'string' ? aiResponse.trim() : JSON.stringify(aiResponse);
-                clean = clean.replace(/^```json?\n?/, '').replace(/\n?```$/, '');
-                const start = clean.indexOf('{');
-                const end = clean.lastIndexOf('}');
-                if (start === -1 || end === -1) throw new Error('No valid JSON found');
-                clean = clean.substring(start, end + 1);
-                return JSON.parse(clean);
-            }
-
-            let mappingIndex = {};
-            try {
-                const parsed7 = parseMappingIndex(mappingIndexRaw);
-                // Support both { mappingIndex: {...} } and flat { knowledgeQuestions: [...] }
-                mappingIndex = parsed7.mappingIndex || parsed7;
-            } catch (e) {
-                console.error('Mapping index parse failed:', e.message);
-                mappingIndex = { knowledgeQuestions: [], observationItems: [], projectSteps: [], verbalQuestions: [], assessmentConditions: [], foundationSkills: [] };
-            }
-
-            // Validation: warn if mapped question count is less than built question count
-            const builtQuestionCount = kText.match(/Q\d+\./g)?.length || 0;
-            const mappedCount = mappingIndex.knowledgeQuestions?.length || 0;
-            if (mappedCount < builtQuestionCount) {
-                console.warn(`Mapping index has ${mappedCount} entries but assessment has ${builtQuestionCount} questions. Some questions are unmapped.`);
-            }
-
-            // BSBLDR413 fallback: ensure "Interaction with others" condition is present
-            if (hasBSBLDR413) {
-                const hasInteraction = mappingIndex.assessmentConditions &&
-                    mappingIndex.assessmentConditions.some(ac =>
-                        (ac.condition || '').toLowerCase().includes('interaction')
-                    );
-                if (!hasInteraction) {
-                    if (!mappingIndex.assessmentConditions) mappingIndex.assessmentConditions = [];
-                    mappingIndex.assessmentConditions.push({
-                        condition: 'Interaction with others',
-                        howMet: 'Part B requires the learner to interact with at least four different individuals or groups across multiple observation occasions. Part C requires team collaboration throughout the workplace project.',
-                    });
-                }
-            }
+            const mappingIndex = await buildMappingIndex({
+                units, kText, oText, pText,
+                ask: (name, prompt) => llmStep(name, prompt, 'claude_sonnet_4_6'),
+            });
 
             // Assemble final document
             const mText = typeof markingGuide === 'string' ? markingGuide : JSON.stringify(markingGuide);
@@ -1523,132 +1411,15 @@ ${pText}
 ${mText}`;
 
             setAssessmentText(fullAssessment);
+            resultRef.current = { kText, oText, pText, mText, clusterCode, clusterTitle, band, sections: useSections };
             setBuildProgress(100);
 
             // ── Generate compliance documents (per-unit for cluster) ───────
-            const filterMIByUnit = (mi, unitCode) => {
-                const f = arr => (arr || []).filter(e => !e.unit || e.unit === unitCode);
-                return {
-                    ...mi,
-                    knowledgeQuestions: f(mi.knowledgeQuestions),
-                    observationItems: f(mi.observationItems),
-                    projectSteps: f(mi.projectSteps),
-                    verbalQuestions: f(mi.verbalQuestions),
-                    assessmentConditions: f(mi.assessmentConditions),
-                    foundationSkills: f(mi.foundationSkills),
-                };
-            };
-            const perUnitMappingData = allParsed.map((p, i) => {
-                const unitInfoForUnit = { code: p.unit_code, title: p.unit_title, uocData: units[i].uocData, text: null };
-                const unitMI = filterMIByUnit(mappingIndex, p.unit_code);
-                return { unitCode: p.unit_code, mappingData: extractMappingData(p, unitInfoForUnit, cohortInfo, useSections, unitMI) };
+            const docs = await generateSupportingDocs({
+                units, cohortInfo, sections: useSections, kText, oText, pText, mappingIndex, clusterCode, clusterTitle,
+                want: { mapping: true, validation: true, booklet: true },
             });
-
-            // Extract question strings from knowledgeSection
-            // Matches lines like: "Q1. text", "**Q1. text**", "**Q1.** text", "Q1. **text**"
-            // Strips markdown bold markers, model answer lines, and blank lines
-            const builtQuestions = [];
-            if (typeof kText === 'string') {
-                const lines = kText.split('\n');
-                for (const line of lines) {
-                    const stripped = line.replace(/\*\*/g, '').trim();
-                    const match = stripped.match(/^Q(\d+)\.\s*(.+)/);
-                    if (match) {
-                        builtQuestions.push(match[2].trim());
-                    }
-                }
-            }
-            console.log('Question count:', builtQuestions.length, builtQuestions);
-
-            // Extract observation items from observationSection (table rows, non-header text cells)
-            const builtObsItems = (typeof oText === 'string' ? oText : '')
-                .split('\n')
-                .filter(l => l.includes('|') && !/Item|Observable|---/.test(l))
-                .map(l => {
-                    const cells = l.split('|').map(c => c.trim()).filter(Boolean);
-                    return cells[1] || '';
-                })
-                .filter(Boolean);
-
-            // Extract project steps from projectSection — handle multiple heading formats
-            const builtProjectSteps = [];
-            if (typeof pText === 'string') {
-                // Match: "### Step 1: Title", "### Step 1 — Title", "**Step 1: Title**", "**Step 1 — Title**"
-                const stepMatches = [...pText.matchAll(/(?:#{1,3}\s*|\*\*)(Step\s+\d+[^*\n]*?)(?:\*\*|)\n([\s\S]*?)(?=(?:#{1,3}\s*|\*\*)Step\s+\d+|$)/gi)];
-                stepMatches.forEach(m => {
-                    const title = m[1].replace(/[*#]/g, '').trim();
-                    const desc = m[2].replace(/\*\*/g, '').trim().slice(0, 600);
-                    if (title) builtProjectSteps.push({ title, desc });
-                });
-                // Fallback: numbered list steps if no heading-style steps found
-                if (builtProjectSteps.length === 0) {
-                    const listMatches = [...pText.matchAll(/^\d+\.\s+\*\*([^*]+)\*\*[:.]?\s*\n?([\s\S]*?)(?=^\d+\.|$)/gm)];
-                    listMatches.forEach(m => {
-                        builtProjectSteps.push({ title: m[1].trim(), desc: m[2].trim().slice(0, 600) });
-                    });
-                }
-            }
-            console.log('Passing to booklet:', {
-                questions: builtQuestions,
-                obsItems: builtObsItems,
-                projectSteps: builtProjectSteps,
-            });
-
-            // Generate per-unit competency mapping + validation records, and one combined student booklet
-            const docPromises = [
-                ...perUnitMappingData.map(({ unitCode, mappingData }) =>
-                    base44.functions.invoke('generateCompetencyMapping', { mappingData }).then(r => ({ type: 'mapping', unitCode, data: r.data }))
-                ),
-                ...perUnitMappingData.map(({ unitCode, mappingData }) =>
-                    base44.functions.invoke('generateValidationRecord', { mappingData }).then(r => ({ type: 'validation', unitCode, data: r.data }))
-                ),
-                base44.functions.invoke('generateStudentBooklet', {
-                    unitCode: clusterCode,
-                    unitTitle: clusterTitle,
-                    questions: builtQuestions,
-                    obsItems: builtObsItems.length > 0 ? builtObsItems : [],
-                    projectSteps: builtProjectSteps.length > 0 ? builtProjectSteps : [],
-                    occasionCount: 4,
-                }).then(r => ({ type: 'booklet', data: r.data })),
-            ];
-
-            const docResults = await Promise.allSettled(docPromises);
-
-            const newMappingResults = [];
-            const newValidationResults = [];
-            let bookletSuccess = false;
-
-            docResults.forEach(r => {
-                if (r.status !== 'fulfilled') return;
-                const val = r.value;
-                if (val.type === 'mapping' && val.data?.file_base64) {
-                    newMappingResults.push({ unitCode: val.unitCode, file_base64: val.data.file_base64, filename: val.data.filename });
-                } else if (val.type === 'validation' && val.data?.file_base64) {
-                    newValidationResults.push({ unitCode: val.unitCode, file_base64: val.data.file_base64, filename: val.data.filename });
-                } else if (val.type === 'booklet' && val.data?.file_base64) {
-                    setStudentBookletBase64(val.data.file_base64);
-                    setStudentBookletError(false);
-                    bookletSuccess = true;
-                }
-            });
-
-            if (newMappingResults.length > 0) {
-                setMappingResults(newMappingResults);
-                setMappingError(null);
-            } else {
-                setMappingError('Competency mapping could not be generated. Try downloading the assessment first, then rebuild.');
-            }
-
-            if (newValidationResults.length > 0) {
-                setValidationResults(newValidationResults);
-                setValidationError(null);
-            } else {
-                setValidationError('Validation record could not be generated. Try downloading the assessment first, then rebuild.');
-            }
-
-            if (!bookletSuccess) {
-                setStudentBookletError(true);
-            }
+            applyDocs(docs, { mapping: true, validation: true, booklet: true });
 
             // Report build usage for metered billing
             try {
@@ -1759,6 +1530,8 @@ ${mText}`;
                     studentBookletError={studentBookletError}
                     usageInfo={usageInfo}
                     coverage={coverage}
+                    regen={regen}
+                    onRegenerate={handleRegenerate}
                     onBack={() => setScreen(2)}
                     onReset={handleReset}
                     onSave={handleSave}
